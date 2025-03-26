@@ -1,0 +1,2 @@
+C:/project/shiok_pos_android_app/android/app/.cxx/Debug/a6c1ha1i/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/project/shiok_pos_android_app/android/app/.cxx/Debug/a6c1ha1i/armeabi-v7a/CMakeFiles/rebuild_cache.dir
