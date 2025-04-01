@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:shiok_pos_android_app/screens/home_screen.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/screens/settings_screen.dart';
+import 'package:shiok_pos_android_app/screens/table_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,7 +27,7 @@ class _LoginPageState extends State<LoginPage> {
     if (enteredPin == correctPin) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomeScreen()),
+        MaterialPageRoute(builder: (context) => MainLayout()),
       );
     } else {
       Fluttertoast.showToast(

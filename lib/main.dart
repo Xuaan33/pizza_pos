@@ -18,6 +18,7 @@ class MyApp extends StatelessWidget {
       title: 'Shiok POS Android App',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        fontFamily: 'Raleway'
       ),
       home: const LoginPage(), // Start with Login Page
     );
