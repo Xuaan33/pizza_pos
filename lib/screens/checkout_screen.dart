@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'home_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final int tableNumber;
   final List<Map<String, dynamic>> orderItems;
-  
+
   const CheckoutScreen({
-    Key? key, 
+    Key? key,
     required this.tableNumber,
     required this.orderItems,
   }) : super(key: key);
@@ -18,257 +20,232 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'Cash';
   final List<String> _paymentMethods = ['Cash', 'Card', 'QR Pay', 'Split Bill'];
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Container(
-          color: Colors.grey[100],
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Navigation bar
-              _buildNavBar(),
-              
-              const SizedBox(height: 20),
-              
-              // Order details card
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    children: [
-                      // Table and time info
-                      _buildTableInfo(),
-                      
-                      // Order items header
-                      _buildOrderItemsHeader(),
-                      
-                      // Order items list
-                      Expanded(
-                        child: _buildOrderItemsList(),
-                      ),
-                      
-                      // Order summary
-                      _buildOrderSummary(),
-                    ],
-                  ),
+        child: Column(
+          children: [
+            _buildTopBar(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  children: [
+                    _buildTableInfo(),
+                    _buildOrderItemsHeader(),
+                    _buildOrderItemsList(),
+                    Divider(color: Colors.pink, thickness: 1),
+                    _buildOrderSummary(),
+                    Spacer(),
+                    _buildPaymentMethods(),
+                    SizedBox(height: 16),
+                    _buildCompleteOrderButton(),
+                    SizedBox(height: 16),
+                  ],
                 ),
               ),
-              
-              const SizedBox(height: 20),
-              
-              // Bottom payment methods and complete order button
-              _buildBottomActions(),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildNavBar() {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: () {
-            Navigator.pop(context);
-          },
-          child: Row(
-            children: [
-              const Icon(Icons.home, size: 20),
-              const SizedBox(width: 5),
-              Text(
-                'Home Screen',
-                style: TextStyle(
-                  color: Colors.grey[600],
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        children: [
+          Image.asset('assets/logo-shiokpos.png', width: 40, height: 40),
+          SizedBox(width: 12),
+          Text('Welcome back, Clarence',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Spacer(),
+          _buildStatusCard('Revenue', 'RM 888.88'),
+          SizedBox(width: 12),
+          _buildStatusCard('Unpaid Orders', 'RM 888.88'),
+          SizedBox(width: 12),
+          _buildStatusCard('Tables Free', '12'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(String title, String value) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: [
+          Text(title, style: TextStyle(color: Colors.white, fontSize: 14)),
+          SizedBox(width: 8),
+          Text(value,
+              style: TextStyle(
+                  color: Colors.white,
                   fontSize: 14,
-                ),
-              ),
-              const Icon(Icons.chevron_right, size: 20),
-              const Text(
-                'Tables',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+                  fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
   Widget _buildTableInfo() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Table ${widget.tableNumber}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+  return Row(
+    children: [
+      _buildInfoChip('Table ${widget.tableNumber}'),
+      SizedBox(width: 16),
+      _buildInfoChip('Entry Time ${DateTime.now().toString().substring(11, 16)}'),
+      Spacer(),
+      ElevatedButton(
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomeScreen(
+                tableNumber: widget.tableNumber,
+                existingOrder: widget.orderItems,
               ),
-            ],
+            ),
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+            side: BorderSide(color: Colors.black),
           ),
-          Row(
-            children: [
-              const Text(
-                'Entry Time',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')} ${DateTime.now().hour >= 12 ? 'pm' : 'am'}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(width: 20),
-              ElevatedButton(
-                onPressed: () {
-                  // Navigate back to HomeScreen to add more items
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => HomeScreen(
-                        tableNumber: widget.tableNumber,
-                        existingOrder: widget.orderItems,
-                      ),
-                    ),
-                  ).then((updatedOrderItems) {
-                    if (updatedOrderItems != null) {
-                      setState(() {
-                        // If this returns null, it means the user just went back without changes
-                      });
-                    }
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  side: const BorderSide(color: Colors.grey),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                child: const Text('Add Items'),
-              ),
-            ],
+        ),
+        child: Text('Add Items'),
+      ),
+    ],
+  );
+}
+
+  Widget _buildInfoChip(String text) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
           ),
         ],
       ),
+      child: Text(text, style: TextStyle(fontSize: 16)),
     );
   }
 
   Widget _buildOrderItemsHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!),
-        ),
-      ),
-      child: const Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
         children: [
+          Expanded(flex: 3, child: Text('Item', style: _headerStyle())),
           Expanded(
-            flex: 3,
-            child: Text(
-              'Item',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
+              flex: 2,
+              child: Text('Quantity',
+                  textAlign: TextAlign.center, style: _headerStyle())),
           Expanded(
-            flex: 1,
-            child: Text(
-              'Quantity',
-              style: TextStyle(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ),
+              flex: 2,
+              child: Text('Unit Price',
+                  textAlign: TextAlign.center, style: _headerStyle())),
           Expanded(
-            flex: 2,
-            child: Text(
-              'Unit Price',
-              style: TextStyle(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              'Total Price',
-              style: TextStyle(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.right,
-            ),
-          ),
+              flex: 2,
+              child: Text('Total Price',
+                  textAlign: TextAlign.right, style: _headerStyle())),
         ],
       ),
     );
   }
 
+  TextStyle _headerStyle() {
+    return TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
+  }
+
   Widget _buildOrderItemsList() {
-    return ListView.builder(
-      itemCount: widget.orderItems.length,
-      itemBuilder: (context, index) {
-        final item = widget.orderItems[index];
-        final totalItemPrice = item['price'] * item['quantity'];
-        
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.grey[200]!),
-            ),
-          ),
+    return Column(
+      children: widget.orderItems.map((item) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
               Expanded(
-                flex: 3,
-                child: Text(item['name']),
-              ),
+                  flex: 3,
+                  child: Text(item['name'], style: TextStyle(fontSize: 16))),
               Expanded(
-                flex: 1,
-                child: Text(
-                  '${item['quantity']}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+                  flex: 2,
+                  child:
+                      Text('${item['quantity']}', textAlign: TextAlign.center)),
               Expanded(
-                flex: 2,
-                child: Text(
-                  'RM ${item['price'].toStringAsFixed(2)}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+                  flex: 2,
+                  child:
+                      Text('RM ${item['price']}', textAlign: TextAlign.center)),
               Expanded(
-                flex: 2,
-                child: Text(
-                  'RM${totalItemPrice.toStringAsFixed(2)}',
-                  textAlign: TextAlign.right,
-                ),
-              ),
+                  flex: 2,
+                  child: Text(
+                      'RM ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                      textAlign: TextAlign.right)),
             ],
           ),
         );
-      },
+      }).toList(),
     );
   }
+
+  Widget _buildOrderSummary() {
+    return Column(
+      children: [
+        _buildSummaryRow('Total', 'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
+        _buildSummaryRow('SST (6%)', 'RM ${_calculateSST().toStringAsFixed(2)}'),
+        _buildSummaryRow('Service Charge (10%)', 'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
+        _buildSummaryRow('Rounding', 'RM ${_calculateRounding().toStringAsFixed(2)}'),
+        _buildSummaryRow('Order Total', 'RM ${_calculateTotal().toStringAsFixed(2)}', isPrimary: true),
+      ],
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value,
+      {bool isPrimary = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 16, color: isPrimary ? Colors.pink : Colors.black)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isPrimary ? Colors.pink : Colors.black)),
+      ],
+    );
+  }
+
+  // Ensure complete payment properly navigates back
+Widget _buildCompleteOrderButton() {
+  return ElevatedButton(
+    onPressed: () {
+      // This will pop back to HomeScreen with true
+      Navigator.pop(context, true);
+    },
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.pink,
+      foregroundColor: Colors.white,
+      minimumSize: Size(double.infinity, 50),
+    ),
+    child: Text('Complete Payment'),
+  );
+}
 
   double _calculateSubtotal() {
     double subtotal = 0;
@@ -279,153 +256,65 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   double _calculateSST() {
-    return _calculateSubtotal() * 0.06; // 6% of subtotal
+    // In the image, SST is shown as 8% instead of 6% from the original code
+    return _calculateSubtotal() * 0.06;
   }
 
   double _calculateServiceCharge() {
-    return _calculateSubtotal() * 0.10; // 10% of subtotal
+    // In the image, it shows service charge as 6% instead of 10%
+    return _calculateSubtotal() * 0.10;
   }
 
   double _calculateRounding() {
-    // Round to nearest 0.05
-    double total = _calculateSubtotal() + _calculateSST() + _calculateServiceCharge();
+    double total =
+        _calculateSubtotal() + _calculateSST() + _calculateServiceCharge();
     double rounded = (total * 20).round() / 20;
     return rounded - total;
   }
 
   double _calculateTotal() {
-    return _calculateSubtotal() + _calculateSST() + _calculateServiceCharge() + _calculateRounding();
+    return _calculateSubtotal() +
+        _calculateSST() +
+        _calculateServiceCharge() +
+        _calculateRounding();
   }
 
-  Widget _buildOrderSummary() {
-    final subtotal = _calculateSubtotal();
-    final sst = _calculateSST();
-    final serviceCharge = _calculateServiceCharge();
-    final rounding = _calculateRounding();
-    final total = _calculateTotal();
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey[200]!),
-        ),
-      ),
-      child: Column(
-        children: [
-          _buildSummaryRow('Total', 'RM ${subtotal.toStringAsFixed(2)}'),
-          _buildSummaryRow('SST (6%)', 'RM ${sst.toStringAsFixed(2)}'),
-          _buildSummaryRow('Service Charge (10%)', 'RM ${serviceCharge.toStringAsFixed(2)}'),
-          _buildSummaryRow('Rounding', 'RM ${rounding.toStringAsFixed(2)}'),
-          const SizedBox(height: 8),
-          _buildSummaryRow(
-            'Order Total', 
-            'RM ${total.toStringAsFixed(2)}', 
-            isPrimary: true
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value, {bool isPrimary = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal,
-              color: isPrimary ? Colors.pink : Colors.black,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal,
-              color: isPrimary ? Colors.pink : Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomActions() {
+  Widget _buildPaymentMethods() {
     return Row(
-      children: [
-        // Payment methods
-        Expanded(
-          child: Row(
-            children: _paymentMethods.map((method) {
-              final isSelected = _selectedPaymentMethod == method;
-              
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedPaymentMethod = method;
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isSelected ? Colors.pink : Colors.white,
-                    foregroundColor: isSelected ? Colors.white : Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: Text(method),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        
-        const SizedBox(width: 16),
-        
-        // Complete order button
-        SizedBox(
-          width: 180,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: _paymentMethods.map((method) {
+        final isSelected = _selectedPaymentMethod == method;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: ElevatedButton(
             onPressed: () {
-              // Process the order
-              // Show success message
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order completed successfully!'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
-                ),
-              );
-              
-              // Add a small delay to allow the snackbar to be visible
-              Future.delayed(const Duration(milliseconds: 500), () {
-                // Navigate back through both screens to table screen
-                Navigator.pop(context, true); // true indicates order completed
+              setState(() {
+                _selectedPaymentMethod = method;
               });
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.pink,
-              foregroundColor: Colors.white,
+              backgroundColor: isSelected ? Colors.pink : Colors.white,
+              foregroundColor: isSelected ? Colors.white : Colors.black,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 12,
+                borderRadius: BorderRadius.circular(30),
+                side: BorderSide(
+                  color: isSelected ? Colors.pink : Colors.black,
+                ),
               ),
             ),
-            child: const Text('Complete Order'),
+            child: Text(
+              method,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 }

@@ -4,9 +4,9 @@ import 'checkout_screen.dart';
 class HomeScreen extends StatefulWidget {
   final int tableNumber;
   final List<Map<String, dynamic>>? existingOrder;
-  
+
   const HomeScreen({
-    Key? key, 
+    Key? key,
     required this.tableNumber,
     this.existingOrder,
   }) : super(key: key);
@@ -18,39 +18,111 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedFoodType = 0;
   List<Map<String, dynamic>> foodTypes = [
-    {
-      'name': 'Food',
-      'image': 'assets/img-main-food.png'
-    },
-    {
-      'name': 'Drinks',
-      'image': 'assets/img-main-drinks.png'
-    },
+    {'name': 'Food', 'image': 'assets/img-main-food.png'},
+    {'name': 'Drinks', 'image': 'assets/img-main-drinks.png'},
   ];
 
   // Menu Items Data
   List<Map<String, dynamic>> foodItems = [
-    {'name': 'Pepperoni Pizza', 'price': 70.25, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Margherita Pizza', 'price': 65.50, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Hawaiian Pizza', 'price': 75.80, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Veggie Pizza', 'price': 68.90, 'image': 'assets/pizza.png', 'soldOut': true},
-    {'name': 'BBQ Chicken Pizza', 'price': 80.00, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Meat Lovers Pizza', 'price': 85.50, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Supreme Pizza', 'price': 82.75, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Cheese Pizza', 'price': 60.00, 'image': 'assets/pizza.png', 'soldOut': false},
-    {'name': 'Burger', 'price': 21.98, 'image': 'assets/burger.png', 'soldOut': false},
-    {'name': 'Fries', 'price': 16.00, 'image': 'assets/fries.png', 'soldOut': false},
+    {
+      'name': 'Pepperoni Pizza',
+      'price': 70.25,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    },
+    {
+      'name': 'Margherita Pizza',
+      'price': 65.50,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    },
+    {
+      'name': 'Hawaiian Pizza',
+      'price': 75.80,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    },
+    {
+      'name': 'Veggie Pizza',
+      'price': 68.90,
+      'image': 'assets/pizza.png',
+      'soldOut': true
+    },
+    {
+      'name': 'BBQ Chicken Pizza',
+      'price': 80.00,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    },
+    {
+      'name': 'Meat Lovers Pizza',
+      'price': 85.50,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    },
+    {
+      'name': 'Supreme Pizza',
+      'price': 82.75,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    },
+    {
+      'name': 'Cheese Pizza',
+      'price': 60.00,
+      'image': 'assets/pizza.png',
+      'soldOut': false
+    }
   ];
 
   List<Map<String, dynamic>> drinkItems = [
-    {'name': 'Coca Cola', 'price': 5.50, 'image': 'assets/drinks.jpg', 'soldOut': false},
-    {'name': 'Sprite', 'price': 5.50, 'image': 'assets/drinks.jpg', 'soldOut': false},
-    {'name': 'Lemon Tea', 'price': 6.00, 'image': 'assets/drinks.jpg', 'soldOut': false},
-    {'name': 'Ice Coffee', 'price': 8.50, 'image': 'assets/drinks.jpg', 'soldOut': false},
-    {'name': 'Orange Juice', 'price': 7.00, 'image': 'assets/drinks.jpg', 'soldOut': false},
-    {'name': 'Mineral Water', 'price': 3.00, 'image': 'assets/drinks.jpg', 'soldOut': true},
-    {'name': 'Hot Tea', 'price': 4.50, 'image': 'assets/drinks.jpg', 'soldOut': false},
-    {'name': 'Milkshake', 'price': 12.00, 'image': 'assets/drinks.jpg', 'soldOut': false},
+    {
+      'name': 'Coca Cola',
+      'price': 5.50,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
+    {
+      'name': 'Sprite',
+      'price': 5.50,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
+    {
+      'name': 'Lemon Tea',
+      'price': 6.00,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
+    {
+      'name': 'Ice Coffee',
+      'price': 8.50,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
+    {
+      'name': 'Orange Juice',
+      'price': 7.00,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
+    {
+      'name': 'Mineral Water',
+      'price': 3.00,
+      'image': 'assets/drinks.jpg',
+      'soldOut': true
+    },
+    {
+      'name': 'Hot Tea',
+      'price': 4.50,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
+    {
+      'name': 'Milkshake',
+      'price': 12.00,
+      'image': 'assets/drinks.jpg',
+      'soldOut': false
+    },
   ];
 
   // Current Order Items
@@ -64,258 +136,368 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     // Initialize order items with existing order if provided
-    if (widget.existingOrder != null && widget.existingOrder!.isNotEmpty) {
-      currentOrderItems = List.from(widget.existingOrder!);
-    } else {
-      currentOrderItems = [];
-    }
+    currentOrderItems =
+        widget.existingOrder != null ? List.from(widget.existingOrder!) : [];
   }
 
   @override
   Widget build(BuildContext context) {
     // Get the correct items list based on selection
-    List<Map<String, dynamic>> displayedItems = _selectedFoodType == 0 ? foodItems : drinkItems;
-    
+    List<Map<String, dynamic>> displayedItems =
+        _selectedFoodType == 0 ? foodItems : drinkItems;
+
     // Filter by search if needed
     if (searchQuery.isNotEmpty) {
-      displayedItems = displayedItems.where((item) => 
-        item['name'].toLowerCase().contains(searchQuery.toLowerCase())
-      ).toList();
+      displayedItems = displayedItems
+          .where((item) =>
+              item['name'].toLowerCase().contains(searchQuery.toLowerCase()))
+          .toList();
     }
 
-    return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            // Main Content
-            Expanded(
-              child: Container(
-                color: Colors.white,
-                child: Column(
-                  children: [
-                    // Top Bar with Back Button
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              // Back Button
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back),
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        body: SafeArea(
+          child: Row(
+            children: [
+              // Main Content
+              Expanded(
+                child: Container(
+                  color: Colors.white,
+                  child: Column(
+                    children: [
+                      // Top Bar with Back Button
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                // Back Button
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_back),
+                                  onPressed: () {
+                                    _onBackPressed();
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                Image.asset('assets/logo-shiokpos.png',
+                                    height: 40),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Welcome back, ABC - Table ${widget.tableNumber}',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                              const SizedBox(width: 8),
-                              Image.asset('assets/logo-shiokpos.png', height: 40),
-                              const SizedBox(width: 10),
-                              Text(
-                                'Welcome back, ABC - Table ${widget.tableNumber}',
+                              child: Text(
+                                'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
                                 style: const TextStyle(
-                                  fontSize: 18,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(20),
                             ),
-                            child: Text(
-                              'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-        
-                    // Food/Drinks Selector with Images
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Row(
-                        children: List.generate(foodTypes.length, (index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  _selectedFoodType = index;
-                                  // Clear search when switching categories
-                                  searchController.clear();
-                                  searchQuery = '';
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _selectedFoodType == index
-                                    ? Colors.yellow
-                                    : Colors.white,
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Image.asset(
-                                    foodTypes[index]['image'],
-                                    width: 24,
-                                    height: 24,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(foodTypes[index]['name']),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-        
-                    // Search Bar
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: TextField(
-                        controller: searchController,
-                        onChanged: (value) {
-                          setState(() {
-                            searchQuery = value;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Search for food, drinks, etc',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          ],
                         ),
                       ),
-                    ),
-        
-                    // Menu Grid
-                    Expanded(
-                      child: GridView.builder(
+
+                      // Food/Drinks Selector with Images
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Row(
+                          children: List.generate(foodTypes.length, (index) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedFoodType = index;
+                                    // Clear search when switching categories
+                                    searchController.clear();
+                                    searchQuery = '';
+                                  });
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _selectedFoodType == index
+                                      ? Colors.yellow
+                                      : Colors.white,
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Image.asset(
+                                      foodTypes[index]['image'],
+                                      width: 24,
+                                      height: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(foodTypes[index]['name']),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+
+                      // Search Bar
+                      Padding(
                         padding: const EdgeInsets.all(16.0),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 0.8,
+                        child: TextField(
+                          controller: searchController,
+                          onChanged: (value) {
+                            setState(() {
+                              searchQuery = value;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search for food, drinks, etc',
+                            prefixIcon: const Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
                         ),
-                        itemCount: displayedItems.length,
-                        itemBuilder: (context, index) {
-                          return _buildMenuItem(displayedItems[index], index);
-                        },
                       ),
-                    ),
-                  ],
+
+                      // Menu Grid
+                      Expanded(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.all(16.0),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.8,
+                          ),
+                          itemCount: displayedItems.length,
+                          itemBuilder: (context, index) {
+                            return _buildMenuItem(displayedItems[index], index);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        
-            // Current Order Section - Only show if there are items in the order
-            if (currentOrderItems.isNotEmpty)
-              Container(
-                width: 300,
-                color: Colors.white,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Table ${widget.tableNumber} Order',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              setState(() {
-                                // Clear the order instead of going back
-                                currentOrderItems.clear();
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: currentOrderItems.length,
-                        itemBuilder: (context, index) {
-                          return _buildOrderItem(currentOrderItems[index], index);
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          _buildOrderSummaryRow('Sub Total', 'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                          _buildOrderSummaryRow('Service Charge (10%)', 'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
-                          _buildOrderSummaryRow('GST (6%)', 'RM ${_calculateGST().toStringAsFixed(2)}'),
-                          const SizedBox(height: 10),
-                          ElevatedButton(
-                            onPressed: () {
-                              // Navigate to checkout screen
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => CheckoutScreen(
-                                    tableNumber: widget.tableNumber,
-                                    orderItems: currentOrderItems,
-                                  ),
-                                ),
-                              ).then((orderCompleted) {
-                                // If order was completed, return to previous screen
-                                if (orderCompleted == true) {
-                                  // Return current order items to previous screen (if coming from checkout)
-                                  Navigator.pop(context, currentOrderItems);
-                                }
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.pink,
-                              minimumSize: const Size.fromHeight(50),
-                            ),
-                            child: Text(
-                              'Order Total RM ${_calculateTotal().toStringAsFixed(2)}',
+
+              // Current Order Section - Only show if there are items in the order
+              if (currentOrderItems.isNotEmpty)
+                Container(
+                  width: 400,
+                  color: Colors.white,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Current Order',
                               style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: currentOrderItems.length,
+                          itemBuilder: (context, index) {
+                            return _buildOrderItem(
+                                currentOrderItems[index], index);
+                          },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            Divider(
+                              color: const Color(0xFFE732A0), // Pink divider
+                              thickness: 1,
+                              height: 20,
+                            ),
+                            _buildOrderSummaryRow('Sub Total',
+                                'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
+                            _buildOrderSummaryRow('Service Charge (10%)',
+                                'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
+                            _buildOrderSummaryRow('GST (6%)',
+                                'RM ${_calculateGST().toStringAsFixed(2)}'),
+                            const SizedBox(height: 10),
+                            // Vertical buttons
+                            Column(
+                              children: [
+                                // Submit Order Button
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _submitOrder,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      minimumSize: const Size.fromHeight(50),
+                                    ),
+                                    child: const Text(
+                                      'Submit Order',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                // Checkout Button
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _goToCheckout,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE732A0),
+                                      minimumSize: const Size.fromHeight(50),
+                                    ),
+                                    child: Text(
+                                      'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  // Handle back button press with confirmation dialog
+  Future<bool> _onWillPop() async {
+    if (currentOrderItems.isEmpty) {
+      return true;
+    }
+    return _onBackPressed();
+  }
+
+  Future<bool> _onBackPressed() async {
+    if (currentOrderItems.isEmpty) {
+      Navigator.pop(context);
+      return true;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard Order?'),
+        content: const Text(
+            'Are you sure you want to discard this order and go back?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('DISCARD'),
+          ),
+        ],
+      ),
+    );
+
+    if (result ?? false) {
+      if (!mounted) return false;
+      Navigator.pop(context);
+      return true;
+    }
+    return false;
+  }
+
+  // Submit order method - sends order to Orders screen
+  void _submitOrder() {
+    bool hasExistingOrder =
+        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(hasExistingOrder ? 'Update Order' : 'Submit Order'),
+        content: Text(hasExistingOrder
+            ? 'Update this order?'
+            : 'Submit this order to kitchen?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              // Wait a frame to ensure dialog is fully closed
+              await Future.delayed(Duration.zero);
+              Navigator.pop(context, {
+                // Pop back to TableScreen
+                'action': hasExistingOrder ? 'updated' : 'submitted',
+                'items': currentOrderItems,
+                'replaceExisting': hasExistingOrder,
+              });
+            },
+            child: Text(hasExistingOrder ? 'UPDATE' : 'SUBMIT'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToCheckout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutScreen(
+          tableNumber: widget.tableNumber,
+          orderItems: currentOrderItems,
+        ),
+      ),
+    ).then((orderCompleted) {
+      if (orderCompleted == true) {
+        // This will pop all the way back to TableScreen
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    });
   }
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
@@ -418,33 +600,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   item['name'],
                   style: const TextStyle(fontWeight: FontWeight.bold),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-                Text('RM ${item['price'].toStringAsFixed(2)}'),
+                if (item['remarks'] != null && item['remarks'].isNotEmpty)
+                  Text(
+                    'Remarks: ${item['remarks']}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
               ],
             ),
           ),
+          // Quantity controls
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.remove),
-                onPressed: () {
-                  _decreaseQuantity(index);
-                },
+                icon: const Icon(Icons.remove, size: 20),
+                onPressed: () => _decreaseQuantity(index),
               ),
               Text('${item['quantity']}'),
               IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: () {
-                  _increaseQuantity(index);
-                },
+                icon: const Icon(Icons.add, size: 20),
+                onPressed: () => _increaseQuantity(index),
+              ),
+              // Cross icon to remove item
+              IconButton(
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: () => _removeItem(index),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  void _removeItem(int index) {
+    setState(() {
+      currentOrderItems.removeAt(index);
+    });
   }
 
   Widget _buildOrderSummaryRow(String label, String amount) {
@@ -463,10 +655,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // Logic functions
   void _addToOrder(Map<String, dynamic> item) {
     setState(() {
-      int existingIndex = currentOrderItems.indexWhere((orderItem) => 
-        orderItem['name'] == item['name']
-      );
-      
+      int existingIndex = currentOrderItems
+          .indexWhere((orderItem) => orderItem['name'] == item['name']);
+
       if (existingIndex != -1) {
         currentOrderItems[existingIndex]['quantity']++;
       } else {

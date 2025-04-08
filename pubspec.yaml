@@ -62,6 +62,11 @@ flutter:
     - assets/img-sidebar-dashboard.png
     - assets/img-sidebar-delivery.png
     - assets/img-sidebar-settings.png
+    - assets/img-sidebar-logout.png
+    - assets/img-sidebar-orders.png
+    - assets/icon-table-with-order.png
+    - assets/icon-table-takeaway.png
+    - assets/icon-table-empty.png
     - assets/pizza.png
     - assets/drinks.jpg
 
