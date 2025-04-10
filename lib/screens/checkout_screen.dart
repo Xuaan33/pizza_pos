@@ -4,13 +4,11 @@ import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'home_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
-  final int tableNumber;
-  final List<Map<String, dynamic>> orderItems;
+  final Map<String, dynamic> order; // Now accepts full order object
 
   const CheckoutScreen({
     Key? key,
-    required this.tableNumber,
-    required this.orderItems,
+    required this.order,
   }) : super(key: key);
 
   @override
@@ -20,6 +18,9 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'Cash';
   final List<String> _paymentMethods = ['Cash', 'Card', 'QR Pay', 'Split Bill'];
+   List<Map<String, dynamic>> get orderItems {
+    return List<Map<String, dynamic>>.from(widget.order['items']);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,37 +97,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildTableInfo() {
-  return Row(
-    children: [
-      _buildInfoChip('Table ${widget.tableNumber}'),
-      SizedBox(width: 16),
-      _buildInfoChip('Entry Time ${DateTime.now().toString().substring(11, 16)}'),
-      Spacer(),
-      ElevatedButton(
-        onPressed: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(
-                tableNumber: widget.tableNumber,
-                existingOrder: widget.orderItems,
+    return Row(
+      children: [
+        _buildInfoChip('Table ${widget.order['tableNumber']}'),
+        SizedBox(width: 16),
+        _buildInfoChip(
+            'Entry Time: ${_formatTime(widget.order['entryTime'] ?? DateTime.now())}'),
+        Spacer(),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(
+                  tableNumber: widget.order['tableNumber'],
+                  existingOrder: widget.order['items'],
+                ),
               ),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+              side: BorderSide(color: Colors.black),
             ),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-            side: BorderSide(color: Colors.black),
           ),
+          child: Text('Add Items'),
         ),
-        child: Text('Add Items'),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   Widget _buildInfoChip(String text) {
     return Container(
@@ -174,7 +176,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _buildOrderItemsList() {
     return Column(
-      children: widget.orderItems.map((item) {
+      children: orderItems.map((item) {
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
@@ -205,11 +207,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _buildOrderSummary() {
     return Column(
       children: [
-        _buildSummaryRow('Total', 'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-        _buildSummaryRow('SST (6%)', 'RM ${_calculateSST().toStringAsFixed(2)}'),
-        _buildSummaryRow('Service Charge (10%)', 'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
-        _buildSummaryRow('Rounding', 'RM ${_calculateRounding().toStringAsFixed(2)}'),
-        _buildSummaryRow('Order Total', 'RM ${_calculateTotal().toStringAsFixed(2)}', isPrimary: true),
+        _buildSummaryRow(
+            'Total', 'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
+        _buildSummaryRow(
+            'SST (6%)', 'RM ${_calculateSST().toStringAsFixed(2)}'),
+        _buildSummaryRow('Service Charge (10%)',
+            'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
+        _buildSummaryRow(
+            'Rounding', 'RM ${_calculateRounding().toStringAsFixed(2)}'),
+        _buildSummaryRow(
+            'Order Total', 'RM ${_calculateTotal().toStringAsFixed(2)}',
+            isPrimary: true),
       ],
     );
   }
@@ -232,24 +240,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // Ensure complete payment properly navigates back
-Widget _buildCompleteOrderButton() {
-  return ElevatedButton(
-    onPressed: () {
-      // This will pop back to HomeScreen with true
-      Navigator.pop(context, true);
-    },
-    style: ElevatedButton.styleFrom(
-      backgroundColor: Colors.pink,
-      foregroundColor: Colors.white,
-      minimumSize: Size(double.infinity, 50),
-    ),
-    child: Text('Complete Payment'),
-  );
-}
+  Widget _buildCompleteOrderButton() {
+    return ElevatedButton(
+      onPressed: () {
+        // This will pop back to HomeScreen with true
+        Navigator.pop(context, true);
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.pink,
+        foregroundColor: Colors.white,
+        minimumSize: Size(double.infinity, 50),
+      ),
+      child: Text('Complete Payment'),
+    );
+  }
 
   double _calculateSubtotal() {
     double subtotal = 0;
-    for (var item in widget.orderItems) {
+    for (var item in orderItems) {
       subtotal += (item['price'] * item['quantity']);
     }
     return subtotal;
@@ -277,6 +285,28 @@ Widget _buildCompleteOrderButton() {
         _calculateSST() +
         _calculateServiceCharge() +
         _calculateRounding();
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour}:${time.minute.toString().padLeft(2, '0')}, ${time.day}th ${_getMonthName(time.month)}';
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return months[month - 1];
   }
 
   Widget _buildPaymentMethods() {

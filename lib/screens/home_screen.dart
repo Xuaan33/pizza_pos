@@ -448,50 +448,51 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Submit order method - sends order to Orders screen
-  void _submitOrder() {
-    bool hasExistingOrder =
-        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+  // In _submitOrder method:
+void _submitOrder() {
+  bool hasExistingOrder = widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(hasExistingOrder ? 'Update Order' : 'Submit Order'),
-        content: Text(hasExistingOrder
-            ? 'Update this order?'
-            : 'Submit this order to kitchen?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
-              // Wait a frame to ensure dialog is fully closed
-              await Future.delayed(Duration.zero);
-              Navigator.pop(context, {
-                // Pop back to TableScreen
-                'action': hasExistingOrder ? 'updated' : 'submitted',
-                'items': currentOrderItems,
-                'replaceExisting': hasExistingOrder,
-              });
-            },
-            child: Text(hasExistingOrder ? 'UPDATE' : 'SUBMIT'),
-          ),
-        ],
-      ),
-    );
-  }
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(hasExistingOrder ? 'Update Order' : 'Submit Order'),
+      content: Text(hasExistingOrder 
+          ? 'Update this order?'
+          : 'Submit this order to kitchen?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('CANCEL'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            Navigator.pop(context, {
+              'action': hasExistingOrder ? 'updated' : 'submitted',
+              'items': currentOrderItems,
+              'replaceExisting': hasExistingOrder,
+              'entryTime': DateTime.now(), // Pass entry time
+            });
+          },
+          child: Text(hasExistingOrder ? 'UPDATE' : 'SUBMIT'),
+        ),
+      ],
+    ),
+  );
+}
 
   void _goToCheckout() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CheckoutScreen(
-          tableNumber: widget.tableNumber,
-          orderItems: currentOrderItems,
-        ),
+      builder: (context) => CheckoutScreen(
+        order: {
+          'tableNumber': widget.tableNumber,
+          'items': List<Map<String, dynamic>>.from(currentOrderItems),
+          'entryTime': DateTime.now(),
+        },
       ),
+    ),
     ).then((orderCompleted) {
       if (orderCompleted == true) {
         // This will pop all the way back to TableScreen

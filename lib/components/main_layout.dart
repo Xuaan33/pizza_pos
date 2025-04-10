@@ -14,7 +14,8 @@ class _MainLayoutState extends State<MainLayout> {
   int _selectedTabIndex = 0;
   List<Map<String, dynamic>> _activeOrders = [];
   Set<int> _tablesWithSubmittedOrders = {};
-  bool _isOrdersLoading = false; 
+  bool _isOrdersLoading = false;
+  int _orderCounter = 1;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -39,45 +40,45 @@ class _MainLayoutState extends State<MainLayout> {
   Future<void> _refreshOrders() async {
     setState(() => _isOrdersLoading = true);
     // Simulate network delay (remove in production)
-    await Future.delayed(Duration(milliseconds: 500)); 
+    await Future.delayed(Duration(milliseconds: 500));
     setState(() => _isOrdersLoading = false);
   }
 
   List<Widget> _getScreensWithOrders() {
-  return [
-    TableScreen(
-      tablesWithSubmittedOrders: _tablesWithSubmittedOrders,
-      onOrderSubmitted: (order) {
-        _addNewOrder(order);
-        _refreshOrders();
-      },
-      onOrderPaid: _markOrderAsPaid,
-      activeOrders: _activeOrders, // Pass active orders to table screen
-    ),
-    DeliveryScreen(),
-    OrdersScreen(
-      orders: _activeOrders,
-      isLoading: _isOrdersLoading,
-      onOrderPaid: (order) {
-        _handleOrderPaid(order);
-        setState(() => _isOrdersLoading = true);
-        Future.delayed(Duration(seconds: 1), () {
-          setState(() => _isOrdersLoading = false);
-        });
-      },
-      onEditOrder: _handleEditOrder,
-      onRefresh: _refreshOrders,
-    ),
-    DashboardScreen(),
-    SettingsScreen(),
-  ];
-}
+    return [
+      TableScreen(
+        tablesWithSubmittedOrders: _tablesWithSubmittedOrders,
+        onOrderSubmitted: (order) {
+          _addNewOrder(order);
+          _refreshOrders();
+        },
+        onOrderPaid: _markOrderAsPaid,
+        activeOrders: _activeOrders, // Pass active orders to table screen
+      ),
+      DeliveryScreen(),
+      OrdersScreen(
+        orders: _activeOrders,
+        isLoading: _isOrdersLoading,
+        onOrderPaid: (order) {
+          _handleOrderPaid(order);
+          setState(() => _isOrdersLoading = true);
+          Future.delayed(Duration(seconds: 1), () {
+            setState(() => _isOrdersLoading = false);
+          });
+        },
+        onEditOrder: _handleEditOrder,
+        onRefresh: _refreshOrders,
+      ),
+      DashboardScreen(),
+      SettingsScreen(),
+    ];
+  }
 
   Future<List<Map<String, dynamic>>> _fetchOrders() async {
-  // Simulate network delay
-  await Future.delayed(Duration(milliseconds: 500)); 
-  return _activeOrders.where((o) => !o['isPaid']).toList();
-}
+    // Simulate network delay
+    await Future.delayed(Duration(milliseconds: 500));
+    return _activeOrders.where((o) => !o['isPaid']).toList();
+  }
 
   Widget _buildNavigationSidebar() {
     return Container(
@@ -147,15 +148,16 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _handleOrderPaid(Map<String, dynamic> order) async {
-  setState(() {
-    final index = _activeOrders.indexWhere((o) => 
-        o['tableNumber'] == order['tableNumber']);
-    if (index != -1) {
-      _activeOrders[index]['isPaid'] = true;
-      _tablesWithSubmittedOrders.remove(order['tableNumber']);
-    }
-  });
-}
+    setState(() {
+      final index = _activeOrders
+          .indexWhere((o) => o['tableNumber'] == order['tableNumber']);
+      if (index != -1) {
+        _activeOrders[index]['isPaid'] = true;
+        _activeOrders[index]['status'] = 'Paid'; // Add this
+        _tablesWithSubmittedOrders.remove(order['tableNumber']);
+      }
+    });
+  }
 
   void _handleEditOrder(Map<String, dynamic> order) {
     setState(() {
@@ -175,47 +177,47 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _addNewOrder(Map<String, dynamic> order) {
-  setState(() {
-    // Remove any existing order for this table first
-    _activeOrders.removeWhere((o) => 
-        o['tableNumber'] == order['tableNumber'] && !o['isPaid']);
-    
-    // Add the new order with additional metadata
-    _activeOrders.add({
-      'tableNumber': order['tableNumber'],
-      'items': List.from(order['items']),
-      'submittedTime': DateTime.now(),
-      'isPaid': false,
-      'isDirectCheckout': order['isDirectCheckout'] ?? false,
+    setState(() {
+      _activeOrders.removeWhere(
+          (o) => o['tableNumber'] == order['tableNumber'] && !o['isPaid']);
+
+      _activeOrders.add({
+        'orderId': 'ORDER-${_orderCounter.toString().padLeft(2, '0')}',
+        'tableNumber': order['tableNumber'],
+        'items': List.from(order['items']),
+        'status': 'Draft', // Add this
+        'orderType': 'Dine in',
+        'submittedTime': DateTime.now(),
+        'entryTime': DateTime.now(), // Track when order was created
+        'isPaid': false,
+      });
+
+      _orderCounter++;
+      _tablesWithSubmittedOrders.add(order['tableNumber']);
     });
-    
-    // Update table status
-    _tablesWithSubmittedOrders.add(order['tableNumber']);
-  });
-}
+  }
 
-void _updateOrder(Map<String, dynamic> updatedOrder) {
-  setState(() {
-    final index = _activeOrders.indexWhere(
-      (o) => o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']
-    );
-    if (index != -1) {
-      _activeOrders[index] = updatedOrder;
-    }
-  });
-}
+  void _updateOrder(Map<String, dynamic> updatedOrder) {
+    setState(() {
+      final index = _activeOrders.indexWhere((o) =>
+          o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
+      if (index != -1) {
+        _activeOrders[index] = updatedOrder;
+      }
+    });
+  }
 
-void _markOrderAsPaid(int tableNumber) {
-  setState(() {
-    // Mark as paid
-    final index = _activeOrders.indexWhere(
-        (order) => order['tableNumber'] == tableNumber);
-    if (index != -1) {
-      _activeOrders[index]['isPaid'] = true;
-    }
-    
-    // Update table status
-    _tablesWithSubmittedOrders.remove(tableNumber);
-  });
-}
+  void _markOrderAsPaid(int tableNumber) {
+    setState(() {
+      // Mark as paid
+      final index = _activeOrders
+          .indexWhere((order) => order['tableNumber'] == tableNumber);
+      if (index != -1) {
+        _activeOrders[index]['isPaid'] = true;
+      }
+
+      // Update table status
+      _tablesWithSubmittedOrders.remove(tableNumber);
+    });
+  }
 }
