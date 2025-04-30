@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
-import 'package:shiok_pos_android_app/screens/table_screen.dart';
-import 'home_screen.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CheckoutScreen extends StatefulWidget {
-  final Map<String, dynamic> order; // Now accepts full order object
+  final Map<String, dynamic> order;
 
   const CheckoutScreen({
     Key? key,
@@ -17,8 +17,45 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'Cash';
-  final List<String> _paymentMethods = ['Cash', 'Card', 'QR Pay', 'Split Bill'];
-   List<Map<String, dynamic>> get orderItems {
+  List<Map<String, dynamic>> _paymentMethods = [];
+  bool _isLoadingPaymentMethods = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPaymentMethods();
+  }
+
+  Future<void> _loadPaymentMethods() async {
+  try {
+    setState(() => _isLoadingPaymentMethods = true);
+    final prefs = await SharedPreferences.getInstance();
+    final posProfile = prefs.getString('pos_profile');
+    if (posProfile == null) throw Exception('POS Profile not set');
+
+    final posService = PosService();
+    final response = await posService.getPaymentMethods(posProfile);
+
+    if (response['message'] != null) {
+      setState(() {
+        _paymentMethods = List<Map<String, dynamic>>.from(response['message']);
+        _isLoadingPaymentMethods = false;
+        if (_paymentMethods.isNotEmpty) {
+          _selectedPaymentMethod = _paymentMethods.first['name'];
+        }
+      });
+    } else {
+      throw Exception('No payment methods found');
+    }
+  } catch (e) {
+    setState(() => _isLoadingPaymentMethods = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to load payment methods: ${e.toString()}')),
+    );
+  }
+}
+
+  List<Map<String, dynamic>> get orderItems {
     return List<Map<String, dynamic>>.from(widget.order['items']);
   }
 
@@ -29,24 +66,53 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildTopBar(),
+            _buildHeader(),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  children: [
-                    _buildTableInfo(),
-                    _buildOrderItemsHeader(),
-                    _buildOrderItemsList(),
-                    Divider(color: Colors.pink, thickness: 1),
-                    _buildOrderSummary(),
-                    Spacer(),
-                    _buildPaymentMethods(),
-                    SizedBox(height: 16),
-                    _buildCompleteOrderButton(),
-                    SizedBox(height: 16),
-                  ],
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left side - Payment Methods
+                  Expanded(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildTableInfo(),
+                          const SizedBox(height: 16),
+                          _buildPaymentMethodGrid(),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // Vertical divider
+                  Container(
+                    width: 1,
+                    color: Colors.grey.shade300,
+                  ),
+                  
+                  // Right side - Order details
+                  Expanded(
+                    flex: 3,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildOrderHeader(),
+                          const SizedBox(height: 16),
+                          _buildOrderItemsList(),
+                          const SizedBox(height: 24),
+                          _buildOrderSummary(),
+                          const SizedBox(height: 24),
+                          _buildPayNowButton(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -55,296 +121,367 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildTopBar() {
-    return Padding(
+  Widget _buildHeader() {
+    return Container(
       padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
-          Image.asset('assets/logo-shiokpos.png', width: 40, height: 40),
-          SizedBox(width: 12),
-          Text('Welcome back, Clarence',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          Spacer(),
-          _buildStatusCard('Revenue', 'RM 888.88'),
-          SizedBox(width: 12),
-          _buildStatusCard('Unpaid Orders', 'RM 888.88'),
-          SizedBox(width: 12),
-          _buildStatusCard('Tables Free', '12'),
+          const Text(
+            'Welcome back, nicholas',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const Spacer(),
+          _buildStatPill('Revenue', 'RM0.00'),
+          const SizedBox(width: 8),
+          _buildStatPill('Unpaid Orders', 'RM42.30'),
+          const SizedBox(width: 8),
+          _buildStatPill('Tables Free', '1'),
         ],
       ),
     );
   }
 
-  Widget _buildStatusCard(String title, String value) {
+  Widget _buildStatPill(String title, String value) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: TextStyle(color: Colors.white, fontSize: 14)),
-          SizedBox(width: 8),
-          Text(value,
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildTableInfo() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoChip('Table ${widget.order['tableNumber']}'),
-        SizedBox(width: 16),
-        _buildInfoChip(
-            'Entry Time: ${_formatTime(widget.order['entryTime'] ?? DateTime.now())}'),
-        Spacer(),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeScreen(
-                  tableNumber: widget.order['tableNumber'],
-                  existingOrder: widget.order['items'],
-                ),
-              ),
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-              side: BorderSide(color: Colors.black),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            'MK-Floor 1-Table ${widget.order['tableNumber'] ?? 1}',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          child: Text('Add Items'),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Entry Time',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _formatTime(widget.order['entryTime'] ?? DateTime.now()),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildInfoChip(String text) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
+  Widget _buildPaymentMethodGrid() {
+    if (_isLoadingPaymentMethods) {
+      return const Expanded(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Expanded(
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        itemCount: _paymentMethods.length,
+        itemBuilder: (context, index) {
+          final method = _paymentMethods[index];
+          final isSelected = _selectedPaymentMethod == method['name'];
+          
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedPaymentMethod = method['name'];
+              });
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isSelected ? const Color(0xFFE732A0) : Colors.blue.shade300,
+                  width: isSelected ? 3 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.network(
+                    'https://shiokpos.byondwave.com${method['custom_payment_mode_image']}',
+                    height: 60,
+                    width: 60,
+                    errorBuilder: (context, error, stackTrace) => 
+                      const Icon(Icons.payment, size: 60),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    method['name'],
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? const Color(0xFFE732A0) : Colors.black,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOrderHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Item Name',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const Text(
+          'Quantity',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const Text(
+          'Price (RM)',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const Text(
+          'Amount (RM)',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE732A0),
+            borderRadius: BorderRadius.circular(20),
           ),
-        ],
-      ),
-      child: Text(text, style: TextStyle(fontSize: 16)),
+          child: const Text(
+            'Add Item',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
-  }
-
-  Widget _buildOrderItemsHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text('Item', style: _headerStyle())),
-          Expanded(
-              flex: 2,
-              child: Text('Quantity',
-                  textAlign: TextAlign.center, style: _headerStyle())),
-          Expanded(
-              flex: 2,
-              child: Text('Unit Price',
-                  textAlign: TextAlign.center, style: _headerStyle())),
-          Expanded(
-              flex: 2,
-              child: Text('Total Price',
-                  textAlign: TextAlign.right, style: _headerStyle())),
-        ],
-      ),
-    );
-  }
-
-  TextStyle _headerStyle() {
-    return TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
   }
 
   Widget _buildOrderItemsList() {
-    return Column(
-      children: orderItems.map((item) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: orderItems.length,
+      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final item = orderItems[index];
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             children: [
+              SizedBox(
+                width: 50,
+                height: 50,
+                child: Image.network(
+                  'https://shiokpos.byondwave.com/item-image.jpg',
+                  errorBuilder: (context, error, stackTrace) => 
+                    Container(
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.fastfood),
+                    ),
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                  flex: 3,
-                  child: Text(item['name'], style: TextStyle(fontSize: 16))),
+                flex: 3,
+                child: Text(
+                  item['name'],
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
               Expanded(
-                  flex: 2,
-                  child:
-                      Text('${item['quantity']}', textAlign: TextAlign.center)),
+                flex: 1,
+                child: Text(
+                  '${item['quantity']}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
               Expanded(
-                  flex: 2,
-                  child:
-                      Text('RM ${item['price']}', textAlign: TextAlign.center)),
+                flex: 2,
+                child: Text(
+                  item['price'].toStringAsFixed(2),
+                  textAlign: TextAlign.right,
+                ),
+              ),
               Expanded(
-                  flex: 2,
-                  child: Text(
-                      'RM ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
-                      textAlign: TextAlign.right)),
+                flex: 2,
+                child: Text(
+                  (item['price'] * item['quantity']).toStringAsFixed(2),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
         );
-      }).toList(),
+      },
     );
   }
 
   Widget _buildOrderSummary() {
-    return Column(
-      children: [
-        _buildSummaryRow(
-            'Total', 'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-        _buildSummaryRow(
-            'SST (6%)', 'RM ${_calculateSST().toStringAsFixed(2)}'),
-        _buildSummaryRow('Service Charge (10%)',
-            'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
-        _buildSummaryRow(
-            'Rounding', 'RM ${_calculateRounding().toStringAsFixed(2)}'),
-        _buildSummaryRow(
-            'Order Total', 'RM ${_calculateTotal().toStringAsFixed(2)}',
-            isPrimary: true),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          _buildSummaryRow('Net Total', _calculateSubtotal(), 'RM 35.40'),
+          const SizedBox(height: 8),
+          _buildSummaryRow('Rounding', _calculateRounding(), 'RM 0.01'),
+          const SizedBox(height: 8),
+          _buildSummaryRow('GST @ 6.0%', _calculateGST(), 'RM 2.39'),
+          const Divider(thickness: 1, height: 24),
+          _buildSummaryRow('Grand Total', _calculateTotal(), 'RM 42.30', isTotal: true),
+          const SizedBox(height: 8),
+          _buildSummaryRow('Change Amount', 0.0, 'RM 0.00', isTotal: true),
+        ],
+      ),
     );
   }
 
-  Widget _buildSummaryRow(String label, String value,
-      {bool isPrimary = false}) {
+  Widget _buildSummaryRow(String label, double value, String formattedValue, {bool isTotal = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 16, color: isPrimary ? Colors.pink : Colors.black)),
-        Text(value,
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: isPrimary ? Colors.pink : Colors.black)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: isTotal ? 16 : 14,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        Text(
+          formattedValue,
+          style: TextStyle(
+            fontSize: isTotal ? 18 : 14,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            color: isTotal ? const Color(0xFFE732A0) : Colors.black,
+          ),
+        ),
       ],
     );
   }
 
-  // Ensure complete payment properly navigates back
-  Widget _buildCompleteOrderButton() {
-    return ElevatedButton(
-      onPressed: () {
-        // This will pop back to HomeScreen with true
-        Navigator.pop(context, true);
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.pink,
-        foregroundColor: Colors.white,
-        minimumSize: Size(double.infinity, 50),
+  Widget _buildPayNowButton() {
+    return SizedBox(
+      height: 50,
+      child: ElevatedButton(
+        onPressed: () {
+          MainLayout.of(context)?.handleOrderPaid(widget.order);
+          Navigator.pop(context, true);
+          MainLayout.of(context)?.selectOrdersTab();
+
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFE732A0),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: const Text(
+          'Pay Now',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
       ),
-      child: Text('Complete Payment'),
     );
   }
 
   double _calculateSubtotal() {
-    double subtotal = 0;
-    for (var item in orderItems) {
-      subtotal += (item['price'] * item['quantity']);
-    }
-    return subtotal;
+    return orderItems.fold(
+        0.0, (sum, item) => sum + (item['price'] * item['quantity']));
   }
 
-  double _calculateSST() {
-    // In the image, SST is shown as 8% instead of 6% from the original code
+  double _calculateGST() {
     return _calculateSubtotal() * 0.06;
   }
 
-  double _calculateServiceCharge() {
-    // In the image, it shows service charge as 6% instead of 10%
-    return _calculateSubtotal() * 0.10;
-  }
-
   double _calculateRounding() {
-    double total =
-        _calculateSubtotal() + _calculateSST() + _calculateServiceCharge();
-    double rounded = (total * 20).round() / 20;
-    return rounded - total;
+    final total = _calculateSubtotal() + _calculateGST();
+    return ((total * 100).round() / 100) - total;
   }
 
   double _calculateTotal() {
-    return _calculateSubtotal() +
-        _calculateSST() +
-        _calculateServiceCharge() +
-        _calculateRounding();
+    return _calculateSubtotal() + _calculateGST() + _calculateRounding();
   }
 
   String _formatTime(DateTime time) {
-    return '${time.hour}:${time.minute.toString().padLeft(2, '0')}, ${time.day}th ${_getMonthName(time.month)}';
-  }
-
-  String _getMonthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return months[month - 1];
-  }
-
-  Widget _buildPaymentMethods() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: _paymentMethods.map((method) {
-        final isSelected = _selectedPaymentMethod == method;
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _selectedPaymentMethod = method;
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isSelected ? Colors.pink : Colors.white,
-              foregroundColor: isSelected ? Colors.white : Colors.black,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-                side: BorderSide(
-                  color: isSelected ? Colors.pink : Colors.black,
-                ),
-              ),
-            ),
-            child: Text(
-              method,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
+    final hour = time.hour > 12 ? time.hour - 12 : time.hour;
+    final period = time.hour >= 12 ? 'PM' : 'AM';
+    return '${hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')} $period';
   }
 }

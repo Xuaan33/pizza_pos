@@ -538,14 +538,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {
-    return orders.where((order) {
-      final statusMatch =
-          _filterStatus == 'All' || order['status'] == _filterStatus;
-      final typeMatch = _filterOrderType == 'All' ||
-          (order['orderType'] ?? 'Dine in') == _filterOrderType;
-      return statusMatch && typeMatch;
-    }).toList();
-  }
+  return orders.where((order) {
+    final statusMatch = _filterStatus == 'All' || 
+        (order['status']?.toString().toLowerCase() == _filterStatus.toLowerCase());
+    final typeMatch = _filterOrderType == 'All' || 
+        (order['orderType']?.toString().toLowerCase() ?? 'dine in') == _filterOrderType.toLowerCase();
+    return statusMatch && typeMatch;
+  }).toList();
+}
 
   void _goToCheckout(Map<String, dynamic> order) {
     Navigator.push(

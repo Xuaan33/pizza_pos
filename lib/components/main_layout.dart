@@ -4,8 +4,11 @@ import 'package:shiok_pos_android_app/screens/orders_screen.dart';
 import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
 import 'package:shiok_pos_android_app/screens/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/delivery_screen.dart';
+import 'package:shiok_pos_android_app/service/auth_service.dart';
 
 class MainLayout extends StatefulWidget {
+  static _MainLayoutState? of(BuildContext context) =>
+      context.findAncestorStateOfType<_MainLayoutState>();
   @override
   _MainLayoutState createState() => _MainLayoutState();
 }
@@ -60,7 +63,7 @@ class _MainLayoutState extends State<MainLayout> {
         orders: _activeOrders,
         isLoading: _isOrdersLoading,
         onOrderPaid: (order) {
-          _handleOrderPaid(order);
+          handleOrderPaid(order);
           setState(() => _isOrdersLoading = true);
           Future.delayed(Duration(seconds: 1), () {
             setState(() => _isOrdersLoading = false);
@@ -147,17 +150,18 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  void _handleOrderPaid(Map<String, dynamic> order) async {
-    setState(() {
-      final index = _activeOrders
-          .indexWhere((o) => o['tableNumber'] == order['tableNumber']);
-      if (index != -1) {
-        _activeOrders[index]['isPaid'] = true;
-        _activeOrders[index]['status'] = 'Paid'; // Add this
-        _tablesWithSubmittedOrders.remove(order['tableNumber']);
-      }
-    });
-  }
+  void handleOrderPaid(Map<String, dynamic> order) async {
+  setState(() {
+    final index = _activeOrders.indexWhere((o) => 
+        o['tableNumber'] == order['tableNumber'] && !o['isPaid']);
+    if (index != -1) {
+      _activeOrders[index]['isPaid'] = true;
+      _activeOrders[index]['status'] = 'Paid';
+      _activeOrders[index]['paidTime'] = DateTime.now();
+      _tablesWithSubmittedOrders.remove(order['tableNumber']);
+    }
+  });
+}
 
   void _handleEditOrder(Map<String, dynamic> order) {
     setState(() {
@@ -172,7 +176,9 @@ class _MainLayoutState extends State<MainLayout> {
     });
   }
 
-  void _logout() {
+  // In main_layout.dart
+  void _logout() async {
+    await AuthService.logout();
     Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
   }
 
@@ -194,8 +200,8 @@ class _MainLayoutState extends State<MainLayout> {
 
       _orderCounter++;
       _tablesWithSubmittedOrders.add(order['tableNumber']);
-    });
-  }
+  });
+}
 
   void _updateOrder(Map<String, dynamic> updatedOrder) {
     setState(() {
@@ -208,16 +214,37 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _markOrderAsPaid(int tableNumber) {
-    setState(() {
-      // Mark as paid
-      final index = _activeOrders
-          .indexWhere((order) => order['tableNumber'] == tableNumber);
-      if (index != -1) {
-        _activeOrders[index]['isPaid'] = true;
-      }
+  setState(() {
+    // Mark as paid
+    final index = _activeOrders
+        .indexWhere((order) => order['tableNumber'] == tableNumber);
+    if (index != -1) {
+      _activeOrders[index]['isPaid'] = true;
+      _activeOrders[index]['status'] = 'Paid';
+    }
 
-      // Update table status
-      _tablesWithSubmittedOrders.remove(tableNumber);
+    // Update table status
+    _tablesWithSubmittedOrders.remove(tableNumber);
+  });
+}
+
+  void selectOrdersTab() {
+    setState(() {
+      _selectedTabIndex = 2; // Orders screen index
     });
   }
+
+  double calculateOrderSubtotal(Map<String, dynamic> order) {
+  return (order['items'] as List).fold(0.0, (sum, item) {
+    return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
+  });
+}
+
+double calculateOrderTax(Map<String, dynamic> order) {
+  return calculateOrderSubtotal(order) * 0.06; // 6% GST
+}
+
+double calculateOrderTotal(Map<String, dynamic> order) {
+  return calculateOrderSubtotal(order) + calculateOrderTax(order);
+}
 }

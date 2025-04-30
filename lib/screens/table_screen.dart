@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'home_screen.dart';
 
@@ -21,36 +24,59 @@ class TableScreen extends StatefulWidget {
 }
 
 class _TableScreenState extends State<TableScreen> {
-  String _selectedFloor = 'Ground Floor';
-  List<Map<String, dynamic>> _activeOrders = [];
+  String _selectedFloor = '';
+  List<String> _floors = [];
+  Map<String, List<Map<String, dynamic>>> _floorTables = {};
+  bool _isLoading = true;
 
-  // Define the tables for each floor
-  final Map<String, List<int>> _floorTables = {
-    'Ground Floor': [1, 2, 3, 4, 5, 6, 7],
-    '2nd Floor': [8, 9, 10, 11, 12, 13, 14, 15],
-    'Rooftop': [16, 17, 18, 19, 20, 21],
-  };
-
-  // Track tables with submitted but unpaid orders
-  Set<int> _tablesWithSubmittedOrders = {};
-
-  void _addNewOrder(int tableNumber, List<Map<String, dynamic>> orderItems) {
-    setState(() {
-      _activeOrders.add({
-        'tableNumber': tableNumber,
-        'items': List<Map<String, dynamic>>.from(orderItems),
-        'submittedTime': DateTime.now(),
-        'isPaid': false, // Add this field
-      });
-      _tablesWithSubmittedOrders.add(tableNumber);
-    });
+  @override
+  void initState() {
+    super.initState();
+    _loadFloorsAndTables();
   }
 
-// Update the _handleTableTap method to properly pass the existing order
-  void _handleTableTap(int tableNumber) {
+  Future<void> _loadFloorsAndTables() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final branch = prefs.getString('branch');
+      if (branch == null) throw Exception('Branch not set');
+
+      final posService = PosService();
+      final response = await posService.getFloorsAndTables(branch);
+
+      if (response['success'] == true) {
+        final floorsData = response['message'];
+        final floorTables = <String, List<Map<String, dynamic>>>{};
+        final floors = <String>[];
+
+        for (var floor in floorsData) {
+          final floorName = floor['floor'];
+          final tables = List<Map<String, dynamic>>.from(floor['tables']);
+          floorTables[floorName] = tables;
+          floors.add(floorName);
+        }
+
+        setState(() {
+          _floorTables = floorTables;
+          _floors = floors;
+          _selectedFloor = floors.isNotEmpty ? floors.first : '';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load tables: $e')),
+      );
+    }
+  }
+
+  void _handleTableTap(Map<String, dynamic> table) {
     // Find the existing unpaid order for this table
     var existingOrder = widget.activeOrders.firstWhere(
-      (order) => order['tableNumber'] == tableNumber && !order['isPaid'],
+      (order) =>
+          order['tableNumber'] == int.parse(table['title'].split(' ').last) &&
+          !order['isPaid'],
       orElse: () => {},
     );
 
@@ -58,7 +84,7 @@ class _TableScreenState extends State<TableScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => HomeScreen(
-          tableNumber: tableNumber,
+          tableNumber: int.parse(table['title'].split(' ').last),
           existingOrder: existingOrder.isNotEmpty
               ? List<Map<String, dynamic>>.from(existingOrder['items'])
               : null,
@@ -66,13 +92,17 @@ class _TableScreenState extends State<TableScreen> {
       ),
     ).then((result) {
       if (result != null) {
-        _handleOrderResult(tableNumber, result);
+        _handleOrderResult(int.parse(table['title'].split(' ').last), result);
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Container(
       color: Colors.grey[100],
       padding: const EdgeInsets.all(20),
@@ -105,56 +135,68 @@ class _TableScreenState extends State<TableScreen> {
   }
 
   Widget _buildTopSection() {
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Welcome back, Administrator',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+    return FutureBuilder(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        final username = snapshot.hasData
+            ? snapshot.data!.getString('username') ?? 'Administrator'
+            : 'Administrator';
 
-        // Right side - Statistics pills
-        Row(
-          children: [
-            _buildStatPill('Revenue', 'RM ${_getTotalRevenue().toStringAsFixed(2)}', Colors.black),
-          const SizedBox(width: 10),
-          _buildStatPill('Unpaid Orders', '${widget.tablesWithSubmittedOrders.length}', Colors.black),
-          const SizedBox(width: 10),
-          _buildStatPill('Tables Free', '${_getTotalTables() - widget.tablesWithSubmittedOrders.length}', Colors.black), // Updated
-          ],
-        ),
-      ],)
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Welcome back, $username',
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Row(
+                children: [
+                  _buildStatPill(
+                    'Revenue',
+                    'RM ${_getTotalRevenue().toStringAsFixed(2)}',
+                    Colors.black,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildStatPill(
+                    'Unpaid Orders',
+                    '${widget.tablesWithSubmittedOrders.length}',
+                    Colors.black,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildStatPill(
+                    'Tables Free',
+                    '${_getAvailableTablesCount()}',
+                    Colors.black,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  // Get tables with orders for current floor
-  // Get total number of tables across all floors
-int _getTotalTables() {
-  return _floorTables.values.fold(0, (sum, floorTables) => sum + floorTables.length);
-}
+  int _getAvailableTablesCount() {
+    if (_floorTables.isEmpty) return 0;
+    final currentFloorTables = _floorTables[_selectedFloor] ?? [];
+    final occupiedTables =
+        currentFloorTables.where((table) => table['active'] == 1).length;
+    return currentFloorTables.length - occupiedTables;
+  }
 
-// Get tables with orders for CURRENT floor (keep your existing method)
-Set<int> _getTablesWithOrdersForCurrentFloor() {
-  List<int> currentFloorTables = _floorTables[_selectedFloor] ?? [];
-  return widget.tablesWithSubmittedOrders
-      .where((tableNum) => currentFloorTables.contains(tableNum))
-      .toSet();
-}
-
-double _getTotalRevenue() {
-  return widget.activeOrders
-      .where((order) => !order['isPaid'])
-      .fold(0.0, (sum, order) {
-        double subtotal = order['items'].fold(0.0, 
-          (s, item) => s + (item['price'] * item['quantity']));
-        return sum + subtotal + (subtotal * 0.16); // 10% service + 6% GST
-      });
-}
+  // Update the _getTotalRevenue method in table_screen.dart
+  double _getTotalRevenue() {
+    return widget.activeOrders.where((order) => !order['isPaid']).fold(0.0,
+        (sum, order) {
+      return sum + _calculateOrderTotal(order);
+    });
+  }
 
   Widget _buildStatPill(String label, String value, Color color) {
     return Container(
@@ -185,158 +227,94 @@ double _getTotalRevenue() {
     );
   }
 
- Widget _buildTablesGrid() {
-  List<int> tables = _floorTables[_selectedFloor] ?? [];
-  
-  return GridView.builder(
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 6,
-      crossAxisSpacing: 5,
-      mainAxisSpacing: 5,
-      childAspectRatio: 0.85, // Adjusted for better proportions
-    ),
-    itemCount: tables.length,
-    itemBuilder: (context, index) {
-      return _buildTableIcon(tables[index]);
-    },
-  );
-}
+  Widget _buildTablesGrid() {
+    final tables = _floorTables[_selectedFloor] ?? [];
 
-Widget _buildTableIcon(int tableNumber) {
-  bool hasOrder = widget.tablesWithSubmittedOrders.contains(tableNumber);
-  double revenue = _getTableRevenue(tableNumber);
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 6,
+        crossAxisSpacing: 5,
+        mainAxisSpacing: 5,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: tables.length,
+      itemBuilder: (context, index) {
+        return _buildTableIcon(tables[index]);
+      },
+    );
+  }
 
-  return GestureDetector(
-    onTap: () => _handleTableTap(tableNumber),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Table Icon
-        Image.asset(
-          hasOrder 
-            ? 'assets/icon-table-with-order.png' 
-            : 'assets/icon-table-empty.png',
-          width: 120, // Exact size from reference
-          height: 120,
-        ),
-        const SizedBox(height: 8),
-        // Table Info
-        Column(
-          children: [
-            Text(
-              'Table $tableNumber',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            const Text(
-              'Max Capacity: 4 Pax',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontWeight: FontWeight.w600
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              revenue > 0 ? 'RM ${revenue.toStringAsFixed(2)}' : 'RM 0',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: hasOrder ? Colors.pink : Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+  // In table_screen.dart, modify _buildTableIcon
+// Update the _buildTableIcon method in table_screen.dart
+  Widget _buildTableIcon(Map<String, dynamic> table) {
+    final tableNumber = table['title'];
+    final tableNum = int.parse(table['title'].split(' ').last);
+    final hasOrder = table['active'] == 1 ||
+        widget.tablesWithSubmittedOrders.contains(tableNum);
 
-  Widget _buildTable(int tableNumber) {
-  bool hasOrder = widget.tablesWithSubmittedOrders.contains(tableNumber);
-  double tableRevenue = _getTableRevenue(tableNumber); // Implement this
+    // Calculate unpaid amount for this table
+    final unpaidOrder = widget.activeOrders.firstWhere(
+      (order) => order['tableNumber'] == tableNum && !order['isPaid'],
+      orElse: () => {},
+    );
 
-  return Card(
-    elevation: 2,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Padding(
-      padding: EdgeInsets.all(12),
+    final unpaidAmount =
+        unpaidOrder.isNotEmpty ? _calculateOrderTotal(unpaidOrder) : table['unpaid_order']?.toDouble();
+
+    final capacity = table['capacity'] ?? 4;
+
+    return GestureDetector(
+      onTap: () => _handleTableTap(table),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Table icon (occupied or empty)
           Image.asset(
-            hasOrder 
-              ? 'assets/icon-table-with-order.png' 
-              : 'assets/icon-table-empty.png',
-            width: 40,
-            height: 40,
+            hasOrder
+                ? 'assets/icon-table-with-order.png'
+                : 'assets/icon-table-empty.png',
+            width: 120,
+            height: 120,
           ),
           SizedBox(height: 8),
-          // Table number
-          Text(
-            'Table $tableNumber',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          // Max capacity
-          Text(
-            'Max Capacity: 4 Pax',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-            ),
-          ),
-          SizedBox(height: 8),
-          // Revenue (RM 0 if empty)
-          Text(
-            'RM ${tableRevenue.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: hasOrder ? Colors.pink : Colors.grey,
-            ),
+          Column(
+            children: [
+              Text(
+                tableNumber,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Max Capacity: $capacity Pax',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'RM ${unpaidAmount.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: hasOrder ? const Color(0xFFE732A0) : Colors.grey[600],
+                ),
+              ),
+            ],
           ),
         ],
       ),
-    ),
-  );
-}
-
-// Helper to calculate revenue for a table
-double _getTableRevenue(int tableNumber) {
-  var order = widget.activeOrders.firstWhere(
-    (o) => o['tableNumber'] == tableNumber && !o['isPaid'],
-    orElse: () => {},
-  );
-  if (order.isEmpty) return 0.0;
-  
-  // Calculate subtotal (same as before)
-  double subtotal = 0;
-  for (var item in order['items']) {
-    subtotal += item['price'] * item['quantity'];
+    );
   }
-
-  // Add taxes and service charge (matching CheckoutScreen logic)
-  double serviceCharge = subtotal * 0.10; // 10% service charge
-  double gst = subtotal * 0.06;          // 6% GST
-  double total = subtotal + serviceCharge + gst;
-
-  return total; // Now returns the final amount customer pays
-}
 
   Widget _buildFloorSelector() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: _floorTables.keys.map((floor) {
+      children: _floors.map((floor) {
         bool isSelected = _selectedFloor == floor;
 
         return Padding(
@@ -348,7 +326,7 @@ double _getTableRevenue(int tableNumber) {
               });
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: isSelected ? Colors.pink : Colors.white,
+              backgroundColor: isSelected ? const Color(0xFFE732A0) : Colors.white,
               foregroundColor: isSelected ? Colors.white : Colors.black,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
@@ -358,14 +336,17 @@ double _getTableRevenue(int tableNumber) {
                 vertical: 10,
               ),
             ),
-            child: Text(floor),
+            child: Text(floor,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,),)
           ),
         );
       }).toList(),
     );
   }
 
-  // In the _TableScreenState class, add this method:
+  // In table_screen.dart, modify the _handleOrderResult method
   void _handleOrderResult(int tableNumber, dynamic result) {
     if (result == null) return;
 
@@ -373,10 +354,30 @@ double _getTableRevenue(int tableNumber) {
       widget.onOrderSubmitted({
         'tableNumber': tableNumber,
         'items': result['items'],
+        'action': result['action'],
         'replaceExisting': result['replaceExisting'] ?? false,
+        'entryTime': result['entryTime'] ?? DateTime.now(),
       });
     } else if (result['action'] == 'paid') {
       widget.onOrderPaid(tableNumber);
     }
+
+    // Always refresh table data
+    _loadFloorsAndTables();
+  }
+
+// In table_screen.dart, add these methods to _TableScreenState
+  double _calculateOrderSubtotal(Map<String, dynamic> order) {
+    return (order['items'] as List).fold(0.0, (sum, item) {
+      return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
+    });
+  }
+
+  double _calculateOrderTax(Map<String, dynamic> order) {
+    return _calculateOrderSubtotal(order) * 0.06; // 6% GST
+  }
+
+  double _calculateOrderTotal(Map<String, dynamic> order) {
+    return _calculateOrderSubtotal(order) + _calculateOrderTax(order);
   }
 }

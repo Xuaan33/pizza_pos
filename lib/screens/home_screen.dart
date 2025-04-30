@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'checkout_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,11 +18,42 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedFoodType = 0;
-  List<Map<String, dynamic>> foodTypes = [
-    {'name': 'Food', 'image': 'assets/img-main-food.png'},
-    {'name': 'Drinks', 'image': 'assets/img-main-drinks.png'},
-  ];
+  int _selectedItemGroupIndex = 0;
+  List<Map<String, dynamic>> itemGroups = [];
+  String _selectedItemGroup = 'All';
+  bool _isLoadingItemGroups = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItemGroups();
+    currentOrderItems =
+        widget.existingOrder != null ? List.from(widget.existingOrder!) : [];
+  }
+
+  Future<void> _loadItemGroups() async {
+    try {
+      final posService = PosService();
+      final response = await posService.getItemGroups();
+      
+      if (response['success'] == true) {
+        setState(() {
+          itemGroups = List<Map<String, dynamic>>.from(
+            response['message']['item_groups']
+          );
+          _isLoadingItemGroups = false;
+        });
+      } else {
+        throw Exception('Failed to load item groups');
+      }
+    } catch (e) {
+      setState(() => _isLoadingItemGroups = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading item groups: $e')),
+      );
+    }
+  }
+
 
   // Menu Items Data
   List<Map<String, dynamic>> foodItems = [
@@ -132,19 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String searchQuery = '';
   TextEditingController searchController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    // Initialize order items with existing order if provided
-    currentOrderItems =
-        widget.existingOrder != null ? List.from(widget.existingOrder!) : [];
-  }
 
   @override
   Widget build(BuildContext context) {
     // Get the correct items list based on selection
     List<Map<String, dynamic>> displayedItems =
-        _selectedFoodType == 0 ? foodItems : drinkItems;
+        _selectedItemGroupIndex == 0 ? foodItems : drinkItems;
 
     // Filter by search if needed
     if (searchQuery.isNotEmpty) {
@@ -214,51 +240,47 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
 
                       // Food/Drinks Selector with Images
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          children: List.generate(foodTypes.length, (index) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedFoodType = index;
-                                    // Clear search when switching categories
-                                    searchController.clear();
-                                    searchQuery = '';
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _selectedFoodType == index
-                                      ? Colors.yellow
-                                      : Colors.white,
-                                  foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Image.asset(
-                                      foodTypes[index]['image'],
-                                      width: 24,
-                                      height: 24,
+                      // Item Groups Selector
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: _isLoadingItemGroups
+                          ? CircularProgressIndicator()
+                          : SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: List.generate(itemGroups.length, (index) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedItemGroupIndex = index;
+                                          _selectedItemGroup = itemGroups[index]['value'];
+                                          // Clear search when switching categories
+                                          searchController.clear();
+                                          searchQuery = '';
+                                        });
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _selectedItemGroupIndex == index
+                                            ? Colors.yellow
+                                            : Colors.white,
+                                        foregroundColor: Colors.black,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                      child: Text(itemGroups[index]['name']),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(foodTypes[index]['name']),
-                                  ],
-                                ),
+                                  );
+                                }),
                               ),
-                            );
-                          }),
-                        ),
-                      ),
+                            ),
+                    ),
 
                       // Search Bar
                       Padding(
@@ -302,8 +324,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              Container(
+      width: 1,
+      height: double.infinity,
+      color: Colors.grey[300],
+    ),
+
               // Current Order Section - Only show if there are items in the order
-              if (currentOrderItems.isNotEmpty)
                 Container(
                   width: 400,
                   color: Colors.white,
@@ -447,8 +474,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return false;
   }
 
-  // Submit order method - sends order to Orders screen
-  // In _submitOrder method:
 void _submitOrder() {
   bool hasExistingOrder = widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
@@ -471,7 +496,7 @@ void _submitOrder() {
               'action': hasExistingOrder ? 'updated' : 'submitted',
               'items': currentOrderItems,
               'replaceExisting': hasExistingOrder,
-              'entryTime': DateTime.now(), // Pass entry time
+              'entryTime': DateTime.now(),
             });
           },
           child: Text(hasExistingOrder ? 'UPDATE' : 'SUBMIT'),
@@ -481,10 +506,10 @@ void _submitOrder() {
   );
 }
 
-  void _goToCheckout() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
+ void _goToCheckout() {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
       builder: (context) => CheckoutScreen(
         order: {
           'tableNumber': widget.tableNumber,
@@ -493,13 +518,13 @@ void _submitOrder() {
         },
       ),
     ),
-    ).then((orderCompleted) {
-      if (orderCompleted == true) {
-        // This will pop all the way back to TableScreen
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      }
-    });
-  }
+  ).then((orderCompleted) {
+    if (orderCompleted == true) {
+      // No need to pop here - just select the Orders tab
+      MainLayout.of(context)?.selectOrdersTab();
+    }
+  });
+}
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(
