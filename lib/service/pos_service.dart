@@ -1,4 +1,3 @@
-// lib/service/pos_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
@@ -60,7 +59,6 @@ class PosService {
     }
   }
 
-  // Add this method to your existing PosService class
   Future<Map<String, dynamic>> getPaymentMethods(String posProfile) async {
     final token = await AuthService.getAuthToken();
     if (token == null) throw Exception('Not authenticated');
@@ -77,4 +75,25 @@ class PosService {
       throw Exception('Failed to load payment methods');
     }
   }
+
+
+Future<Map<String, dynamic>> getTodayInfo() async {
+  try {
+    final token = await AuthService.getAuthToken();
+    if (token == null) throw Exception('Not authenticated');
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/shiok_pos.api.calculate_today_info'),
+      headers: {'Authorization': token},
+    ).timeout(Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load today info: ${response.statusCode}');
+    }
+  } catch (e) {
+    throw Exception('Network error: $e');
+  }
+}
 }

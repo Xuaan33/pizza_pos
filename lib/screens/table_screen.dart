@@ -28,11 +28,15 @@ class _TableScreenState extends State<TableScreen> {
   List<String> _floors = [];
   Map<String, List<Map<String, dynamic>>> _floorTables = {};
   bool _isLoading = true;
+  double _totalRevenue = 0.0;
+  int _totalUnpaidOrders = 0;
+  int _totalTablesFree = 0;
 
   @override
   void initState() {
     super.initState();
     _loadFloorsAndTables();
+      _loadTodayInfo();
   }
 
   Future<void> _loadFloorsAndTables() async {
@@ -70,6 +74,25 @@ class _TableScreenState extends State<TableScreen> {
       );
     }
   }
+
+  Future<void> _loadTodayInfo() async {
+  try {
+    final posService = PosService();
+    final response = await posService.getTodayInfo();
+
+    if (response['success'] == true) {
+      setState(() {
+        _totalRevenue = (response['data']['total_revenue'] ?? 0).toDouble();
+        _totalUnpaidOrders = response['data']['total_unpaid_orders'] ?? 0;
+        _totalTablesFree = response['data']['total_table_free'] ?? 0;
+      });
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to load today info: $e')),
+    );
+  }
+}
 
   void _handleTableTap(Map<String, dynamic> table) {
     // Find the existing unpaid order for this table
@@ -158,19 +181,19 @@ class _TableScreenState extends State<TableScreen> {
                 children: [
                   _buildStatPill(
                     'Revenue',
-                    'RM ${_getTotalRevenue().toStringAsFixed(2)}',
+                    'RM ${_totalRevenue.toStringAsFixed(2)}',
                     Colors.black,
                   ),
                   const SizedBox(width: 10),
                   _buildStatPill(
                     'Unpaid Orders',
-                    '${widget.tablesWithSubmittedOrders.length}',
+                    '$_totalUnpaidOrders',
                     Colors.black,
                   ),
                   const SizedBox(width: 10),
                   _buildStatPill(
                     'Tables Free',
-                    '${_getAvailableTablesCount()}',
+                    '$_totalTablesFree',
                     Colors.black,
                   ),
                 ],
@@ -259,8 +282,9 @@ class _TableScreenState extends State<TableScreen> {
       orElse: () => {},
     );
 
-    final unpaidAmount =
-        unpaidOrder.isNotEmpty ? _calculateOrderTotal(unpaidOrder) : table['unpaid_order']?.toDouble();
+    final unpaidAmount = unpaidOrder.isNotEmpty
+        ? _calculateOrderTotal(unpaidOrder)
+        : table['unpaid_order']?.toDouble();
 
     final capacity = table['capacity'] ?? 4;
 
@@ -320,27 +344,30 @@ class _TableScreenState extends State<TableScreen> {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 5),
           child: ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _selectedFloor = floor;
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isSelected ? const Color(0xFFE732A0) : Colors.white,
-              foregroundColor: isSelected ? Colors.white : Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+              onPressed: () {
+                setState(() {
+                  _selectedFloor = floor;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    isSelected ? const Color(0xFFE732A0) : Colors.white,
+                foregroundColor: isSelected ? Colors.white : Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
               ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 10,
-              ),
-            ),
-            child: Text(floor,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,),)
-          ),
+              child: Text(
+                floor,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              )),
         );
       }).toList(),
     );

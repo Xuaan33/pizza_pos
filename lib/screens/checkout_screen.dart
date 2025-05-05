@@ -19,41 +19,66 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'Cash';
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
+  double _totalRevenue = 0.0;
+  int _totalUnpaidOrders = 0;
+  int _totalTablesFree = 0;
 
   @override
   void initState() {
     super.initState();
     _loadPaymentMethods();
+    _loadTodayInfo();
   }
 
   Future<void> _loadPaymentMethods() async {
-  try {
-    setState(() => _isLoadingPaymentMethods = true);
-    final prefs = await SharedPreferences.getInstance();
-    final posProfile = prefs.getString('pos_profile');
-    if (posProfile == null) throw Exception('POS Profile not set');
+    try {
+      setState(() => _isLoadingPaymentMethods = true);
+      final prefs = await SharedPreferences.getInstance();
+      final posProfile = prefs.getString('pos_profile');
+      if (posProfile == null) throw Exception('POS Profile not set');
 
-    final posService = PosService();
-    final response = await posService.getPaymentMethods(posProfile);
+      final posService = PosService();
+      final response = await posService.getPaymentMethods(posProfile);
 
-    if (response['message'] != null) {
-      setState(() {
-        _paymentMethods = List<Map<String, dynamic>>.from(response['message']);
-        _isLoadingPaymentMethods = false;
-        if (_paymentMethods.isNotEmpty) {
-          _selectedPaymentMethod = _paymentMethods.first['name'];
-        }
-      });
-    } else {
-      throw Exception('No payment methods found');
+      if (response['message'] != null) {
+        setState(() {
+          _paymentMethods =
+              List<Map<String, dynamic>>.from(response['message']);
+          _isLoadingPaymentMethods = false;
+          if (_paymentMethods.isNotEmpty) {
+            _selectedPaymentMethod = _paymentMethods.first['name'];
+          }
+        });
+      } else {
+        throw Exception('No payment methods found');
+      }
+    } catch (e) {
+      setState(() => _isLoadingPaymentMethods = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Failed to load payment methods: ${e.toString()}')),
+      );
     }
-  } catch (e) {
-    setState(() => _isLoadingPaymentMethods = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to load payment methods: ${e.toString()}')),
-    );
   }
-}
+
+  Future<void> _loadTodayInfo() async {
+    try {
+      final posService = PosService();
+      final response = await posService.getTodayInfo();
+
+      if (response['success'] == true) {
+        setState(() {
+          _totalRevenue = (response['data']['total_revenue'] ?? 0).toDouble();
+          _totalUnpaidOrders = response['data']['total_unpaid_orders'] ?? 0;
+          _totalTablesFree = response['data']['total_table_free'] ?? 0;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load today info: $e')),
+      );
+    }
+  }
 
   List<Map<String, dynamic>> get orderItems {
     return List<Map<String, dynamic>>.from(widget.order['items']);
@@ -86,13 +111,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     ),
                   ),
-                  
+
                   // Vertical divider
                   Container(
                     width: 1,
                     color: Colors.grey.shade300,
                   ),
-                  
+
                   // Right side - Order details
                   Expanded(
                     flex: 3,
@@ -122,33 +147,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Text(
-            'Welcome back, nicholas',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const Spacer(),
-          _buildStatPill('Revenue', 'RM0.00'),
-          const SizedBox(width: 8),
-          _buildStatPill('Unpaid Orders', 'RM42.30'),
-          const SizedBox(width: 8),
-          _buildStatPill('Tables Free', '1'),
-        ],
-      ),
-    );
+    return FutureBuilder(
+        future: SharedPreferences.getInstance(),
+        builder: (context, snapshot) {
+          final username = snapshot.hasData
+              ? snapshot.data!.getString('username') ?? 'Administrator'
+              : 'Administrator';
+          return Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.2),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Welcome back, $username',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                _buildStatPill(
+                    'Revenue', 'RM${_totalRevenue.toStringAsFixed(2)}'),
+                const SizedBox(width: 8),
+                _buildStatPill('Unpaid Orders', '$_totalUnpaidOrders'),
+                const SizedBox(width: 8),
+                _buildStatPill('Tables Free', '$_totalTablesFree'),
+              ],
+            ),
+          );
+        });
   }
 
   Widget _buildStatPill(String title, String value) {
@@ -166,6 +199,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(width: 8),
@@ -247,7 +281,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         itemBuilder: (context, index) {
           final method = _paymentMethods[index];
           final isSelected = _selectedPaymentMethod == method['name'];
-          
+
           return GestureDetector(
             onTap: () {
               setState(() {
@@ -257,7 +291,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: isSelected ? const Color(0xFFE732A0) : Colors.blue.shade300,
+                  color: isSelected
+                      ? const Color(0xFFE732A0)
+                      : Colors.blue.shade300,
                   width: isSelected ? 3 : 1,
                 ),
                 borderRadius: BorderRadius.circular(8),
@@ -269,15 +305,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     'https://shiokpos.byondwave.com${method['custom_payment_mode_image']}',
                     height: 60,
                     width: 60,
-                    errorBuilder: (context, error, stackTrace) => 
-                      const Icon(Icons.payment, size: 60),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.payment, size: 60),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     method['name'],
                     style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? const Color(0xFFE732A0) : Colors.black,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      color:
+                          isSelected ? const Color(0xFFE732A0) : Colors.black,
                       fontSize: 16,
                     ),
                     textAlign: TextAlign.center,
@@ -346,11 +384,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 height: 50,
                 child: Image.network(
                   'https://shiokpos.byondwave.com/item-image.jpg',
-                  errorBuilder: (context, error, stackTrace) => 
-                    Container(
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.fastfood),
-                    ),
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey.shade200,
+                    child: const Icon(Icons.fastfood),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -399,21 +436,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       child: Column(
         children: [
-          _buildSummaryRow('Net Total', _calculateSubtotal(), 'RM 35.40'),
+          _buildSummaryRow('Net Total', "RM ${_calculateSubtotal().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
-          _buildSummaryRow('Rounding', _calculateRounding(), 'RM 0.01'),
+          _buildSummaryRow('Rounding', "RM ${_calculateRounding().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
-          _buildSummaryRow('GST @ 6.0%', _calculateGST(), 'RM 2.39'),
+          _buildSummaryRow('GST @ 6.0%', "RM ${_calculateGST().toStringAsFixed(2)}"),
           const Divider(thickness: 1, height: 24),
-          _buildSummaryRow('Grand Total', _calculateTotal(), 'RM 42.30', isTotal: true),
+          _buildSummaryRow('Grand Total', "RM ${_calculateTotal().toStringAsFixed(2)}",
+              isTotal: true),
           const SizedBox(height: 8),
-          _buildSummaryRow('Change Amount', 0.0, 'RM 0.00', isTotal: true),
+          _buildSummaryRow('Change Amount', "RM ${0.0.toStringAsFixed(2)}", isTotal: true),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryRow(String label, double value, String formattedValue, {bool isTotal = false}) {
+  Widget _buildSummaryRow(String label, String formattedValue,
+      {bool isTotal = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -444,7 +483,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           MainLayout.of(context)?.handleOrderPaid(widget.order);
           Navigator.pop(context, true);
           MainLayout.of(context)?.selectOrdersTab();
-
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFE732A0),

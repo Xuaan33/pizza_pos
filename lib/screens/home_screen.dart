@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'checkout_screen.dart';
@@ -20,27 +21,42 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedItemGroupIndex = 0;
   List<Map<String, dynamic>> itemGroups = [];
+  List<Map<String, dynamic>> availableItems = [];
   String _selectedItemGroup = 'All';
   bool _isLoadingItemGroups = true;
+  bool _isLoadingItems = true;
+  List<TextEditingController> _itemRemarkControllers = [];
 
   @override
   void initState() {
     super.initState();
     _loadItemGroups();
+    _loadAvailableItems();
     currentOrderItems =
         widget.existingOrder != null ? List.from(widget.existingOrder!) : [];
+    _itemRemarkControllers = currentOrderItems
+        .map((item) => TextEditingController(text: item['remarks'] ?? ''))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    // Dispose all remark controllers
+    for (var controller in _itemRemarkControllers) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _loadItemGroups() async {
     try {
       final posService = PosService();
       final response = await posService.getItemGroups();
-      
+
       if (response['success'] == true) {
         setState(() {
           itemGroups = List<Map<String, dynamic>>.from(
-            response['message']['item_groups']
-          );
+              response['message']['item_groups']);
           _isLoadingItemGroups = false;
         });
       } else {
@@ -54,109 +70,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _loadAvailableItems() async {
+    try {
+      final posService = PosService();
+      final response = await posService.getAvailableItems();
 
-  // Menu Items Data
-  List<Map<String, dynamic>> foodItems = [
-    {
-      'name': 'Pepperoni Pizza',
-      'price': 70.25,
-      'image': 'assets/pizza.png',
-      'soldOut': false
-    },
-    {
-      'name': 'Margherita Pizza',
-      'price': 65.50,
-      'image': 'assets/pizza.png',
-      'soldOut': false
-    },
-    {
-      'name': 'Hawaiian Pizza',
-      'price': 75.80,
-      'image': 'assets/pizza.png',
-      'soldOut': false
-    },
-    {
-      'name': 'Veggie Pizza',
-      'price': 68.90,
-      'image': 'assets/pizza.png',
-      'soldOut': true
-    },
-    {
-      'name': 'BBQ Chicken Pizza',
-      'price': 80.00,
-      'image': 'assets/pizza.png',
-      'soldOut': false
-    },
-    {
-      'name': 'Meat Lovers Pizza',
-      'price': 85.50,
-      'image': 'assets/pizza.png',
-      'soldOut': false
-    },
-    {
-      'name': 'Supreme Pizza',
-      'price': 82.75,
-      'image': 'assets/pizza.png',
-      'soldOut': false
-    },
-    {
-      'name': 'Cheese Pizza',
-      'price': 60.00,
-      'image': 'assets/pizza.png',
-      'soldOut': false
+      if (response['success'] == true) {
+        setState(() {
+          availableItems =
+              List<Map<String, dynamic>>.from(response['message']['items']);
+          _isLoadingItems = false;
+        });
+      } else {
+        throw Exception('Failed to load available items');
+      }
+    } catch (e) {
+      setState(() => _isLoadingItems = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading available items: $e')),
+      );
     }
-  ];
-
-  List<Map<String, dynamic>> drinkItems = [
-    {
-      'name': 'Coca Cola',
-      'price': 5.50,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-    {
-      'name': 'Sprite',
-      'price': 5.50,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-    {
-      'name': 'Lemon Tea',
-      'price': 6.00,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-    {
-      'name': 'Ice Coffee',
-      'price': 8.50,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-    {
-      'name': 'Orange Juice',
-      'price': 7.00,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-    {
-      'name': 'Mineral Water',
-      'price': 3.00,
-      'image': 'assets/drinks.jpg',
-      'soldOut': true
-    },
-    {
-      'name': 'Hot Tea',
-      'price': 4.50,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-    {
-      'name': 'Milkshake',
-      'price': 12.00,
-      'image': 'assets/drinks.jpg',
-      'soldOut': false
-    },
-  ];
+  }
 
   // Current Order Items
   late List<Map<String, dynamic>> currentOrderItems;
@@ -165,272 +99,549 @@ class _HomeScreenState extends State<HomeScreen> {
   String searchQuery = '';
   TextEditingController searchController = TextEditingController();
 
-
   @override
   Widget build(BuildContext context) {
     // Get the correct items list based on selection
-    List<Map<String, dynamic>> displayedItems =
-        _selectedItemGroupIndex == 0 ? foodItems : drinkItems;
+    List<Map<String, dynamic>> displayedItems = _getFilteredItems();
+    return FutureBuilder(
+        future: SharedPreferences.getInstance(),
+        builder: (context, snapshot) {
+          final username = snapshot.hasData
+              ? snapshot.data!.getString('username') ?? 'Administrator'
+              : 'Administrator';
 
-    // Filter by search if needed
-    if (searchQuery.isNotEmpty) {
-      displayedItems = displayedItems
-          .where((item) =>
-              item['name'].toLowerCase().contains(searchQuery.toLowerCase()))
-          .toList();
-    }
-
-    return WillPopScope(
-      onWillPop: _onWillPop,
-      child: Scaffold(
-        body: SafeArea(
-          child: Row(
-            children: [
-              // Main Content
-              Expanded(
-                child: Container(
-                  color: Colors.white,
-                  child: Column(
-                    children: [
-                      // Top Bar with Back Button
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return WillPopScope(
+            onWillPop: _onWillPop,
+            child: Scaffold(
+              body: SafeArea(
+                child: Row(
+                  children: [
+                    // Main Content
+                    Expanded(
+                      child: Container(
+                        color: Colors.white,
+                        child: Column(
                           children: [
-                            Row(
-                              children: [
-                                // Back Button
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_back),
-                                  onPressed: () {
-                                    _onBackPressed();
-                                  },
+                            // Top Bar with Back Button
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      // Back Button
+                                      IconButton(
+                                        icon: const Icon(Icons.arrow_back),
+                                        onPressed: () {
+                                          _onBackPressed();
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Image.asset('assets/logo-shiokpos.png',
+                                          height: 40),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Welcome back, $username - Table ${widget.tableNumber}',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Item Groups Selector
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: _isLoadingItemGroups
+                                  ? CircularProgressIndicator()
+                                  : SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: List.generate(
+                                            itemGroups.length, (index) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                right: 8.0),
+                                            child: ElevatedButton(
+                                              onPressed: () {
+                                                setState(() {
+                                                  _selectedItemGroupIndex =
+                                                      index;
+                                                  _selectedItemGroup =
+                                                      itemGroups[index]
+                                                          ['value'];
+                                                  searchController.clear();
+                                                  searchQuery = '';
+                                                });
+                                              },
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    _selectedItemGroupIndex ==
+                                                            index
+                                                        ? Colors.yellow
+                                                        : Colors.white,
+                                                foregroundColor: Colors.black,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 12,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                  itemGroups[index]['name']),
+                                            ),
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                            ),
+
+                            // Search Bar
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: TextField(
+                                controller: searchController,
+                                onChanged: (value) {
+                                  setState(() {
+                                    searchQuery = value;
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  hintText: 'Search for food, drinks, etc',
+                                  prefixIcon: const Icon(Icons.search),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                                const SizedBox(width: 8),
-                                Image.asset('assets/logo-shiokpos.png',
-                                    height: 40),
-                                const SizedBox(width: 10),
+                              ),
+                            ),
+
+                            // Menu Grid
+                            Expanded(
+                              child: _isLoadingItems
+                                  ? Center(child: CircularProgressIndicator())
+                                  : GridView.builder(
+                                      padding: const EdgeInsets.all(16.0),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 4,
+                                        crossAxisSpacing: 16,
+                                        mainAxisSpacing: 16,
+                                        childAspectRatio: 0.8,
+                                      ),
+                                      itemCount: displayedItems.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildMenuItem(
+                                            displayedItems[index], index);
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    Container(
+                      width: 1,
+                      height: double.infinity,
+                      color: Colors.grey[300],
+                    ),
+
+                    // Current Order Section
+                    Container(
+                      width: 400,
+                      color: Colors.white,
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
                                 Text(
-                                  'Welcome back, ABC - Table ${widget.tableNumber}',
+                                  'Current Order',
                                   style: const TextStyle(
                                     fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: currentOrderItems.length,
+                              itemBuilder: (context, index) {
+                                return _buildOrderItem(
+                                    currentOrderItems[index], index);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              children: [
+                                Divider(
+                                  color: const Color(0xFFE732A0),
+                                  thickness: 1,
+                                  height: 20,
+                                ),
+                                _buildOrderSummaryRow('Sub Total',
+                                    'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
+                                _buildOrderSummaryRow('Service Charge (10%)',
+                                    'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
+                                _buildOrderSummaryRow('GST (6%)',
+                                    'RM ${_calculateGST().toStringAsFixed(2)}'),
+                                const SizedBox(height: 10),
+                                Column(
+                                  children: [
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: _submitOrder,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          minimumSize:
+                                              const Size.fromHeight(50),
+                                        ),
+                                        child: const Text(
+                                          'Submit Order',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.black,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: _goToCheckout,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFFE732A0),
+                                          minimumSize:
+                                              const Size.fromHeight(50),
+                                        ),
+                                        child: Text(
+                                          'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        });
+  }
+
+  List<Map<String, dynamic>> _getFilteredItems() {
+    String selectedGroup = itemGroups.isNotEmpty
+        ? itemGroups[_selectedItemGroupIndex]['value']
+        : 'All';
+
+    List<Map<String, dynamic>> filteredItems = availableItems.where((item) {
+      bool groupMatch =
+          selectedGroup == 'All' || item['item_group'] == selectedGroup;
+      bool searchMatch = searchQuery.isEmpty ||
+          item['item_name'].toLowerCase().contains(searchQuery.toLowerCase());
+      return groupMatch && searchMatch;
+    }).toList();
+
+    return filteredItems;
+  }
+
+  Future<void> _showItemOptionsDialog(Map<String, dynamic> item) async {
+    List<Map<String, dynamic>> variants =
+        List.from(item['structured_variant_info'] ?? []);
+    Map<String, String?> selectedOptions = {};
+
+    return showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              title: Text(
+                item['item_name'],
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (item['image'] != null)
+                      Container(
+                        height: 150,
+                        width: double.infinity,
+                        margin: EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          image: DecorationImage(
+                            image: NetworkImage(
+                                'https://shiokpos.byondwave.com${item['image']}'),
+                            fit: BoxFit.cover,
+                            onError: (_, __) => AssetImage('assets/pizza.png'),
+                          ),
+                        ),
+                      ),
+                    Text(
+                      'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFFE732A0),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    ...variants.map((variant) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            variant['variant_group'],
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          if (variant['required'] == 1)
+                            Text(
+                              '(Required)',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          SizedBox(height: 8),
+                          ...(variant['options'] as List).map((option) {
+                            return Container(
+                              margin: EdgeInsets.only(bottom: 4),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: selectedOptions[
+                                              variant['variant_group']] ==
+                                          option['option']
+                                      ? Color(0xFFE732A0)
+                                      : Colors.grey.shade300,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: RadioListTile<String>(
+                                title: Text(
+                                  option['option'],
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ],
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Food/Drinks Selector with Images
-                      // Item Groups Selector
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: _isLoadingItemGroups
-                          ? CircularProgressIndicator()
-                          : SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: List.generate(itemGroups.length, (index) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8.0),
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedItemGroupIndex = index;
-                                          _selectedItemGroup = itemGroups[index]['value'];
-                                          // Clear search when switching categories
-                                          searchController.clear();
-                                          searchQuery = '';
-                                        });
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: _selectedItemGroupIndex == index
-                                            ? Colors.yellow
-                                            : Colors.white,
-                                        foregroundColor: Colors.black,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(20),
+                                subtitle: option['additional_cost'] > 0
+                                    ? Text(
+                                        '+RM${option['additional_cost'].toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          color: Color(0xFFE732A0),
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
-                                      ),
-                                      child: Text(itemGroups[index]['name']),
-                                    ),
-                                  );
-                                }),
+                                      )
+                                    : null,
+                                value: option['option'],
+                                groupValue:
+                                    selectedOptions[variant['variant_group']],
+                                activeColor: Color(0xFFE732A0),
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedOptions[variant['variant_group']] =
+                                        value;
+                                  });
+                                },
+                                dense: true,
                               ),
-                            ),
-                    ),
-
-                      // Search Bar
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: TextField(
-                          controller: searchController,
-                          onChanged: (value) {
-                            setState(() {
-                              searchQuery = value;
-                            });
-                          },
-                          decoration: InputDecoration(
-                            hintText: 'Search for food, drinks, etc',
-                            prefixIcon: const Icon(Icons.search),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Menu Grid
-                      Expanded(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.all(16.0),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 0.8,
-                          ),
-                          itemCount: displayedItems.length,
-                          itemBuilder: (context, index) {
-                            return _buildMenuItem(displayedItems[index], index);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                            );
+                          }).toList(),
+                          SizedBox(height: 16),
+                        ],
+                      );
+                    }).toList(),
+                  ],
                 ),
               ),
-
-              Container(
-      width: 1,
-      height: double.infinity,
-      color: Colors.grey[300],
-    ),
-
-              // Current Order Section - Only show if there are items in the order
-                Container(
-                  width: 400,
-                  color: Colors.white,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Current Order',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: currentOrderItems.length,
-                          itemBuilder: (context, index) {
-                            return _buildOrderItem(
-                                currentOrderItems[index], index);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          children: [
-                            Divider(
-                              color: const Color(0xFFE732A0), // Pink divider
-                              thickness: 1,
-                              height: 20,
-                            ),
-                            _buildOrderSummaryRow('Sub Total',
-                                'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                            _buildOrderSummaryRow('Service Charge (10%)',
-                                'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
-                            _buildOrderSummaryRow('GST (6%)',
-                                'RM ${_calculateGST().toStringAsFixed(2)}'),
-                            const SizedBox(height: 10),
-                            // Vertical buttons
-                            Column(
-                              children: [
-                                // Submit Order Button
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _submitOrder,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      minimumSize: const Size.fromHeight(50),
-                                    ),
-                                    child: const Text(
-                                      'Submit Order',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                // Checkout Button
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _goToCheckout,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFE732A0),
-                                      minimumSize: const Size.fromHeight(50),
-                                    ),
-                                    child: Text(
-                                      'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
                   ),
                 ),
-            ],
-          ),
-        ),
-      ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Validate required options
+                    bool allRequiredSelected = true;
+                    for (var variant in variants) {
+                      if (variant['required'] == 1 &&
+                          (selectedOptions[variant['variant_group']] == null ||
+                              selectedOptions[variant['variant_group']]!
+                                  .isEmpty)) {
+                        allRequiredSelected = false;
+                        break;
+                      }
+                    }
+
+                    if (allRequiredSelected || variants.isEmpty) {
+                      _addToOrderWithOptions(item, selectedOptions);
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Please select all required options',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                  child: Text(
+                    'Add to Order',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+  }
+
+  void _addToOrderWithOptions(
+    Map<String, dynamic> item,
+    Map<String, String?> selectedOptions,
+  ) {
+    double additionalCost = 0;
+    List<String> optionTexts = [];
+
+    selectedOptions.forEach((group, option) {
+      if (option != null) {
+        var variant = (item['structured_variant_info'] as List).firstWhere(
+          (v) => v['variant_group'] == group,
+          orElse: () => null,
+        );
+
+        if (variant != null) {
+          var optionData = (variant['options'] as List).firstWhere(
+            (o) => o['option'] == option,
+            orElse: () => null,
+          );
+
+          if (optionData != null) {
+            additionalCost += optionData['additional_cost'] ?? 0;
+            optionTexts.add('$group: $option');
+          }
+        }
+      }
+    });
+
+    setState(() {
+      int existingIndex = currentOrderItems.indexWhere((orderItem) =>
+          orderItem['item_code'] == item['item_code'] &&
+          _compareOptions(orderItem['options'], selectedOptions));
+
+      if (existingIndex != -1) {
+        currentOrderItems[existingIndex]['quantity']++;
+      } else {
+        Map<String, dynamic> newOrderItem = {
+          'item_code': item['item_code'],
+          'name': item['item_name'],
+          'price': (item['price_list_rate'] ?? 0) + additionalCost,
+          'image': item['image'] ?? 'assets/pizza.png',
+          'quantity': 1,
+          'options': selectedOptions,
+          'option_text': optionTexts.join(', '),
+        };
+        currentOrderItems.add(newOrderItem);
+      }
+    });
+  }
+
+  bool _compareOptions(dynamic options1, Map<String, String?> options2) {
+    if (options1 == null || options2 == null) return false;
+    if (options1 is! Map || options2 is! Map) return false;
+
+    var map1 = Map<String, String?>.from(options1);
+    var map2 = Map<String, String?>.from(options2);
+
+    if (map1.length != map2.length) return false;
+
+    for (var key in map1.keys) {
+      if (map1[key] != map2[key]) return false;
+    }
+
+    return true;
   }
 
   // Handle back button press with confirmation dialog
@@ -450,17 +661,50 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discard Order?'),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        title: const Text(
+          'Discard Order?',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
         content: const Text(
-            'Are you sure you want to discard this order and go back?'),
+          'Are you sure you want to discard this order and go back?',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCEL'),
+            child: Text(
+              'CANCEL',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('DISCARD'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFE732A0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: Text(
+              'DISCARD',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -474,64 +718,97 @@ class _HomeScreenState extends State<HomeScreen> {
     return false;
   }
 
-void _submitOrder() {
-  bool hasExistingOrder = widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+  void _submitOrder() {
+    bool hasExistingOrder =
+        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(hasExistingOrder ? 'Update Order' : 'Submit Order'),
-      content: Text(hasExistingOrder 
-          ? 'Update this order?'
-          : 'Submit this order to kitchen?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('CANCEL'),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
         ),
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            Navigator.pop(context, {
-              'action': hasExistingOrder ? 'updated' : 'submitted',
-              'items': currentOrderItems,
-              'replaceExisting': hasExistingOrder,
-              'entryTime': DateTime.now(),
-            });
-          },
-          child: Text(hasExistingOrder ? 'UPDATE' : 'SUBMIT'),
+        title: Text(
+          hasExistingOrder ? 'Update Order' : 'Submit Order',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
-      ],
-    ),
-  );
-}
-
- void _goToCheckout() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => CheckoutScreen(
-        order: {
-          'tableNumber': widget.tableNumber,
-          'items': List<Map<String, dynamic>>.from(currentOrderItems),
-          'entryTime': DateTime.now(),
-        },
+        content: Text(
+          hasExistingOrder
+              ? 'Are you sure you want to update this order?'
+              : 'Are you sure you want to submit this order to kitchen?',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'CANCEL',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context, {
+                'action': hasExistingOrder ? 'updated' : 'submitted',
+                'items': currentOrderItems,
+                'replaceExisting': hasExistingOrder,
+                'entryTime': DateTime.now(),
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFE732A0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: Text(
+              hasExistingOrder ? 'UPDATE' : 'SUBMIT',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
-    ),
-  ).then((orderCompleted) {
-    if (orderCompleted == true) {
-      // No need to pop here - just select the Orders tab
-      MainLayout.of(context)?.selectOrdersTab();
-    }
-  });
-}
+    );
+  }
+
+  void _goToCheckout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutScreen(
+          order: {
+            'tableNumber': widget.tableNumber,
+            'items': List<Map<String, dynamic>>.from(currentOrderItems),
+            'entryTime': DateTime.now(),
+          },
+        ),
+      ),
+    ).then((orderCompleted) {
+      if (orderCompleted == true) {
+        // No need to pop here - just select the Orders tab
+        MainLayout.of(context)?.selectOrdersTab();
+      }
+    });
+  }
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(
       onTap: () {
-        if (!item['soldOut']) {
-          _addToOrder(item);
-        }
+        _showItemOptionsDialog(item);
       },
       child: Container(
         decoration: BoxDecoration(
@@ -546,11 +823,21 @@ void _submitOrder() {
                   child: ClipRRect(
                     borderRadius:
                         const BorderRadius.vertical(top: Radius.circular(15)),
-                    child: Image.asset(
-                      item['image'],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
+                    child: item['image'] != null
+                        ? Image.network(
+                            'https://shiokpos.byondwave.com${item['image']}',
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Image.asset(
+                              'assets/pizza.png',
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Image.asset(
+                            'assets/pizza.png',
+                            fit: BoxFit.cover,
+                          ),
                   ),
                 ),
                 Padding(
@@ -558,7 +845,7 @@ void _submitOrder() {
                   child: Column(
                     children: [
                       Text(
-                        item['name'],
+                        item['item_name'],
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                         ),
@@ -567,9 +854,10 @@ void _submitOrder() {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'RM ${item['price'].toStringAsFixed(2)}',
+                        'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
                         style: TextStyle(
-                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFFE732A0),
                         ),
                       ),
                     ],
@@ -577,7 +865,6 @@ void _submitOrder() {
                 ),
               ],
             ),
-            if (item['soldOut']) _buildSoldOutOverlay(),
           ],
         ),
       ),
@@ -605,58 +892,173 @@ void _submitOrder() {
   }
 
   Widget _buildOrderItem(Map<String, dynamic> item, int index) {
+    // Ensure we have a controller for this item
+    if (index >= _itemRemarkControllers.length) {
+      _itemRemarkControllers
+          .add(TextEditingController(text: item['remarks'] ?? ''));
+    } else {
+      _itemRemarkControllers[index].text = item['remarks'] ?? '';
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
+      child: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              item['image'],
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item['name'],
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (item['remarks'] != null && item['remarks'].isNotEmpty)
-                  Text(
-                    'Remarks: ${item['remarks']}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-              ],
-            ),
-          ),
-          // Quantity controls
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.remove, size: 20),
-                onPressed: () => _decreaseQuantity(index),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: item['image'] != null
+                    ? Image.network(
+                        'https://shiokpos.byondwave.com${item['image']}',
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Image.asset(
+                          'assets/pizza.png',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Image.asset(
+                        'assets/pizza.png',
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                      ),
               ),
-              Text('${item['quantity']}'),
-              IconButton(
-                icon: const Icon(Icons.add, size: 20),
-                onPressed: () => _increaseQuantity(index),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item['name'],
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (item['option_text'] != null &&
+                        item['option_text'].isNotEmpty)
+                      Text(
+                        item['option_text'],
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                    Text(
+                      'RM ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE732A0),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              // Cross icon to remove item
+              // Quantity controls
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove, size: 16),
+                      onPressed: () => _decreaseQuantity(index),
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(minWidth: 30, minHeight: 30),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        '${item['quantity']}',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add, size: 16),
+                      onPressed: () => _increaseQuantity(index),
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(minWidth: 30, minHeight: 30),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.close, size: 20),
+                icon: const Icon(Icons.delete_outline,
+                    size: 20, color: Colors.red),
                 onPressed: () => _removeItem(index),
               ),
             ],
           ),
+          // Enhanced remarks field for this item
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 70, bottom: 8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.grey.shade50,
+              ),
+              child: TextField(
+                controller: _itemRemarkControllers[index],
+                decoration: InputDecoration(
+                  hintText: 'Add remarks...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Color(0xFFE732A0)),
+                  ),
+                  suffixIcon: Container(
+                    margin: EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFE732A0),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.check, size: 16, color: Colors.white),
+                      onPressed: () {
+                        _saveRemarks(index);
+                        FocusScope.of(context).unfocus();
+                      },
+                      constraints: BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+                style: TextStyle(fontSize: 13),
+                onSubmitted: (_) => _saveRemarks(index),
+              ),
+            ),
+          ),
+          Divider(color: Colors.grey.shade200),
         ],
       ),
     );
+  }
+
+  void _saveRemarks(int index) {
+    setState(() {
+      currentOrderItems[index]['remarks'] = _itemRemarkControllers[index].text;
+    });
   }
 
   void _removeItem(int index) {
@@ -672,26 +1074,14 @@ void _submitOrder() {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label),
-          Text(amount),
+          Text(
+            amount,
+            style: TextStyle(
+                fontWeight: FontWeight.bold, color: const Color(0xFFE732A0)),
+          ),
         ],
       ),
     );
-  }
-
-  // Logic functions
-  void _addToOrder(Map<String, dynamic> item) {
-    setState(() {
-      int existingIndex = currentOrderItems
-          .indexWhere((orderItem) => orderItem['name'] == item['name']);
-
-      if (existingIndex != -1) {
-        currentOrderItems[existingIndex]['quantity']++;
-      } else {
-        Map<String, dynamic> newOrderItem = Map.from(item);
-        newOrderItem['quantity'] = 1;
-        currentOrderItems.add(newOrderItem);
-      }
-    });
   }
 
   void _increaseQuantity(int index) {
