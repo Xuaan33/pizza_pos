@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class CheckoutScreen extends StatefulWidget {
+class CheckoutScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> order;
 
   const CheckoutScreen({
@@ -12,10 +14,10 @@ class CheckoutScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _CheckoutScreenState createState() => _CheckoutScreenState();
+  ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
-class _CheckoutScreenState extends State<CheckoutScreen> {
+class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String _selectedPaymentMethod = 'Cash';
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
@@ -86,6 +88,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    
+    return authState.when(
+      initial: () => const Center(child: CircularProgressIndicator()),
+      unauthenticated: () => const Center(child: Text('Unauthorized')),
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -143,6 +151,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
         ),
       ),
+    );
+      }
     );
   }
 

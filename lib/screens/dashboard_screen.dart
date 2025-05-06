@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
 
   @override
-  _DashboardScreenState createState() => _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    
+    return authState.when(
+      initial: () => const Center(child: CircularProgressIndicator()),
+      unauthenticated: () => const Center(child: Text('Unauthorized')),
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) {
     return Container(
       color: Colors.grey[100],
       padding: const EdgeInsets.all(20),
@@ -32,6 +40,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+      }
     );
   }
 

@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
-import 'package:shiok_pos_android_app/service/auth_service.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   String enteredPin = "";
-  String username = "";
-  final AuthService _authService = AuthService();
   final TextEditingController _usernameController = TextEditingController();
   bool _isLoading = false;
 
@@ -26,7 +25,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _validateCredentials() async {
-    username = _usernameController.text.trim();
+    final username = _usernameController.text.trim();
 
     if (username.isEmpty || enteredPin.isEmpty) {
       Fluttertoast.showToast(
@@ -39,22 +38,26 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() => _isLoading = true);
-    final response = await _authService.login(username, enteredPin);
-    setState(() => _isLoading = false);
-
-    if (response['success'] == true) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => MainLayout()),
-      );
-    } else {
+    try {
+      await ref.read(authProvider.notifier).login(username, enteredPin);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => MainLayout()),
+        );
+      }
+    } catch (e) {
       Fluttertoast.showToast(
-        msg: response['message'] ?? "Login failed",
+        msg: e.toString(),
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
       _clearPin();
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

@@ -1,4 +1,3 @@
-// lib/service/auth_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,17 +19,9 @@ class AuthService {
       final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200 && responseData['success'] == true) {
-        // Store the credentials
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('api_key', responseData['message']['api_key']);
-        await prefs.setString('api_secret', responseData['message']['api_secret']);
-        await prefs.setString('username', responseData['message']['username']);
-        await prefs.setString('pos_profile', responseData['message']['pos_profile']);
-        await prefs.setString('branch', responseData['message']['branch']);
-        
         return {
           'success': true,
-          'data': responseData['message'],
+          'message': responseData['message'],
         };
       } else {
         return {

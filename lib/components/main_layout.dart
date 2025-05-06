@@ -5,38 +5,67 @@ import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
 import 'package:shiok_pos_android_app/screens/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/delivery_screen.dart';
 import 'package:shiok_pos_android_app/service/auth_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 
-class MainLayout extends StatefulWidget {
-  static _MainLayoutState? of(BuildContext context) =>
-      context.findAncestorStateOfType<_MainLayoutState>();
+class MainLayout extends ConsumerStatefulWidget {
+  static MainLayoutState? of(BuildContext context) =>
+      context.findAncestorStateOfType<MainLayoutState>();
   @override
-  _MainLayoutState createState() => _MainLayoutState();
+  ConsumerState<MainLayout> createState() => MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class MainLayoutState extends ConsumerState<MainLayout> {
   int _selectedTabIndex = 0;
   List<Map<String, dynamic>> _activeOrders = [];
   Set<int> _tablesWithSubmittedOrders = {};
   bool _isOrdersLoading = false;
+  bool _isLoggingOut = false;
   int _orderCounter = 1;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
 
   @override
+  void initState() {
+    super.initState();
+    // Check auth state when widget initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).loadSession();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          _buildNavigationSidebar(),
-          Expanded(
-            child: IndexedStack(
-              index: _selectedTabIndex,
-              children: _getScreensWithOrders(),
-            ),
+    final authState = ref.watch(authProvider);
+
+    return authState.when(
+      initial: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      unauthenticated: () {
+        if (!_isLoggingOut) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+          });
+        }
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      },
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch) {
+        return Scaffold(
+          body: Row(
+            children: [
+              _buildNavigationSidebar(),
+              Expanded(
+                child: IndexedStack(
+                  index: _selectedTabIndex,
+                  children: _getScreensWithOrders(),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -119,7 +148,16 @@ class _MainLayoutState extends State<MainLayout> {
       [VoidCallback? action]) {
     final bool isSelected = index == _selectedTabIndex;
     return GestureDetector(
-      onTap: action ?? () => setState(() => _selectedTabIndex = index),
+      onTap: action ??
+          () {
+            if (index == -1) {
+              // Logout
+              ref.read(authProvider.notifier).logout();
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            } else {
+              setState(() => _selectedTabIndex = index);
+            }
+          },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Column(
@@ -151,17 +189,17 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void handleOrderPaid(Map<String, dynamic> order) async {
-  setState(() {
-    final index = _activeOrders.indexWhere((o) => 
-        o['tableNumber'] == order['tableNumber'] && !o['isPaid']);
-    if (index != -1) {
-      _activeOrders[index]['isPaid'] = true;
-      _activeOrders[index]['status'] = 'Paid';
-      _activeOrders[index]['paidTime'] = DateTime.now();
-      _tablesWithSubmittedOrders.remove(order['tableNumber']);
-    }
-  });
-}
+    setState(() {
+      final index = _activeOrders.indexWhere(
+          (o) => o['tableNumber'] == order['tableNumber'] && !o['isPaid']);
+      if (index != -1) {
+        _activeOrders[index]['isPaid'] = true;
+        _activeOrders[index]['status'] = 'Paid';
+        _activeOrders[index]['paidTime'] = DateTime.now();
+        _tablesWithSubmittedOrders.remove(order['tableNumber']);
+      }
+    });
+  }
 
   void _handleEditOrder(Map<String, dynamic> order) {
     setState(() {
@@ -176,10 +214,16 @@ class _MainLayoutState extends State<MainLayout> {
     });
   }
 
-  // In main_layout.dart
   void _logout() async {
-    await AuthService.logout();
-    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    await ref.read(authProvider.notifier).logout();
+
+    if (mounted) {
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
   }
 
   void _addNewOrder(Map<String, dynamic> order) {
@@ -200,8 +244,8 @@ class _MainLayoutState extends State<MainLayout> {
 
       _orderCounter++;
       _tablesWithSubmittedOrders.add(order['tableNumber']);
-  });
-}
+    });
+  }
 
   void _updateOrder(Map<String, dynamic> updatedOrder) {
     setState(() {
@@ -214,19 +258,19 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _markOrderAsPaid(int tableNumber) {
-  setState(() {
-    // Mark as paid
-    final index = _activeOrders
-        .indexWhere((order) => order['tableNumber'] == tableNumber);
-    if (index != -1) {
-      _activeOrders[index]['isPaid'] = true;
-      _activeOrders[index]['status'] = 'Paid';
-    }
+    setState(() {
+      // Mark as paid
+      final index = _activeOrders
+          .indexWhere((order) => order['tableNumber'] == tableNumber);
+      if (index != -1) {
+        _activeOrders[index]['isPaid'] = true;
+        _activeOrders[index]['status'] = 'Paid';
+      }
 
-    // Update table status
-    _tablesWithSubmittedOrders.remove(tableNumber);
-  });
-}
+      // Update table status
+      _tablesWithSubmittedOrders.remove(tableNumber);
+    });
+  }
 
   void selectOrdersTab() {
     setState(() {
@@ -235,16 +279,16 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   double calculateOrderSubtotal(Map<String, dynamic> order) {
-  return (order['items'] as List).fold(0.0, (sum, item) {
-    return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
-  });
-}
+    return (order['items'] as List).fold(0.0, (sum, item) {
+      return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
+    });
+  }
 
-double calculateOrderTax(Map<String, dynamic> order) {
-  return calculateOrderSubtotal(order) * 0.06; // 6% GST
-}
+  double calculateOrderTax(Map<String, dynamic> order) {
+    return calculateOrderSubtotal(order) * 0.06; // 6% GST
+  }
 
-double calculateOrderTotal(Map<String, dynamic> order) {
-  return calculateOrderSubtotal(order) + calculateOrderTax(order);
-}
+  double calculateOrderTotal(Map<String, dynamic> order) {
+    return calculateOrderSubtotal(order) + calculateOrderTax(order);
+  }
 }

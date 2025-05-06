@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'home_screen.dart';
 
-class TableScreen extends StatefulWidget {
+class TableScreen extends ConsumerStatefulWidget {
   final Set<int> tablesWithSubmittedOrders;
   final Function(Map<String, dynamic>) onOrderSubmitted;
   final Function(int) onOrderPaid;
@@ -20,14 +22,15 @@ class TableScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _TableScreenState createState() => _TableScreenState();
+  ConsumerState<TableScreen> createState() => _TableScreenState();
 }
 
-class _TableScreenState extends State<TableScreen> {
+class _TableScreenState extends ConsumerState<TableScreen> {
   String _selectedFloor = '';
   List<String> _floors = [];
   Map<String, List<Map<String, dynamic>>> _floorTables = {};
   bool _isLoading = true;
+  bool _isDisposed = false;
   double _totalRevenue = 0.0;
   int _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
@@ -36,7 +39,13 @@ class _TableScreenState extends State<TableScreen> {
   void initState() {
     super.initState();
     _loadFloorsAndTables();
-      _loadTodayInfo();
+    _loadTodayInfo();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true; // Mark as disposed
+    super.dispose();
   }
 
   Future<void> _loadFloorsAndTables() async {
@@ -60,39 +69,63 @@ class _TableScreenState extends State<TableScreen> {
           floors.add(floorName);
         }
 
-        setState(() {
-          _floorTables = floorTables;
-          _floors = floors;
-          _selectedFloor = floors.isNotEmpty ? floors.first : '';
-          _isLoading = false;
-        });
+        if (!_isDisposed) {
+          setState(() {
+            _floorTables = floorTables;
+            _floors = floors;
+            _selectedFloor = floors.isNotEmpty ? floors.first : '';
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load tables: $e')),
-      );
+      if (!_isDisposed) {
+        setState(() => _isLoading = false);
+        // Only show error if we're still mounted and authenticated
+        if (mounted && ref.read(authProvider) is AsyncData) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load tables: $e')),
+          );
+        }
+      }
     }
   }
 
   Future<void> _loadTodayInfo() async {
-  try {
-    final posService = PosService();
-    final response = await posService.getTodayInfo();
+    // Check auth state before loading
+    final authState = ref.read(authProvider);
+    if (authState is! AsyncData) return;
 
-    if (response['success'] == true) {
-      setState(() {
-        _totalRevenue = (response['data']['total_revenue'] ?? 0).toDouble();
-        _totalUnpaidOrders = response['data']['total_unpaid_orders'] ?? 0;
-        _totalTablesFree = response['data']['total_table_free'] ?? 0;
-      });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final branch = prefs.getString('branch');
+
+      // Only proceed if we're authenticated and have branch information
+      if (branch == null || _isDisposed) return;
+
+      final posService = PosService();
+      final response = await posService.getTodayInfo();
+
+      if (_isDisposed) return; // Check again before setState
+
+      if (response['success'] == true) {
+        if (!_isDisposed) {
+          // Final check before setState
+          setState(() {
+            _totalRevenue = (response['data']['total_revenue'] ?? 0).toDouble();
+            _totalUnpaidOrders = response['data']['total_unpaid_orders'] ?? 0;
+            _totalTablesFree = response['data']['total_table_free'] ?? 0;
+          });
+        }
+      }
+    } catch (e) {
+      if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load today info: $e')),
+        );
+      }
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to load today info: $e')),
-    );
   }
-}
 
   void _handleTableTap(Map<String, dynamic> table) {
     // Find the existing unpaid order for this table
@@ -125,36 +158,43 @@ class _TableScreenState extends State<TableScreen> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+    final authState = ref.watch(authProvider);
 
-    return Container(
-      color: Colors.grey[100],
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top section with logo, welcome message and stats
-          _buildTopSection(),
-
-          const SizedBox(height: 30),
-
-          // Tables area
-          Expanded(
+    return authState.when(
+        initial: () => const Center(child: CircularProgressIndicator()),
+        unauthenticated: () => const Center(child: Text('Unauthorized')),
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch) {
+          return Container(
+            color: Colors.grey[100],
+            padding: const EdgeInsets.all(20),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Tables grid
-                Expanded(
-                  child: _buildTablesGrid(),
-                ),
+                // Top section with logo, welcome message and stats
+                _buildTopSection(),
 
-                // Floor selector
-                const SizedBox(height: 20),
-                _buildFloorSelector(),
+                const SizedBox(height: 30),
+
+                // Tables area
+                Expanded(
+                  child: Column(
+                    children: [
+                      // Tables grid
+                      Expanded(
+                        child: _buildTablesGrid(),
+                      ),
+
+                      // Floor selector
+                      const SizedBox(height: 20),
+                      _buildFloorSelector(),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
+          );
+        });
   }
 
   Widget _buildTopSection() {

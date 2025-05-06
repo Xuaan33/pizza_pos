@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 
-class OrdersScreen extends StatefulWidget {
+class OrdersScreen extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> orders;
   final Function(Map<String, dynamic>) onOrderPaid;
   final Function(Map<String, dynamic>) onEditOrder;
@@ -19,10 +21,10 @@ class OrdersScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _OrdersScreenState createState() => _OrdersScreenState();
+  ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
+class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _filterStatus = 'All'; // 'All', 'Draft', 'Paid'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   Map<String, dynamic>? _selectedOrder;
@@ -30,26 +32,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final filteredOrders = _filterOrders(widget.orders);
+    final authState = ref.watch(authProvider);
 
-    return Scaffold(
-      body: Row(
-        children: [
-          // Left panel - Order list
-          Expanded(
-            flex: 5,
-            child: _buildOrderListPanel(filteredOrders),
-          ),
+    return authState.when(
+        initial: () => const Center(child: CircularProgressIndicator()),
+        unauthenticated: () => const Center(child: Text('Unauthorized')),
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch) {
+          return Scaffold(
+            body: Row(
+              children: [
+                // Left panel - Order list
+                Expanded(
+                  flex: 5,
+                  child: _buildOrderListPanel(filteredOrders),
+                ),
 
-          // Right panel - Order details
-          Expanded(
-            flex: 5,
-            child: _selectedOrder != null
-                ? _buildOrderDetailsPanel(_selectedOrder!)
-                : _buildEmptyDetailsPanel(),
-          ),
-        ],
-      ),
-    );
+                // Right panel - Order details
+                Expanded(
+                  flex: 5,
+                  child: _selectedOrder != null
+                      ? _buildOrderDetailsPanel(_selectedOrder!)
+                      : _buildEmptyDetailsPanel(),
+                ),
+              ],
+            ),
+          );
+        });
   }
 
   Widget _buildOrderListPanel(List<Map<String, dynamic>> orders) {
@@ -538,14 +547,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {
-  return orders.where((order) {
-    final statusMatch = _filterStatus == 'All' || 
-        (order['status']?.toString().toLowerCase() == _filterStatus.toLowerCase());
-    final typeMatch = _filterOrderType == 'All' || 
-        (order['orderType']?.toString().toLowerCase() ?? 'dine in') == _filterOrderType.toLowerCase();
-    return statusMatch && typeMatch;
-  }).toList();
-}
+    return orders.where((order) {
+      final statusMatch = _filterStatus == 'All' ||
+          (order['status']?.toString().toLowerCase() ==
+              _filterStatus.toLowerCase());
+      final typeMatch = _filterOrderType == 'All' ||
+          (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
+              _filterOrderType.toLowerCase();
+      return statusMatch && typeMatch;
+    }).toList();
+  }
 
   void _goToCheckout(Map<String, dynamic> order) {
     Navigator.push(

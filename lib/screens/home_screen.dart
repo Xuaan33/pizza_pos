@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'checkout_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   final int tableNumber;
   final List<Map<String, dynamic>>? existingOrder;
 
@@ -15,10 +17,10 @@ class HomeScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedItemGroupIndex = 0;
   List<Map<String, dynamic>> itemGroups = [];
   List<Map<String, dynamic>> availableItems = [];
@@ -103,265 +105,290 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     // Get the correct items list based on selection
     List<Map<String, dynamic>> displayedItems = _getFilteredItems();
-    return FutureBuilder(
-        future: SharedPreferences.getInstance(),
-        builder: (context, snapshot) {
-          final username = snapshot.hasData
-              ? snapshot.data!.getString('username') ?? 'Administrator'
-              : 'Administrator';
+    final authState = ref.watch(authProvider);
 
-          return WillPopScope(
-            onWillPop: _onWillPop,
-            child: Scaffold(
-              body: SafeArea(
-                child: Row(
-                  children: [
-                    // Main Content
-                    Expanded(
-                      child: Container(
-                        color: Colors.white,
-                        child: Column(
-                          children: [
-                            // Top Bar with Back Button
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+    return authState.when(
+        initial: () => const Center(child: CircularProgressIndicator()),
+        unauthenticated: () => const Center(child: Text('Unauthorized')),
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch) {
+          return FutureBuilder(
+              future: SharedPreferences.getInstance(),
+              builder: (context, snapshot) {
+                final username = snapshot.hasData
+                    ? snapshot.data!.getString('username') ?? 'Administrator'
+                    : 'Administrator';
+
+                return WillPopScope(
+                  onWillPop: _onWillPop,
+                  child: Scaffold(
+                    body: SafeArea(
+                      child: Row(
+                        children: [
+                          // Main Content
+                          Expanded(
+                            child: Container(
+                              color: Colors.white,
+                              child: Column(
                                 children: [
-                                  Row(
-                                    children: [
-                                      // Back Button
-                                      IconButton(
-                                        icon: const Icon(Icons.arrow_back),
-                                        onPressed: () {
-                                          _onBackPressed();
-                                        },
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Image.asset('assets/logo-shiokpos.png',
-                                          height: 40),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        'Welcome back, $username - Table ${widget.tableNumber}',
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
+                                  // Top Bar with Back Button
+                                  Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            // Back Button
+                                            IconButton(
+                                              icon:
+                                                  const Icon(Icons.arrow_back),
+                                              onPressed: () {
+                                                _onBackPressed();
+                                              },
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Image.asset(
+                                                'assets/logo-shiokpos.png',
+                                                height: 40),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              'Welcome back, $username - Table ${widget.tableNumber}',
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black,
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Item Groups Selector
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16.0),
+                                    child: _isLoadingItemGroups
+                                        ? CircularProgressIndicator()
+                                        : SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: List.generate(
+                                                  itemGroups.length, (index) {
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                          right: 8.0),
+                                                  child: ElevatedButton(
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _selectedItemGroupIndex =
+                                                            index;
+                                                        _selectedItemGroup =
+                                                            itemGroups[index]
+                                                                ['value'];
+                                                        searchController
+                                                            .clear();
+                                                        searchQuery = '';
+                                                      });
+                                                    },
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          _selectedItemGroupIndex ==
+                                                                  index
+                                                              ? Colors.yellow
+                                                              : Colors.white,
+                                                      foregroundColor:
+                                                          Colors.black,
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                      ),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 12,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                        itemGroups[index]
+                                                            ['name']),
+                                                  ),
+                                                );
+                                              }),
+                                            ),
+                                          ),
+                                  ),
+
+                                  // Search Bar
+                                  Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: TextField(
+                                      controller: searchController,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          searchQuery = value;
+                                        });
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText:
+                                            'Search for food, drinks, etc',
+                                        prefixIcon: const Icon(Icons.search),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+
+                                  // Menu Grid
+                                  Expanded(
+                                    child: _isLoadingItems
+                                        ? Center(
+                                            child: CircularProgressIndicator())
+                                        : GridView.builder(
+                                            padding: const EdgeInsets.all(16.0),
+                                            gridDelegate:
+                                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: 4,
+                                              crossAxisSpacing: 16,
+                                              mainAxisSpacing: 16,
+                                              childAspectRatio: 0.8,
+                                            ),
+                                            itemCount: displayedItems.length,
+                                            itemBuilder: (context, index) {
+                                              return _buildMenuItem(
+                                                  displayedItems[index], index);
+                                            },
+                                          ),
                                   ),
                                 ],
                               ),
                             ),
-
-                            // Item Groups Selector
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16.0),
-                              child: _isLoadingItemGroups
-                                  ? CircularProgressIndicator()
-                                  : SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        children: List.generate(
-                                            itemGroups.length, (index) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                                right: 8.0),
-                                            child: ElevatedButton(
-                                              onPressed: () {
-                                                setState(() {
-                                                  _selectedItemGroupIndex =
-                                                      index;
-                                                  _selectedItemGroup =
-                                                      itemGroups[index]
-                                                          ['value'];
-                                                  searchController.clear();
-                                                  searchQuery = '';
-                                                });
-                                              },
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    _selectedItemGroupIndex ==
-                                                            index
-                                                        ? Colors.yellow
-                                                        : Colors.white,
-                                                foregroundColor: Colors.black,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(20),
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 12,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                  itemGroups[index]['name']),
-                                            ),
-                                          );
-                                        }),
-                                      ),
-                                    ),
-                            ),
-
-                            // Search Bar
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: TextField(
-                                controller: searchController,
-                                onChanged: (value) {
-                                  setState(() {
-                                    searchQuery = value;
-                                  });
-                                },
-                                decoration: InputDecoration(
-                                  hintText: 'Search for food, drinks, etc',
-                                  prefixIcon: const Icon(Icons.search),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            // Menu Grid
-                            Expanded(
-                              child: _isLoadingItems
-                                  ? Center(child: CircularProgressIndicator())
-                                  : GridView.builder(
-                                      padding: const EdgeInsets.all(16.0),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 4,
-                                        crossAxisSpacing: 16,
-                                        mainAxisSpacing: 16,
-                                        childAspectRatio: 0.8,
-                                      ),
-                                      itemCount: displayedItems.length,
-                                      itemBuilder: (context, index) {
-                                        return _buildMenuItem(
-                                            displayedItems[index], index);
-                                      },
-                                    ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    Container(
-                      width: 1,
-                      height: double.infinity,
-                      color: Colors.grey[300],
-                    ),
-
-                    // Current Order Section
-                    Container(
-                      width: 400,
-                      color: Colors.white,
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Current Order',
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: currentOrderItems.length,
-                              itemBuilder: (context, index) {
-                                return _buildOrderItem(
-                                    currentOrderItems[index], index);
-                              },
-                            ),
+
+                          Container(
+                            width: 1,
+                            height: double.infinity,
+                            color: Colors.grey[300],
                           ),
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
+
+                          // Current Order Section
+                          Container(
+                            width: 400,
+                            color: Colors.white,
                             child: Column(
                               children: [
-                                Divider(
-                                  color: const Color(0xFFE732A0),
-                                  thickness: 1,
-                                  height: 20,
+                                Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Current Order',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                _buildOrderSummaryRow('Sub Total',
-                                    'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                                _buildOrderSummaryRow('Service Charge (10%)',
-                                    'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
-                                _buildOrderSummaryRow('GST (6%)',
-                                    'RM ${_calculateGST().toStringAsFixed(2)}'),
-                                const SizedBox(height: 10),
-                                Column(
-                                  children: [
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton(
-                                        onPressed: _submitOrder,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green,
-                                          minimumSize:
-                                              const Size.fromHeight(50),
-                                        ),
-                                        child: const Text(
-                                          'Submit Order',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.black,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
+                                Expanded(
+                                  child: ListView.builder(
+                                    itemCount: currentOrderItems.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildOrderItem(
+                                          currentOrderItems[index], index);
+                                    },
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    children: [
+                                      Divider(
+                                        color: const Color(0xFFE732A0),
+                                        thickness: 1,
+                                        height: 20,
                                       ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton(
-                                        onPressed: _goToCheckout,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              const Color(0xFFE732A0),
-                                          minimumSize:
-                                              const Size.fromHeight(50),
-                                        ),
-                                        child: Text(
-                                          'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
+                                      _buildOrderSummaryRow('Sub Total',
+                                          'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
+                                      _buildOrderSummaryRow(
+                                          'Service Charge (10%)',
+                                          'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
+                                      _buildOrderSummaryRow('GST (6%)',
+                                          'RM ${_calculateGST().toStringAsFixed(2)}'),
+                                      const SizedBox(height: 10),
+                                      Column(
+                                        children: [
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              onPressed: _submitOrder,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green,
+                                                minimumSize:
+                                                    const Size.fromHeight(50),
+                                              ),
+                                              child: const Text(
+                                                'Submit Order',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.black,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                          const SizedBox(height: 10),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              onPressed: _goToCheckout,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    const Color(0xFFE732A0),
+                                                minimumSize:
+                                                    const Size.fromHeight(50),
+                                              ),
+                                              child: Text(
+                                                'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -369,11 +396,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          );
+                  ),
+                );
+              });
         });
   }
 
