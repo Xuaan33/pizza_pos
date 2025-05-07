@@ -76,21 +76,46 @@ class PosService {
     }
   }
 
+  Future<Map<String, dynamic>> getTodayInfo() async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
 
-Future<Map<String, dynamic>> getTodayInfo() async {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/shiok_pos.api.calculate_today_info'),
+        headers: {'Authorization': token},
+      ).timeout(Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load today info: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getOrders(String posProfile) async {
   try {
     final token = await AuthService.getAuthToken();
     if (token == null) throw Exception('Not authenticated');
 
-    final response = await http.get(
-      Uri.parse('$_baseUrl/shiok_pos.api.calculate_today_info'),
-      headers: {'Authorization': token},
+    final response = await http.post(
+      Uri.parse('$_baseUrl/shiok_pos.api.get_pos_invoice_list'),
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'pos_profile': posProfile,
+      }),
     ).timeout(Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to load today info: ${response.statusCode}');
+      throw Exception('Failed to load orders: ${response.statusCode}');
     }
   } catch (e) {
     throw Exception('Network error: $e');

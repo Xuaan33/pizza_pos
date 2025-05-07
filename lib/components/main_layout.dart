@@ -215,14 +215,81 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   void _logout() async {
+    // Show confirmation dialog first
+    final shouldLogout = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            title: const Text(
+              'Confirm Logout',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'Are you sure you want to logout?',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              TextButton(
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                onPressed: () => Navigator.of(context).pop(false),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: const Color(0xFFE732A0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 8.0),
+                ),
+                child: const Text(
+                  'Confirm',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                onPressed: () => Navigator.of(context).pop(true),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!shouldLogout) return;
+
     setState(() {
       _isLoggingOut = true;
     });
 
-    await ref.read(authProvider.notifier).logout();
+    try {
+      await ref.read(authProvider.notifier).logout();
 
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: ${e.toString()}')),
+        );
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
     }
   }
 

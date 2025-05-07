@@ -431,6 +431,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
 
     // Always refresh table data
     _loadFloorsAndTables();
+    _loadTodayInfo();
   }
 
 // In table_screen.dart, add these methods to _TableScreenState

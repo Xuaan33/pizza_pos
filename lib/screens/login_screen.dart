@@ -86,8 +86,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 Image.asset('assets/logo-shiokpos.png', height: 80),
                 const SizedBox(height: 20),
                 const Text("Welcome!",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 30),
+                    style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
 
                 // Username field
                 TextField(
@@ -99,12 +100,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                     filled: true,
                     fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
-                const Text("Enter your PIN", style: TextStyle(fontSize: 16)),
+                const Text("Enter your PIN", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
 
                 // PIN Dots
@@ -117,28 +119,50 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       height: 12,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: index < enteredPin.length ? Colors.black : Colors.grey,
+                        color: index < enteredPin.length
+                            ? Colors.black
+                            : Colors.grey,
                       ),
                     );
                   }),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 _buildPinPad(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
 
                 // Sign In Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading || enteredPin.length != 4 ? null : _validateCredentials,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        side: const BorderSide(color: Color.fromARGB(255, 26, 10, 10)),
+                    onPressed: _isLoading || enteredPin.length != 4
+                        ? null
+                        : _validateCredentials,
+                    style: ButtonStyle(
+                      backgroundColor:
+                          MaterialStateProperty.resolveWith<Color>((states) {
+                        if (states.contains(MaterialState.pressed)) {
+                          return const Color(0xFFE732A0); // Pink when pressed
+                        }
+                        return Colors.white; // Default background
+                      }),
+                      foregroundColor:
+                          MaterialStateProperty.resolveWith<Color>((states) {
+                        if (states.contains(MaterialState.pressed)) {
+                          return Colors.white; // White text when pressed
+                        }
+                        return Colors.black; // Default text color
+                      }),
+                      shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30.0),
+                          side: const BorderSide(
+                              color: Color.fromARGB(255, 26, 10, 10)),
+                        ),
+                      ),
+                      padding: MaterialStateProperty.all<EdgeInsetsGeometry>(
+                        const EdgeInsets.symmetric(
+                            horizontal: 40, vertical: 12),
                       ),
                     ),
                     child: _isLoading
@@ -149,7 +173,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           )
                         : const Text(
                             "Sign In",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                   ),
                 ),
@@ -186,7 +211,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           if (key == '⌫') {
                             if (enteredPin.isNotEmpty) {
                               setState(() {
-                                enteredPin = enteredPin.substring(0, enteredPin.length - 1);
+                                enteredPin = enteredPin.substring(
+                                    0, enteredPin.length - 1);
                               });
                             }
                           } else if (key == 'C') {
@@ -195,18 +221,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             _onKeyPress(key);
                           }
                         },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(25),
+                  style: ButtonStyle(
+                    backgroundColor:
+                        MaterialStateProperty.resolveWith<Color>((states) {
+                      if (states.contains(MaterialState.pressed)) {
+                        return const Color(0xFFE732A0); // Pink when pressed
+                      }
+                      return Colors.white; // Default background
+                    }),
+                    foregroundColor:
+                        MaterialStateProperty.resolveWith<Color>((states) {
+                      if (states.contains(MaterialState.pressed)) {
+                        return Colors.white; // White text when pressed
+                      }
+                      return Colors.black; // Default text color
+                    }),
+                    shape: MaterialStateProperty.all<CircleBorder>(
+                        const CircleBorder()),
+                    padding: MaterialStateProperty.all<EdgeInsetsGeometry>(
+                      const EdgeInsets.all(25), // Adjust button size
+                    ),
                   ),
                   child: SizedBox(
                     width: 24,
                     child: Center(
                       child: Text(
                         key,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
