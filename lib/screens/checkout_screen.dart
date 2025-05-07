@@ -24,6 +24,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _totalRevenue = 0.0;
   int _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
+  double _amountGiven = 0.0;
 
   @override
   void initState() {
@@ -89,71 +90,71 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    
+
     return authState.when(
-      initial: () => const Center(child: CircularProgressIndicator()),
-      unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        initial: () => const Center(child: CircularProgressIndicator()),
+        unauthenticated: () => const Center(child: Text('Unauthorized')),
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              child: Column(
                 children: [
-                  // Left side - Payment Methods
+                  _buildHeader(),
                   Expanded(
-                    flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildTableInfo(),
-                          const SizedBox(height: 16),
-                          _buildPaymentMethodGrid(),
-                        ],
-                      ),
-                    ),
-                  ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left side - Payment Methods
+                        Expanded(
+                          flex: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildTableInfo(),
+                                const SizedBox(height: 16),
+                                _buildPaymentMethodGrid(),
+                              ],
+                            ),
+                          ),
+                        ),
 
-                  // Vertical divider
-                  Container(
-                    width: 1,
-                    color: Colors.grey.shade300,
-                  ),
+                        // Vertical divider
+                        Container(
+                          width: 1,
+                          color: Colors.grey.shade300,
+                        ),
 
-                  // Right side - Order details
-                  Expanded(
-                    flex: 3,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildOrderHeader(),
-                          const SizedBox(height: 16),
-                          _buildOrderItemsList(),
-                          const SizedBox(height: 24),
-                          _buildOrderSummary(),
-                          const SizedBox(height: 24),
-                          _buildPayNowButton(),
-                        ],
-                      ),
+                        // Right side - Order details
+                        Expanded(
+                          flex: 3,
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildOrderHeader(),
+                                const SizedBox(height: 16),
+                                _buildOrderItemsList(),
+                                const SizedBox(height: 24),
+                                _buildOrderSummary(),
+                                const SizedBox(height: 24),
+                                _buildPayNowButton(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-      }
-    );
+          );
+        });
   }
 
   Widget _buildHeader() {
@@ -291,9 +292,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         itemBuilder: (context, index) {
           final method = _paymentMethods[index];
           final isSelected = _selectedPaymentMethod == method['name'];
+          final isCash = method['name'] == 'Cash';
 
           return GestureDetector(
-            onTap: () {
+            onTap: () async {
+              if (isCash) {
+                await _showCashPaymentDialog();
+              }
               setState(() {
                 _selectedPaymentMethod = method['name'];
               });
@@ -359,17 +364,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           'Amount (RM)',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE732A0),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Text(
-            'Add Item',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+        GestureDetector(
+          onTap: () => Navigator.pop(context, true),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE732A0),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              'Add Item',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -438,6 +446,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildOrderSummary() {
+    final changeAmount =
+        _amountGiven > 0 ? _amountGiven - _calculateTotal() : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -446,16 +457,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
       child: Column(
         children: [
-          _buildSummaryRow('Net Total', "RM ${_calculateSubtotal().toStringAsFixed(2)}"),
+          _buildSummaryRow(
+              'Net Total', "RM ${_calculateSubtotal().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
-          _buildSummaryRow('Rounding', "RM ${_calculateRounding().toStringAsFixed(2)}"),
+          _buildSummaryRow(
+              'Rounding', "RM ${_calculateRounding().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
-          _buildSummaryRow('GST @ 6.0%', "RM ${_calculateGST().toStringAsFixed(2)}"),
+          _buildSummaryRow(
+              'GST @ 6.0%', "RM ${_calculateGST().toStringAsFixed(2)}"),
           const Divider(thickness: 1, height: 24),
-          _buildSummaryRow('Grand Total', "RM ${_calculateTotal().toStringAsFixed(2)}",
+          _buildSummaryRow(
+              'Grand Total', "RM ${_calculateTotal().toStringAsFixed(2)}",
               isTotal: true),
           const SizedBox(height: 8),
-          _buildSummaryRow('Change Amount', "RM ${0.0.toStringAsFixed(2)}", isTotal: true),
+          _buildSummaryRow(
+            'Change Amount',
+            "RM ${changeAmount.toStringAsFixed(2)}",
+            isTotal: true,
+          ),
         ],
       ),
     );
@@ -470,14 +489,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           label,
           style: TextStyle(
             fontSize: isTotal ? 16 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
           ),
         ),
         Text(
           formattedValue,
           style: TextStyle(
             fontSize: isTotal ? 18 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
             color: isTotal ? const Color(0xFFE732A0) : Colors.black,
           ),
         ),
@@ -491,7 +510,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       child: ElevatedButton(
         onPressed: () {
           MainLayout.of(context)?.handleOrderPaid(widget.order);
-          Navigator.pop(context, true);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => MainLayout(), // This will show OrdersScreen
+            ),
+            (route) => false,
+          );
           MainLayout.of(context)?.selectOrdersTab();
         },
         style: ElevatedButton.styleFrom(
@@ -506,6 +530,84 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
+    );
+  }
+
+  Future<void> _showCashPaymentDialog() async {
+    final totalAmount = _calculateTotal();
+    final amountController = TextEditingController();
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Cash Payment',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text(
+                  'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: amountController,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount Received',
+                    labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                    prefixText: 'RM ',
+                    hintStyle: TextStyle(fontWeight: FontWeight.bold),
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                final amount = double.tryParse(amountController.text) ?? 0.0;
+                if (amount >= totalAmount) {
+                  setState(() {
+                  _amountGiven = amount;
+                });
+                  Navigator.of(context).pop();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text('Amount received is less than total amount'),
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 

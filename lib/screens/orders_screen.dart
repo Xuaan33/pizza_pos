@@ -30,6 +30,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Map<String, dynamic>? _selectedOrder;
 
   @override
+  void initState() {
+    super.initState();
+    // Trigger refresh when screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.onRefresh != null) {
+        widget.onRefresh!();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final filteredOrders = _filterOrders(widget.orders);
     final authState = ref.watch(authProvider);
@@ -233,6 +244,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final tax = _calculateOrderTax(order);
     final rounding = _calculateRounding(subtotal + tax);
     final total = subtotal + tax + rounding;
+    final isPaid = order['isPaid'] ?? false;
+    final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
@@ -334,6 +347,36 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           ),
           SizedBox(height: 16),
 
+          Card(
+            color: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Customer',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(order['customerName'] ?? 'Guest',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  if (order['remarks'] != null && order['remarks'].isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text('Remarks: ${order['remarks']}',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          SizedBox(height: 16),
+
           // Items Section
           Card(
             color: Colors.white,
@@ -364,10 +407,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                                         TextStyle(fontWeight: FontWeight.w600),
                                   ),
                                 ),
-                                Text('x${item['quantity'] ?? 1}'),
+                                Text(
+                                  'x${(item['quantity']).toStringAsFixed(0)}',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                                 SizedBox(width: 16),
                                 Text(
-                                  'RM ${(item['price'] * (item['quantity'] ?? 1)).toStringAsFixed(2)}',
+                                  'RM ${(item['price'] * (item['quantity'])).toStringAsFixed(2)}',
                                   style: TextStyle(
                                       color: Color(0xFFE732A0),
                                       fontWeight: FontWeight.w600),
@@ -393,24 +439,30 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Summary',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  _buildSummaryRow('Net Total', subtotal),
-                  _buildSummaryRow('Rounding', rounding),
-                  _buildSummaryRow('GST @ 6%', tax),
-                  Divider(height: 16),
-                  _buildSummaryRow('Grand Total', total, isTotal: true),
-                  SizedBox(height: 8),
-                  _buildSummaryRow('Change Amount', 0.0),
+                  _buildSummaryRow('Subtotal', order['subtotal']),
+                  if (taxBreakdown != null)
+                    _buildSummaryRow(
+                      '${taxBreakdown['description']}%',
+                      taxBreakdown['amount'],
+                    ),
+                  _buildSummaryRow('Total', order['total'], isTotal: true),
+                  if (isPaid) ...[
+                    Divider(),
+                    _buildSummaryRow('Payment Method', order['paymentMethod']),
+                    _buildSummaryRow(
+                      'Paid Time',
+                      DateFormat('dd MMM yyyy HH:mm').format(
+                          order['paidTime'] is DateTime
+                              ? order['paidTime']
+                              : DateTime.parse(order['paidTime'])),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
+
           SizedBox(height: 24),
 
           // Action Buttons
@@ -529,18 +581,31 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     );
   }
 
-  Widget _buildSummaryRow(String label, double amount, {bool isTotal = false}) {
+  Widget _buildSummaryRow(String label, dynamic value, {bool isTotal = false}) {
+    String formattedValue;
+
+    if (value is num) {
+      formattedValue = 'RM ${value.toStringAsFixed(2)}';
+    } else if (value is DateTime) {
+      formattedValue = DateFormat('dd MMM yyyy HH:mm').format(value);
+    } else {
+      formattedValue = value?.toString() ?? '';
+    }
+
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          Text('RM ${amount.toStringAsFixed(2)}',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+          Text(label,
+              style: TextStyle(
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
+              )),
+          Text(formattedValue,
+              style: TextStyle(
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
+                color: isTotal ? Color(0xFFE732A0) : Colors.black,
+              )),
         ],
       ),
     );

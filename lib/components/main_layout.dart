@@ -7,6 +7,7 @@ import 'package:shiok_pos_android_app/screens/delivery_screen.dart';
 import 'package:shiok_pos_android_app/service/auth_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   static MainLayoutState? of(BuildContext context) =>
@@ -70,11 +71,76 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _refreshOrders() async {
-    setState(() => _isOrdersLoading = true);
-    // Simulate network delay (remove in production)
-    await Future.delayed(Duration(milliseconds: 500));
+  setState(() => _isOrdersLoading = true);
+  try {
+    final authState = ref.read(authProvider);
+    authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) async {
+        final response = await PosService().getOrders(posProfile);
+        if (response['success'] == true) {
+          final List<dynamic> invoices = response['message'];
+          setState(() {
+            _activeOrders = invoices.map((invoice) {
+              return _mapApiInvoiceToOrder(invoice);
+            }).toList();
+          });
+        }
+      },
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
+    );
+  } finally {
     setState(() => _isOrdersLoading = false);
   }
+}
+
+Map<String, dynamic> _mapApiInvoiceToOrder(Map<String, dynamic> invoice) {
+  final items = (invoice['items'] as List).map((item) {
+    return {
+      'name': item['item_name'],
+      'price': item['rate'],
+      'quantity': item['qty'],
+      'item_code': item['item_code'],
+      'description': item['description'],
+    };
+  }).toList();
+
+  return {
+    'orderId': invoice['name'],
+    'invoiceNumber': invoice['name'],
+    'status': invoice['status'],
+    'orderType': invoice['custom_order_channel'] ?? 'Dine in',
+    'tableNumber': invoice['custom_table'] ?? 0,
+    'items': items,
+    'subtotal': invoice['net_total'],
+    'tax': invoice['total_taxes_and_charges'],
+    'total': invoice['grand_total'],
+    'entryTime': DateTime.parse(invoice['creation']),
+    'paidTime': DateTime.parse(invoice['posting_date']),
+    'isPaid': invoice['status'] == 'Paid',
+    'paymentMethod': invoice['mode_of_payment'] ?? 'Cash',
+    'customerName': invoice['customer_name'] ?? 'Guest',
+    'remarks': invoice['remarks'] ?? 'No remarks',
+    'taxBreakdown': _parseTaxBreakdown(invoice),
+  };
+}
+
+Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
+  try {
+    final taxes = invoice['taxes'] as List;
+    if (taxes.isEmpty) return null;
+    
+    return {
+      'rate': taxes[0]['rate'],
+      'amount': taxes[0]['tax_amount'],
+      'description': taxes[0]['description'],
+    };
+  } catch (e) {
+    return null;
+  }
+}
 
   List<Widget> _getScreensWithOrders() {
     return [
