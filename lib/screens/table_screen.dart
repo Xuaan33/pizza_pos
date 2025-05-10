@@ -375,43 +375,53 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     );
   }
 
-  Widget _buildFloorSelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+Widget _buildFloorSelector() {
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(28),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    padding: const EdgeInsets.all(4),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
       children: _floors.map((floor) {
         bool isSelected = _selectedFloor == floor;
-
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5),
-          child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _selectedFloor = floor;
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    isSelected ? const Color(0xFFE732A0) : Colors.white,
-                foregroundColor: isSelected ? Colors.white : Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedFloor = floor;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFE732A0) : Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Text(
-                floor,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                'Floor ${floor.split(' ').last}',
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
                 ),
-              )),
+              ),
+            ),
+          ),
         );
       }).toList(),
-    );
-  }
+    ),
+  );
+}
 
   // In table_screen.dart, modify the _handleOrderResult method
   void _handleOrderResult(int tableNumber, dynamic result) {

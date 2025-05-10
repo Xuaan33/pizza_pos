@@ -267,13 +267,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 children: [
                   // First row - Order ID and Total
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Order Details',
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold),
                       ),
+                      SizedBox(width: 16),
+                      Text(
+                        order['orderType'] ?? 'Dine in',
+                        style: TextStyle(
+                            color: Colors.black, fontWeight: FontWeight.w600),
+                      ),
+                      Spacer(),
                       Container(
                         padding:
                             EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -295,6 +301,28 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
                   SizedBox(height: 8),
 
+                  // Second row - Order Type and Table
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (order['tableNumber'] != null) ...[
+                        Text(
+                          'Table ${order['tableNumber']}',
+                          style: TextStyle(
+                              color: Colors.black, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                      Text(
+                        _formatDate(order['entryTime'] ?? DateTime.now()),
+                        style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -305,41 +333,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       Text(
                         'RM ${total.toStringAsFixed(2)}',
                         style: TextStyle(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFFE732A0),
                         ),
                       ),
                     ],
-                  ),
-                  SizedBox(height: 8),
-
-                  // Second row - Order Type and Table
-                  Row(
-                    children: [
-                      Text(
-                        order['orderType'] ?? 'Dine in',
-                        style: TextStyle(
-                            color: Colors.black, fontWeight: FontWeight.w600),
-                      ),
-                      if (order['tableNumber'] != null) ...[
-                        SizedBox(width: 16),
-                        Text(
-                          'Table ${order['tableNumber']}',
-                          style: TextStyle(
-                              color: Colors.black, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: 8),
-
-                  // Third row - Date
-                  Text(
-                    _formatDate(order['entryTime'] ?? DateTime.now()),
-                    style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -359,16 +358,39 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Customer',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Customer',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      // Optional: you can add a tag like VIP or Member status here
+                    ],
+                  ),
                   SizedBox(height: 8),
-                  Text(order['customerName'] ?? 'Guest',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  // Customer Name
+                  Text(
+                    order['customerName'] ?? 'Guest',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  // Remarks if available
                   if (order['remarks'] != null && order['remarks'].isNotEmpty)
                     Padding(
                       padding: EdgeInsets.only(top: 8),
-                      child: Text('Remarks: ${order['remarks']}',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(
+                        'Remarks: ${order['remarks']}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -395,23 +417,30 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
+                  // In the Items Section of _buildOrderDetailsPanel, replace the item mapping with:
                   ...items
-                      .map((item) => Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
+                      .map(
+                        (item) => Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: SingleChildScrollView(
                             child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    item['name'] ?? 'Item',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w600),
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      item['name'] ?? 'Item',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'x${(item['quantity']).toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  'x${(item['quantity']).toStringAsFixed(0)}',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                SizedBox(width: 16),
                                 Text(
                                   'RM ${(item['price'] * (item['quantity'])).toStringAsFixed(2)}',
                                   style: TextStyle(
@@ -420,7 +449,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                                 ),
                               ],
                             ),
-                          ))
+                          ),
+                        ),
+                      )
                       .toList(),
                 ],
               ),

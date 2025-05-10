@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -57,9 +58,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     } catch (e) {
       setState(() => _isLoadingPaymentMethods = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Failed to load payment methods: ${e.toString()}')),
+      Fluttertoast.showToast(
+        msg: "Failed to load payment methods: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }
@@ -117,6 +120,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 _buildTableInfo(),
                                 const SizedBox(height: 16),
                                 _buildPaymentMethodGrid(),
+                                const SizedBox(height: 16),
+                                // Action Buttons Grid
+                                _buildActionButtonsGrid(),
                               ],
                             ),
                           ),
@@ -129,22 +135,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
 
                         // Right side - Order details
+                        // Right side - Order details with fixed bottom summary
                         Expanded(
                           flex: 3,
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildOrderHeader(),
-                                const SizedBox(height: 16),
-                                _buildOrderItemsList(),
-                                const SizedBox(height: 24),
-                                _buildOrderSummary(),
-                                const SizedBox(height: 24),
-                                _buildPayNowButton(),
-                              ],
-                            ),
+                          child: Column(
+                            children: [
+                              // Scrollable section
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _buildOrderHeader(),
+                                      const SizedBox(height: 16),
+                                      _buildOrderItemsList(),
+                                      const SizedBox(height: 24),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              // Fixed bottom Order Summary
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16.0),
+                                color: Colors.white,
+                                child: _buildOrderSummary(),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -284,7 +304,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Expanded(
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+          crossAxisCount: 3,
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
         ),
@@ -344,106 +364,217 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Widget _buildOrderHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Item Name',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const Text(
-          'Quantity',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const Text(
-          'Price (RM)',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const Text(
-          'Amount (RM)',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        GestureDetector(
-          onTap: () => Navigator.pop(context, true),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE732A0),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text(
-              'Add Item',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+  Widget _buildActionButtonsGrid() {
+    return Container(
+      height: 120, // Fixed height for the action buttons grid
+      child: Column(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton(
+                    'Split Bill',
+                    const Color(
+                        0xFF00203E), // Dark blue color like in the image
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildActionButton(
+                    'Transfer Table',
+                    const Color(0xFFFB8A3F), // Orange color like in the image
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 10),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton(
+                    'Pay Later',
+                    const Color(0xFF4E73F8), // Blue color like in the image
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildPayNowButton()
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildOrderItemsList() {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: orderItems.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final item = orderItems[index];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
+  Widget _buildActionButton(String label, Color color,
+      {VoidCallback? onPressed}) {
+    return ElevatedButton(
+      onPressed: onPressed ?? () {},
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+        minimumSize: Size.fromHeight(50),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildOrderHeader() {
+  return Column(
+    children: [
+      Row(
+        children: [
+          Spacer(),
+          GestureDetector(
+            onTap: () => Navigator.pop(context, true),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE732A0),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Add Item',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Table(
+        columnWidths: const {
+          0: FixedColumnWidth(0),  // Image column
+          1: FlexColumnWidth(),     // Item name (flexible)
+          2: FixedColumnWidth(60),  // Quantity
+          3: FixedColumnWidth(90),  // Price
+          4: FixedColumnWidth(100),  // Amount
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          TableRow(
             children: [
-              SizedBox(
-                width: 50,
-                height: 50,
-                child: Image.network(
-                  'https://shiokpos.byondwave.com/item-image.jpg',
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.fastfood),
-                  ),
-                ),
+              const SizedBox(), // Empty for image column
+              const Text(
+                'Item Name',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
+              Center(
                 child: Text(
-                  item['name'],
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
+                  'Quantity',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-              Expanded(
-                flex: 1,
+              Align(
+                alignment: Alignment.centerRight,
                 child: Text(
-                  '${item['quantity']}',
-                  textAlign: TextAlign.center,
-                ),
+                  'Price (RM)',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-              Expanded(
-                flex: 2,
+              Align(
+                alignment: Alignment.centerRight,
                 child: Text(
-                  item['price'].toStringAsFixed(2),
-                  textAlign: TextAlign.right,
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  (item['price'] * item['quantity']).toStringAsFixed(2),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+                  'Amount (RM)',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
+        ],
+      ),
+    ],
+  );
+}
+
+Widget _buildOrderItemsList() {
+  return Table(
+    columnWidths: const {
+      0: FixedColumnWidth(62),  // Image column
+      1: FlexColumnWidth(),     // Item name (flexible)
+      2: FixedColumnWidth(80),  // Quantity
+      3: FixedColumnWidth(90),  // Price
+      4: FixedColumnWidth(100),  // Amount
+    },
+    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+    children: [
+      for (final item in orderItems)
+        TableRow(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Image.network(
+                '${item['image']}',
+                width: 50,
+                height: 50,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 50,
+                  height: 50,
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.fastfood),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Text(
+                item['name'],
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'x${item['quantity']}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  item['price'].toStringAsFixed(2),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  (item['price'] * item['quantity']).toStringAsFixed(2),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+    ],
+  );
+}
 
   Widget _buildOrderSummary() {
     final changeAmount =
@@ -505,111 +636,147 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildPayNowButton() {
-    return SizedBox(
-      height: 50,
-      child: ElevatedButton(
-        onPressed: () {
-          MainLayout.of(context)?.handleOrderPaid(widget.order);
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (context) => MainLayout(), // This will show OrdersScreen
-            ),
-            (route) => false,
-          );
-          MainLayout.of(context)?.selectOrdersTab();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE732A0),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: const Text(
-          'Pay Now',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+  return SizedBox(
+    height: 50,
+    child: ElevatedButton(
+      onPressed: () async {
+        if (_selectedPaymentMethod == 'Cash') {
+          // Show cash dialog and wait for amount input
+          await _showCashPaymentDialog();
+          
+          // Only proceed if amount given is sufficient
+          if (_amountGiven >= _calculateTotal()) {
+            _completePayment();
+          } else {
+            Fluttertoast.showToast(
+              msg: "Please enter sufficient cash amount",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.red,
+              textColor: Colors.white,
+            );
+          }
+        } else {
+          // For non-cash payments, proceed directly
+          _completePayment();
+        }
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFE732A0),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
-    );
+      child: const Text(
+        'Pay Now',
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+    ),
+  );
+}
+
+void _completePayment() {
+  // Update order with payment details
+  final updatedOrder = {
+    ...widget.order,
+    'paymentMethod': _selectedPaymentMethod,
+    'isPaid': true,
+    'paidTime': DateTime.now(),
+    'status': 'Paid',
+  };
+  
+  if (_selectedPaymentMethod == 'Cash') {
+    updatedOrder['amountGiven'] = _amountGiven;
+    updatedOrder['changeAmount'] = _amountGiven - _calculateTotal();
   }
 
-  Future<void> _showCashPaymentDialog() async {
-    final totalAmount = _calculateTotal();
-    final amountController = TextEditingController();
+  MainLayout.of(context)?.handleOrderPaid(updatedOrder);
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: (context) => MainLayout(),
+    ),
+    (route) => false,
+  );
+  MainLayout.of(context)?.selectOrdersTab();
+}
 
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
-            'Cash Payment',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                Text(
-                  'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: amountController,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount Received',
-                    labelStyle: TextStyle(fontWeight: FontWeight.bold),
-                    prefixText: 'RM ',
-                    hintStyle: TextStyle(fontWeight: FontWeight.bold),
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text(
-                'Cancel',
+  Future<bool> _showCashPaymentDialog() async {
+  final totalAmount = _calculateTotal();
+  final amountController = TextEditingController();
+
+  return await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Cash Payment',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: ListBody(
+            children: <Widget>[
+              Text(
+                'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              const SizedBox(height: 20),
+              TextField(
+                controller: amountController,
+                decoration: const InputDecoration(
+                  labelText: 'Amount Received',
+                  labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                  prefixText: 'RM ',
+                  hintStyle: TextStyle(fontWeight: FontWeight.bold),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE732A0),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text(
-                'OK',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              onPressed: () {
-                final amount = double.tryParse(amountController.text) ?? 0.0;
-                if (amount >= totalAmount) {
-                  setState(() {
+            onPressed: () {
+              Navigator.of(context).pop(false);
+            },
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE732A0),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'OK',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            onPressed: () {
+              final amount = double.tryParse(amountController.text) ?? 0.0;
+              if (amount >= totalAmount) {
+                setState(() {
                   _amountGiven = amount;
                 });
-                  Navigator.of(context).pop();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content:
-                          Text('Amount received is less than total amount'),
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+                Navigator.of(context).pop(true);
+              } else {
+                Fluttertoast.showToast(
+                  msg: "Amount received is less than total amount",
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                );
+              }
+            },
+          ),
+        ],
+      );
+    },
+  ) ?? false; // Return false if dialog is dismissed
+}
 
   double _calculateSubtotal() {
     return orderItems.fold(

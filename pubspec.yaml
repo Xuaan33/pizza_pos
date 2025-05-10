@@ -58,6 +58,7 @@ dev_dependencies:
   build_runner: ^2.4.6
   freezed: ^2.4.5
   riverpod_generator: ^2.2.5
+  flutter_launcher_icons: ^0.14.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -96,3 +97,9 @@ flutter_native_splash:
   ios: true
   fullscreen: true
   android_gravity: center
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo-shiokpos.png"

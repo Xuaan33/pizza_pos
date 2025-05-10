@@ -358,7 +358,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 'Submit Order',
                                                 style: TextStyle(
                                                   fontSize: 16,
-                                                  color: Colors.black,
+                                                  color: Colors.white,
                                                   fontWeight: FontWeight.w600,
                                                 ),
                                               ),
@@ -446,20 +446,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (item['image'] != null)
-                      Container(
-                        height: 150,
-                        width: double.infinity,
-                        margin: EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          image: DecorationImage(
-                            image: NetworkImage(
-                                'https://shiokpos.byondwave.com${item['image']}'),
-                            fit: BoxFit.cover,
-                            onError: (_, __) => AssetImage('assets/pizza.png'),
-                          ),
-                        ),
-                      ),
                     Text(
                       'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
                       style: TextStyle(
@@ -850,7 +836,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const BorderRadius.vertical(top: Radius.circular(15)),
                     child: item['image'] != null
                         ? Image.network(
-                            'https://shiokpos.byondwave.com${item['image']}',
+                            item['image'],
                             fit: BoxFit.cover,
                             width: double.infinity,
                             errorBuilder: (context, error, stackTrace) =>
@@ -935,7 +921,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 borderRadius: BorderRadius.circular(10),
                 child: item['image'] != null
                     ? Image.network(
-                        'https://shiokpos.byondwave.com${item['image']}',
+                        '${item['image']}',
                         width: 60,
                         height: 60,
                         fit: BoxFit.cover,
