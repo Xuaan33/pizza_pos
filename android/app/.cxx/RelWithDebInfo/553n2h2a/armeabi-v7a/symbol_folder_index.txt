@@ -1,0 +1,1 @@
+C:\project\shiok_pos_android_app\build\app\intermediates\cxx\RelWithDebInfo\553n2h2a\obj\armeabi-v7a
