@@ -24,7 +24,7 @@ class MyApp extends ConsumerWidget {
       home: authState.when(
         initial: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
         unauthenticated: () => const LoginPage(),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) {
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch, paymentMethods, taxes, hasOpening) {
           return MainLayout();
         },
       ),

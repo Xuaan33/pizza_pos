@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -52,7 +54,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch) {
+          posProfile, branch, paymentMethods, taxes, hasOpening) {
         return Scaffold(
           body: Row(
             children: [
@@ -75,24 +77,85 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   try {
     final authState = ref.read(authProvider);
     authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) async {
-        final response = await PosService().getOrders(posProfile);
-        if (response['success'] == true) {
-          final List<dynamic> invoices = response['message'];
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch, paymentMethods, taxes, hasOpening) async {
+        final response = await PosService().getOrders(
+          posProfile: posProfile,
+        );
+        
+        print('Full API response: ${jsonEncode(response)}'); // Debug log
+        
+        if (response['message']['success'] == true) {  // Note the nested 'message'
+          final List<dynamic> invoices = response['message']['message']; // Nested array
+          print('Found ${invoices.length} invoices'); // Debug log
+          
           setState(() {
             _activeOrders = invoices.map((invoice) {
-              return _mapApiInvoiceToOrder(invoice);
+              print('Processing invoice: ${invoice['name']}'); // Debug log
+              
+              // Extract items if they exist
+              final items = (invoice['items'] as List? ?? []).map((item) {
+                return {
+                  'name': item['item_name'] ?? 'Unknown Item',
+                  'price': item['rate']?.toDouble() ?? 0.0,
+                  'quantity': item['qty']?.toDouble() ?? 1.0,
+                  'item_code': item['item_code'] ?? '',
+                };
+              }).toList();
+              
+              // Extract taxes if they exist
+              final taxBreakdown = (invoice['taxes'] as List? ?? []).isNotEmpty 
+                  ? {
+                      'rate': invoice['taxes'][0]['rate']?.toDouble() ?? 0.0,
+                      'amount': invoice['taxes'][0]['amount']?.toDouble() ?? 0.0,
+                      'description': invoice['taxes'][0]['account_head'] ?? 'Tax',
+                    }
+                  : null;
+              
+              return {
+                'orderId': invoice['name'] ?? 'Unknown',
+                'invoiceNumber': invoice['name'] ?? 'Unknown',
+                'status': invoice['status'] ?? 'Draft',
+                'orderType': invoice['custom_order_channel'] ?? 'Dine in',
+                'tableNumber': _extractTableNumber(invoice['custom_table']),
+                'items': items,
+                'subtotal': (invoice['rounded_total']?.toDouble() ?? 0.0) - 
+                           (taxBreakdown?['amount'] ?? 0.0),
+                'tax': taxBreakdown?['amount'] ?? 0.0,
+                'total': invoice['rounded_total']?.toDouble() ?? 0.0,
+                'entryTime': DateTime.parse(invoice['posting_date'] ?? DateTime.now().toString()),
+                'paidTime': invoice['status'] == 'Paid' 
+                    ? DateTime.parse(invoice['posting_date'] ?? DateTime.now().toString())
+                    : null,
+                'isPaid': invoice['status'] == 'Paid',
+                'paymentMethod': invoice['mode_of_payment'] ?? 'Cash',
+                'customerName': invoice['customer_name'] ?? 'Guest',
+                'remarks': invoice['remarks'] ?? 'No remarks',
+                'taxBreakdown': taxBreakdown,
+              };
             }).toList();
           });
+          
+          print('Mapped ${_activeOrders.length} orders'); // Debug log
         }
       },
     );
   } catch (e) {
+    print('Error refreshing orders: $e'); // Debug log
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
     );
   } finally {
     setState(() => _isOrdersLoading = false);
+  }
+}
+
+int _extractTableNumber(String? tableString) {
+  if (tableString == null) return 0;
+  try {
+    final parts = tableString.split(' ');
+    return int.tryParse(parts.last) ?? 0;
+  } catch (e) {
+    return 0;
   }
 }
 

@@ -6,36 +6,50 @@ class AuthService {
   static const String _baseUrl = 'https://shiokpos.byondwave.com/api/method/shiok_pos.api.login';
   
   Future<Map<String, dynamic>> login(String username, String password) async {
-    try {
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': username,
-          'password': password,
-        }),
-      );
+  try {
+    final response = await http.post(
+      Uri.parse(_baseUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+      }),
+    );
 
-      final responseData = jsonDecode(response.body);
+    final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        return {
-          'success': true,
-          'message': responseData['message'],
-        };
-      } else {
-        return {
-          'success': false,
-          'message': responseData['message']['message'] ?? 'Login failed',
-        };
-      }
-    } catch (e) {
+    if (response.statusCode == 200 && responseData['success'] == true) {
+      final message = responseData['message'];
+      return {
+        'success': true,
+        'message': message['message'] ?? 'Login successful',
+        'sid': message['sid'] ?? '',
+        'api_key': message['api_key'] ?? '',
+        'api_secret': message['api_secret'] ?? '',
+        'username': message['username'] ?? '',
+        'email': message['email'] ?? '',
+        'full_name': message['full_name'] ?? message['username'] ?? '',
+        'pos_profile': message['pos_profile'] ?? '',
+        'branch': message['branch'] ?? '',
+        'mode_of_payment': message['mode_of_payment'] ?? [],
+        'taxes': message['taxes'] ?? [],
+        'has_opening': message['has_opening'] ?? false,
+      };
+    } else {
       return {
         'success': false,
-        'message': 'Connection error: $e',
+        'message': responseData['message']['message'] ?? 
+                  responseData['message'] ?? 
+                  'Login failed',
       };
     }
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'Connection error: $e',
+    };
   }
+}
 
   static Future<String?> getAuthToken() async {
     final prefs = await SharedPreferences.getInstance();

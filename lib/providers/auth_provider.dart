@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/models/auth_state.dart';
@@ -19,6 +21,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final fullName = prefs.getString('full_name');
     final posProfile = prefs.getString('pos_profile');
     final branch = prefs.getString('branch');
+    final paymentMethodsJson = prefs.getString('payment_methods');
+    final taxesJson = prefs.getString('taxes');
+    final hasOpening = prefs.getBool('has_opening') ?? false;
 
     // Add session expiration (e.g., 7 days)
     if (lastLogin != null) {
@@ -44,6 +49,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         fullName: fullName ?? username,
         posProfile: posProfile,
         branch: branch,
+        paymentMethods: paymentMethodsJson != null 
+            ? List<Map<String, dynamic>>.from(jsonDecode(paymentMethodsJson))
+            : [],
+        taxes: taxesJson != null
+            ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
+            : [],
+        hasOpening: hasOpening,
       );
     } else {
       state = const AuthState.unauthenticated();
@@ -51,46 +63,49 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> login(String username, String password) async {
-    try {
-      final response = await AuthService().login(username, password);
+  try {
+    final response = await AuthService().login(username, password);
 
-      if (response['success'] == true) {
-        final message = response['message'];
-        final prefs = await SharedPreferences.getInstance();
+    if (response['success'] == true) {
+      final prefs = await SharedPreferences.getInstance();
 
-        await prefs.setString('sid', message['sid']);
-        await prefs.setString('api_key', message['api_key']);
-        await prefs.setString('api_secret', message['api_secret']);
-        await prefs.setString('username', message['username']);
-        await prefs.setString('email', message['email'] ?? '');
-        await prefs.setString(
-            'full_name', message['full_name'] ?? message['username']);
-        await prefs.setString('pos_profile', message['pos_profile']);
-        await prefs.setString('branch', message['branch']);
+      await prefs.setString('sid', response['sid']);
+      await prefs.setString('api_key', response['api_key']);
+      await prefs.setString('api_secret', response['api_secret']);
+      await prefs.setString('username', response['username']);
+      await prefs.setString('email', response['email']);
+      await prefs.setString('full_name', response['full_name']);
+      await prefs.setString('pos_profile', response['pos_profile']);
+      await prefs.setString('branch', response['branch']);
+      await prefs.setString('payment_methods', jsonEncode(response['mode_of_payment']));
+      await prefs.setString('taxes', jsonEncode(response['taxes']));
+      await prefs.setBool('has_opening', response['has_opening']);
 
-        state = AuthState.authenticated(
-          sid: message['sid'],
-          apiKey: message['api_key'],
-          apiSecret: message['api_secret'],
-          username: message['username'],
-          email: message['email'] ?? '',
-          fullName: message['full_name'] ?? message['username'],
-          posProfile: message['pos_profile'],
-          branch: message['branch'],
-        );
-      } else {
-        state = const AuthState.unauthenticated();
-        throw Exception(response['message'] ?? 'Login failed');
-      }
-    } catch (e) {
+      state = AuthState.authenticated(
+        sid: response['sid'],
+        apiKey: response['api_key'],
+        apiSecret: response['api_secret'],
+        username: response['username'],
+        email: response['email'],
+        fullName: response['full_name'],
+        posProfile: response['pos_profile'],
+        branch: response['branch'],
+        paymentMethods: List<Map<String, dynamic>>.from(response['mode_of_payment']),
+        taxes: List<Map<String, dynamic>>.from(response['taxes']),
+        hasOpening: response['has_opening'],
+      );
+    } else {
       state = const AuthState.unauthenticated();
-      rethrow;
+      throw Exception(response['message'] ?? 'Login failed');
     }
+  } catch (e) {
+    state = const AuthState.unauthenticated();
+    rethrow;
   }
+}
 
   Future<void> logout() async {
-     state = const AuthState.unauthenticated();
-    // Then clear all stored preferences
+    state = const AuthState.unauthenticated();
     await AuthService.logout();
   }
 }

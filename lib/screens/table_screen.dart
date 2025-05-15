@@ -164,7 +164,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch) {
+            posProfile, branch, paymentMethods, taxes, hasOpening) {
           return Container(
             color: Colors.grey[100],
             padding: const EdgeInsets.all(20),

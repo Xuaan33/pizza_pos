@@ -27,7 +27,10 @@ mixin _$AuthState {
             String email,
             String fullName,
             String posProfile,
-            String branch)
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)
         authenticated,
     required TResult Function() unauthenticated,
   }) =>
@@ -43,7 +46,10 @@ mixin _$AuthState {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) =>
@@ -59,7 +65,10 @@ mixin _$AuthState {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -159,7 +168,10 @@ class _$InitialImpl implements _Initial {
             String email,
             String fullName,
             String posProfile,
-            String branch)
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -178,7 +190,10 @@ class _$InitialImpl implements _Initial {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -197,7 +212,10 @@ class _$InitialImpl implements _Initial {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -261,7 +279,10 @@ abstract class _$$AuthenticatedImplCopyWith<$Res> {
       String email,
       String fullName,
       String posProfile,
-      String branch});
+      String branch,
+      List<Map<String, dynamic>> paymentMethods,
+      List<Map<String, dynamic>> taxes,
+      bool hasOpening});
 }
 
 /// @nodoc
@@ -285,6 +306,9 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
     Object? fullName = null,
     Object? posProfile = null,
     Object? branch = null,
+    Object? paymentMethods = null,
+    Object? taxes = null,
+    Object? hasOpening = null,
   }) {
     return _then(_$AuthenticatedImpl(
       sid: null == sid
@@ -319,6 +343,18 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
           ? _value.branch
           : branch // ignore: cast_nullable_to_non_nullable
               as String,
+      paymentMethods: null == paymentMethods
+          ? _value._paymentMethods
+          : paymentMethods // ignore: cast_nullable_to_non_nullable
+              as List<Map<String, dynamic>>,
+      taxes: null == taxes
+          ? _value._taxes
+          : taxes // ignore: cast_nullable_to_non_nullable
+              as List<Map<String, dynamic>>,
+      hasOpening: null == hasOpening
+          ? _value.hasOpening
+          : hasOpening // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -334,7 +370,12 @@ class _$AuthenticatedImpl implements _Authenticated {
       required this.email,
       required this.fullName,
       required this.posProfile,
-      required this.branch});
+      required this.branch,
+      required final List<Map<String, dynamic>> paymentMethods,
+      required final List<Map<String, dynamic>> taxes,
+      required this.hasOpening})
+      : _paymentMethods = paymentMethods,
+        _taxes = taxes;
 
   @override
   final String sid;
@@ -352,10 +393,28 @@ class _$AuthenticatedImpl implements _Authenticated {
   final String posProfile;
   @override
   final String branch;
+  final List<Map<String, dynamic>> _paymentMethods;
+  @override
+  List<Map<String, dynamic>> get paymentMethods {
+    if (_paymentMethods is EqualUnmodifiableListView) return _paymentMethods;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_paymentMethods);
+  }
+
+  final List<Map<String, dynamic>> _taxes;
+  @override
+  List<Map<String, dynamic>> get taxes {
+    if (_taxes is EqualUnmodifiableListView) return _taxes;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_taxes);
+  }
+
+  @override
+  final bool hasOpening;
 
   @override
   String toString() {
-    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch)';
+    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening)';
   }
 
   @override
@@ -374,12 +433,28 @@ class _$AuthenticatedImpl implements _Authenticated {
                 other.fullName == fullName) &&
             (identical(other.posProfile, posProfile) ||
                 other.posProfile == posProfile) &&
-            (identical(other.branch, branch) || other.branch == branch));
+            (identical(other.branch, branch) || other.branch == branch) &&
+            const DeepCollectionEquality()
+                .equals(other._paymentMethods, _paymentMethods) &&
+            const DeepCollectionEquality().equals(other._taxes, _taxes) &&
+            (identical(other.hasOpening, hasOpening) ||
+                other.hasOpening == hasOpening));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, sid, apiKey, apiSecret, username,
-      email, fullName, posProfile, branch);
+  int get hashCode => Object.hash(
+      runtimeType,
+      sid,
+      apiKey,
+      apiSecret,
+      username,
+      email,
+      fullName,
+      posProfile,
+      branch,
+      const DeepCollectionEquality().hash(_paymentMethods),
+      const DeepCollectionEquality().hash(_taxes),
+      hasOpening);
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -401,12 +476,15 @@ class _$AuthenticatedImpl implements _Authenticated {
             String email,
             String fullName,
             String posProfile,
-            String branch)
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
-    return authenticated(
-        sid, apiKey, apiSecret, username, email, fullName, posProfile, branch);
+    return authenticated(sid, apiKey, apiSecret, username, email, fullName,
+        posProfile, branch, paymentMethods, taxes, hasOpening);
   }
 
   @override
@@ -421,12 +499,15 @@ class _$AuthenticatedImpl implements _Authenticated {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
-    return authenticated?.call(
-        sid, apiKey, apiSecret, username, email, fullName, posProfile, branch);
+    return authenticated?.call(sid, apiKey, apiSecret, username, email,
+        fullName, posProfile, branch, paymentMethods, taxes, hasOpening);
   }
 
   @override
@@ -441,14 +522,17 @@ class _$AuthenticatedImpl implements _Authenticated {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
   }) {
     if (authenticated != null) {
       return authenticated(sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch);
+          posProfile, branch, paymentMethods, taxes, hasOpening);
     }
     return orElse();
   }
@@ -497,7 +581,10 @@ abstract class _Authenticated implements AuthState {
       required final String email,
       required final String fullName,
       required final String posProfile,
-      required final String branch}) = _$AuthenticatedImpl;
+      required final String branch,
+      required final List<Map<String, dynamic>> paymentMethods,
+      required final List<Map<String, dynamic>> taxes,
+      required final bool hasOpening}) = _$AuthenticatedImpl;
 
   String get sid;
   String get apiKey;
@@ -507,6 +594,9 @@ abstract class _Authenticated implements AuthState {
   String get fullName;
   String get posProfile;
   String get branch;
+  List<Map<String, dynamic>> get paymentMethods;
+  List<Map<String, dynamic>> get taxes;
+  bool get hasOpening;
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -565,7 +655,10 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String email,
             String fullName,
             String posProfile,
-            String branch)
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -584,7 +677,10 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -603,7 +699,10 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String email,
             String fullName,
             String posProfile,
-            String branch)?
+            String branch,
+            List<Map<String, dynamic>> paymentMethods,
+            List<Map<String, dynamic>> taxes,
+            bool hasOpening)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),

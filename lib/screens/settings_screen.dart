@@ -17,7 +17,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch) {
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch, paymentMethods, taxes, hasOpening) {
     return Container(
       color: Colors.grey[100],
       padding: const EdgeInsets.all(20),

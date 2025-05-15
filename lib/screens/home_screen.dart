@@ -28,6 +28,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoadingItemGroups = true;
   bool _isLoadingItems = true;
   List<TextEditingController> _itemRemarkControllers = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -111,7 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch) {
+            posProfile, branch, paymentMethods, taxes, hasOpening) {
           return FutureBuilder(
               future: SharedPreferences.getInstance(),
               builder: (context, snapshot) {
@@ -347,21 +348,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         children: [
                                           SizedBox(
                                             width: double.infinity,
-                                            child: ElevatedButton(
-                                              onPressed: _submitOrder,
+                                            child: // In your build method, update the submit button:
+                                                ElevatedButton(
+                                              onPressed: _isLoading
+                                                  ? null
+                                                  : _submitOrder,
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: Colors.green,
                                                 minimumSize:
                                                     const Size.fromHeight(50),
                                               ),
-                                              child: const Text(
-                                                'Submit Order',
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
+                                              child: _isLoading
+                                                  ? const CircularProgressIndicator(
+                                                      color: Colors.white)
+                                                  : const Text(
+                                                      'Submit Order',
+                                                      
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w600),
+                                                    ),
                                             ),
                                           ),
                                           const SizedBox(height: 10),
@@ -446,14 +454,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (item['image'] != null)
-                    Text(
-                      'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Color(0xFFE732A0),
+                      Text(
+                        'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFFE732A0),
+                        ),
                       ),
-                    ),
                     SizedBox(height: 16),
                     ...variants.map((variant) {
                       return Column(
@@ -1125,7 +1133,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   double _calculateGST() {
-    return _calculateSubtotal() * 0.06; // 6% of subtotal
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+              posProfile, branch, paymentMethods, taxes, hasOpening) {
+            // Find the GST tax rate
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 6.0}, // Default to 6% if not found
+            );
+            return _calculateSubtotal() * (gstTax['rate'] ?? 6.0) / 100;
+          },
+        ) ??
+        (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
   }
 
   double _calculateTotal() {

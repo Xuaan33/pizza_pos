@@ -26,6 +26,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   int _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
   double _amountGiven = 0.0;
+  bool _isProcessingPayment = false;
+
 
   @override
   void initState() {
@@ -34,37 +36,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _loadTodayInfo();
   }
 
-  Future<void> _loadPaymentMethods() async {
-    try {
-      setState(() => _isLoadingPaymentMethods = true);
-      final prefs = await SharedPreferences.getInstance();
-      final posProfile = prefs.getString('pos_profile');
-      if (posProfile == null) throw Exception('POS Profile not set');
-
-      final posService = PosService();
-      final response = await posService.getPaymentMethods(posProfile);
-
-      if (response['message'] != null) {
+  void _loadPaymentMethods() {
+    final authState = ref.read(authProvider);
+    authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening) {
         setState(() {
-          _paymentMethods =
-              List<Map<String, dynamic>>.from(response['message']);
+          _paymentMethods = paymentMethods;
           _isLoadingPaymentMethods = false;
           if (_paymentMethods.isNotEmpty) {
             _selectedPaymentMethod = _paymentMethods.first['name'];
           }
         });
-      } else {
-        throw Exception('No payment methods found');
-      }
-    } catch (e) {
-      setState(() => _isLoadingPaymentMethods = false);
-      Fluttertoast.showToast(
-        msg: "Failed to load payment methods: ${e.toString()}",
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
-    }
+      },
+    );
   }
 
   Future<void> _loadTodayInfo() async {
@@ -98,7 +83,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch) {
+            posProfile, branch, paymentMethods, taxes, hasOpening) {
           return Scaffold(
             backgroundColor: Colors.white,
             body: SafeArea(
@@ -400,9 +385,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: _buildPayNowButton()
-                ),
+                Expanded(child: _buildPayNowButton()),
               ],
             ),
           ),
@@ -436,145 +419,143 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildOrderHeader() {
-  return Column(
-    children: [
-      Row(
-        children: [
-          Spacer(),
-          GestureDetector(
-            onTap: () => Navigator.pop(context, true),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE732A0),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Add Item',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      Table(
-        columnWidths: const {
-          0: FixedColumnWidth(0),  // Image column
-          1: FlexColumnWidth(),     // Item name (flexible)
-          2: FixedColumnWidth(60),  // Quantity
-          3: FixedColumnWidth(90),  // Price
-          4: FixedColumnWidth(100),  // Amount
-        },
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        children: [
-          TableRow(
-            children: [
-              const SizedBox(), // Empty for image column
-              const Text(
-                'Item Name',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Center(
-                child: Text(
-                  'Quantity',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'Price (RM)',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'Amount (RM)',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ],
-  );
-}
-
-Widget _buildOrderItemsList() {
-  return Table(
-    columnWidths: const {
-      0: FixedColumnWidth(62),  // Image column
-      1: FlexColumnWidth(),     // Item name (flexible)
-      2: FixedColumnWidth(80),  // Quantity
-      3: FixedColumnWidth(90),  // Price
-      4: FixedColumnWidth(100),  // Amount
-    },
-    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-    children: [
-      for (final item in orderItems)
-        TableRow(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-          ),
+    return Column(
+      children: [
+        Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Image.network(
-                '${item['image']}',
-                width: 50,
-                height: 50,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 50,
-                  height: 50,
-                  color: Colors.grey.shade200,
-                  child: const Icon(Icons.fastfood),
+            Spacer(),
+            GestureDetector(
+              onTap: () => Navigator.pop(context, true),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE732A0),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Text(
-                item['name'],
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'x${item['quantity']}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  item['price'].toStringAsFixed(2),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  (item['price'] * item['quantity']).toStringAsFixed(2),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                child: const Text(
+                  'Add Item',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
           ],
         ),
-    ],
-  );
-}
+        const SizedBox(height: 16),
+        Table(
+          columnWidths: const {
+            0: FixedColumnWidth(0), // Image column
+            1: FlexColumnWidth(), // Item name (flexible)
+            2: FixedColumnWidth(60), // Quantity
+            3: FixedColumnWidth(90), // Price
+            4: FixedColumnWidth(100), // Amount
+          },
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            TableRow(
+              children: [
+                const SizedBox(), // Empty for image column
+                const Text(
+                  'Item Name',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Center(
+                  child: Text('Quantity',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('Price (RM)',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('Amount (RM)',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderItemsList() {
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(62), // Image column
+        1: FlexColumnWidth(), // Item name (flexible)
+        2: FixedColumnWidth(80), // Quantity
+        3: FixedColumnWidth(90), // Price
+        4: FixedColumnWidth(100), // Amount
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        for (final item in orderItems)
+          TableRow(
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Image.network(
+                  '${item['image']}',
+                  width: 50,
+                  height: 50,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 50,
+                    height: 50,
+                    color: Colors.grey.shade200,
+                    child: const Icon(Icons.fastfood),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Text(
+                  item['name'],
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'x${item['quantity']}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    item['price'].toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    (item['price'] * item['quantity']).toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
 
   Widget _buildOrderSummary() {
     final changeAmount =
@@ -701,82 +682,85 @@ void _completePayment() {
 }
 
   Future<bool> _showCashPaymentDialog() async {
-  final totalAmount = _calculateTotal();
-  final amountController = TextEditingController();
+    final totalAmount = _calculateTotal();
+    final amountController = TextEditingController();
 
-  return await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Cash Payment',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: SingleChildScrollView(
-          child: ListBody(
-            children: <Widget>[
-              Text(
-                'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Cash Payment',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: amountController,
-                decoration: const InputDecoration(
-                  labelText: 'Amount Received',
-                  labelStyle: TextStyle(fontWeight: FontWeight.bold),
-                  prefixText: 'RM ',
-                  hintStyle: TextStyle(fontWeight: FontWeight.bold),
-                  border: OutlineInputBorder(),
+              content: SingleChildScrollView(
+                child: ListBody(
+                  children: <Widget>[
+                    Text(
+                      'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: amountController,
+                      decoration: const InputDecoration(
+                        labelText: 'Amount Received',
+                        labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                        prefixText: 'RM ',
+                        hintStyle: TextStyle(fontWeight: FontWeight.bold),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType:
+                          TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ],
                 ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
               ),
-            ],
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            onPressed: () {
-              Navigator.of(context).pop(false);
-            },
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE732A0),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text(
-              'OK',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            onPressed: () {
-              final amount = double.tryParse(amountController.text) ?? 0.0;
-              if (amount >= totalAmount) {
-                setState(() {
-                  _amountGiven = amount;
-                });
-                Navigator.of(context).pop(true);
-              } else {
-                Fluttertoast.showToast(
-                  msg: "Amount received is less than total amount",
-                  gravity: ToastGravity.BOTTOM,
-                  backgroundColor: Colors.red,
-                  textColor: Colors.white,
-                );
-              }
-            },
-          ),
-        ],
-      );
-    },
-  ) ?? false; // Return false if dialog is dismissed
-}
+              actions: <Widget>[
+                TextButton(
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop(false);
+                  },
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    final amount =
+                        double.tryParse(amountController.text) ?? 0.0;
+                    if (amount >= totalAmount) {
+                      setState(() {
+                        _amountGiven = amount;
+                      });
+                      Navigator.of(context).pop(true);
+                    } else {
+                      Fluttertoast.showToast(
+                        msg: "Amount received is less than total amount",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        ) ??
+        false; // Return false if dialog is dismissed
+  }
 
   double _calculateSubtotal() {
     return orderItems.fold(
@@ -784,9 +768,19 @@ void _completePayment() {
   }
 
   double _calculateGST() {
-    return _calculateSubtotal() * 0.06;
-  }
-
+  final authState = ref.read(authProvider);
+  return authState.whenOrNull(
+    authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
+        posProfile, branch, paymentMethods, taxes, hasOpening) {
+      // Find the GST tax rate
+      final gstTax = taxes.firstWhere(
+        (tax) => tax['description']?.contains('GST') ?? false,
+        orElse: () => {'rate': 6.0}, // Default to 6% if not found
+      );
+      return _calculateSubtotal() * (gstTax['rate'] ?? 6.0) / 100;
+    },
+  ) ?? (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
+}
   double _calculateRounding() {
     final total = _calculateSubtotal() + _calculateGST();
     return ((total * 100).round() / 100) - total;

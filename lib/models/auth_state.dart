@@ -14,6 +14,9 @@ class AuthState with _$AuthState {
     required String fullName,
     required String posProfile,
     required String branch,
+    required List<Map<String, dynamic>> paymentMethods,
+    required List<Map<String, dynamic>> taxes,
+    required bool hasOpening,
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }
