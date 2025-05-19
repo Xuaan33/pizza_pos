@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -27,7 +30,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   int _totalTablesFree = 0;
   double _amountGiven = 0.0;
   bool _isProcessingPayment = false;
+  bool _isDisposed = false;
 
+
+@override
+  void dispose() {
+    _isDisposed = true; // Mark as disposed
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -52,24 +62,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Future<void> _loadTodayInfo() async {
-    try {
-      final posService = PosService();
-      final response = await posService.getTodayInfo();
-
-      if (response['success'] == true) {
-        setState(() {
-          _totalRevenue = (response['data']['total_revenue'] ?? 0).toDouble();
-          _totalUnpaidOrders = response['data']['total_unpaid_orders'] ?? 0;
-          _totalTablesFree = response['data']['total_table_free'] ?? 0;
-        });
-      }
-    } catch (e) {
+Future<void> _loadTodayInfo() async {
+  try {
+    final response = await PosService().getTodayInfo();
+    
+    if (response['success'] == true) {
+      setState(() {
+        // Ensure we handle both int and double values
+        _totalRevenue = (response['data']['total_revenue'] is int
+            ? (response['data']['total_revenue'] as int).toDouble()
+            : (response['data']['total_revenue'] ?? 0).toDouble());
+            
+        _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is double
+            ? (response['data']['total_unpaid_orders'] as double).toInt()
+            : (response['data']['total_unpaid_orders'] ?? 0));
+            
+        _totalTablesFree = (response['data']['total_table_free'] is double
+            ? (response['data']['total_table_free'] as double).toInt()
+            : (response['data']['total_table_free'] ?? 0));
+      });
+    }
+  } catch (e) {
+    if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load today info: $e')),
       );
     }
   }
+}
 
   List<Map<String, dynamic>> get orderItems {
     return List<Map<String, dynamic>>.from(widget.order['items']);
@@ -592,29 +612,44 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String formattedValue,
-      {bool isTotal = false}) {
-    return Row(
+  Widget _buildSummaryRow(String label, dynamic value, {bool isTotal = false}) {
+  String formattedValue;
+
+  if (value == null) {
+    formattedValue = '';
+  } else if (value is num) {
+    formattedValue = 'RM ${value.toStringAsFixed(2)}';
+  } else if (value is DateTime) {
+    formattedValue = DateFormat('dd MMM yyyy HH:mm').format(value);
+  } else if (value is String && value.contains('T')) {
+    // Handle ISO date strings
+    try {
+      formattedValue = DateFormat('dd MMM yyyy HH:mm').format(DateTime.parse(value));
+    } catch (e) {
+      formattedValue = value;
+    }
+  } else {
+    formattedValue = value.toString();
+  }
+
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isTotal ? 16 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
-          ),
-        ),
-        Text(
-          formattedValue,
-          style: TextStyle(
-            fontSize: isTotal ? 18 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
-            color: isTotal ? const Color(0xFFE732A0) : Colors.black,
-          ),
-        ),
+        Text(label,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
+            )),
+        Text(formattedValue,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
+              color: isTotal ? Color(0xFFE732A0) : Colors.black,
+            )),
       ],
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildPayNowButton() {
   return SizedBox(
@@ -656,29 +691,44 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   );
 }
 
-void _completePayment() {
-  // Update order with payment details
-  final updatedOrder = {
-    ...widget.order,
-    'paymentMethod': _selectedPaymentMethod,
-    'isPaid': true,
-    'paidTime': DateTime.now(),
-    'status': 'Paid',
-  };
+Future<void> _completePayment() async {
+  setState(() => _isProcessingPayment = true);
   
-  if (_selectedPaymentMethod == 'Cash') {
-    updatedOrder['amountGiven'] = _amountGiven;
-    updatedOrder['changeAmount'] = _amountGiven - _calculateTotal();
-  }
+  try {
+    final List<Map<String, dynamic>> payments = [{
+      'mode_of_payment': _selectedPaymentMethod,
+      'amount': _calculateTotal(),
+      if (_selectedPaymentMethod == 'Cash')
+        'reference_no': 'CASH-${DateTime.now().millisecondsSinceEpoch}',
+    }];
 
-  MainLayout.of(context)?.handleOrderPaid(updatedOrder);
-  Navigator.of(context).pushAndRemoveUntil(
-    MaterialPageRoute(
-      builder: (context) => MainLayout(),
-    ),
-    (route) => false,
-  );
-  MainLayout.of(context)?.selectOrdersTab();
+    final response = await PosService().checkoutOrder(
+      invoiceName: widget.order['invoiceNumber'] ?? widget.order['orderId'],
+      payments: payments,
+    );
+
+    if (response['success'] == true) {
+      final paidOrder = OrderMapper.mapPaidOrder(response);
+      final completeOrder = {
+        ...widget.order as Map<String, dynamic>,
+        ...paidOrder,
+        'isPaid': true,
+        'status': 'Paid',
+        'paidTime': DateTime.now().toIso8601String(), // Explicit string conversion
+      };
+
+      MainLayout.of(context)?.handleOrderPaid(completeOrder);
+      Navigator.of(context).pop(true);
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Payment error: ${e.toString()}')),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isProcessingPayment = false);
+    }
+  }
 }
 
   Future<bool> _showCashPaymentDialog() async {

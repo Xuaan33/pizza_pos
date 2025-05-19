@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -273,7 +275,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             padding: const EdgeInsets.all(16.0),
                                             gridDelegate:
                                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: 4,
+                                              crossAxisCount: 5,
                                               crossAxisSpacing: 16,
                                               mainAxisSpacing: 16,
                                               childAspectRatio: 0.8,
@@ -363,9 +365,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                       color: Colors.white)
                                                   : const Text(
                                                       'Submit Order',
-                                                      
                                                       style: TextStyle(
-                                                        color: Colors.white,
+                                                          color: Colors.white,
                                                           fontSize: 16,
                                                           fontWeight:
                                                               FontWeight.w600),
@@ -641,6 +642,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'quantity': 1,
           'options': selectedOptions,
           'option_text': optionTexts.join(', '),
+          'serve_later': false, // Default to serve now
+          'remarks': '', // Initialize remarks
         };
         currentOrderItems.add(newOrderItem);
       }
@@ -737,72 +740,135 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return false;
   }
 
-  void _submitOrder() {
-    bool hasExistingOrder =
-        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+  Future<void> _submitOrder() async {
+  final authState = ref.read(authProvider);
+  bool hasExistingOrder =
+      widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-        ),
-        title: Text(
-          hasExistingOrder ? 'Update Order' : 'Submit Order',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+  final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
-        ),
-        content: Text(
-          hasExistingOrder
-              ? 'Are you sure you want to update this order?'
-              : 'Are you sure you want to submit this order to kitchen?',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'CANCEL',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
+          title: Text(
+            hasExistingOrder ? 'Update Order' : 'Submit Order',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, {
-                'action': hasExistingOrder ? 'updated' : 'submitted',
-                'items': currentOrderItems,
-                'replaceExisting': hasExistingOrder,
-                'entryTime': DateTime.now(),
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFFE732A0),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            child: Text(
-              hasExistingOrder ? 'UPDATE' : 'SUBMIT',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+          content: Text(
+            hasExistingOrder
+                ? 'Are you sure you want to update this order?'
+                : 'Are you sure you want to submit this order to kitchen?',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
             ),
           ),
-        ],
-      ),
-    );
-  }
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'CANCEL',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: Text(
+                hasExistingOrder ? 'UPDATE' : 'SUBMIT',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  if (!confirmed) return;
+
+  authState.whenOrNull(
+    authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
+        posProfile, branch, paymentMethods, taxes, hasOpening) async {
+      setState(() => _isLoading = true);
+      
+      try {
+        // 1. Get the full table name from floors and tables API
+        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+        
+        if (floorsResponse['success'] == true) {
+          for (var floor in floorsResponse['message']) {
+            for (var table in floor['tables']) {
+              if (table['title'] == 'Table ${widget.tableNumber}') {
+                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                break;
+              }
+            }
+          }
+        }
+
+        // 2. Prepare items with proper structure
+        final items = currentOrderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['remarks'] ?? '',
+            'custom_serve_later': item['serve_later'] == true ? 1 : 0,
+            if (item['options'] != null)
+              'custom_variant_info': [
+                {'options': item['options']}
+              ],
+          };
+        }).toList();
+
+        print('Submitting order for table: $tableFullName'); // Debug log
+        print('Order channel: Dine In'); // Debug log
+
+        // 3. Submit with proper table format and order channel
+        final response = await PosService().submitOrder(
+          posProfile: posProfile,
+          customer: 'Guest',
+          items: items,
+          table: tableFullName, // e.g. "MK-Floor 1-Table 1"
+          orderChannel: 'Dine In', // Hardcoded as requested
+        );
+
+        if (response['success'] == true) {
+          Navigator.pop(context, {
+            'action': hasExistingOrder ? 'updated' : 'submitted',
+            'invoice': response['message'],
+            'tableNumber': widget.tableNumber,
+            'tableFullName': tableFullName, // Pass both for reference
+          });
+        }
+      } catch (e) {
+        print('Submit order error: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting order: $e')),
+        );
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    },
+  );
+}
 
   void _goToCheckout() {
     Navigator.push(
@@ -1014,6 +1080,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 onPressed: () => _removeItem(index),
               ),
             ],
+          ),
+
+          Switch(
+            value: item['serve_later'] ?? false,
+            onChanged: (value) {
+              setState(() {
+                currentOrderItems[index]['serve_later'] = value;
+              });
+            },
           ),
           // Enhanced remarks field for this item
           Padding(

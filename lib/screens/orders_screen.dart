@@ -134,40 +134,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     );
   }
 
-  Widget _buildStatusFilter() {
-    return DropdownButton<String>(
-      value: _filterStatus,
-      items: ['All', 'Draft', 'Paid'].map((String value) {
-        return DropdownMenuItem<String>(
-          value: value,
-          child: Text(value),
-        );
-      }).toList(),
-      onChanged: (value) => setState(() => _filterStatus = value!),
-      underline: Container(),
-      style: TextStyle(fontSize: 14),
-    );
-  }
-
-  Widget _buildOrderTypeFilter() {
-    return DropdownButton<String>(
-      value: _filterOrderType,
-      items: ['All', 'Dine in', 'Takeaway', 'Delivery'].map((String value) {
-        return DropdownMenuItem<String>(
-          value: value,
-          child: Text(value),
-        );
-      }).toList(),
-      onChanged: (value) => setState(() => _filterOrderType = value!),
-      underline: Container(),
-      style: TextStyle(fontSize: 14),
-    );
-  }
-
   Widget _buildOrderListItem(Map<String, dynamic> order) {
     final isSelected = _selectedOrder != null &&
         _selectedOrder!['orderId'] == order['orderId'];
-    final isDraft = order['status'] == 'Draft';
+    final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
     final total = _calculateOrderTotal(order);
 
     return Card(
@@ -189,7 +159,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    order['orderId'] ?? 'ORDER-00',
+                    order['orderId']?.toString() ?? 'ORDER-00',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Container(
@@ -214,7 +184,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _formatDate(order['entryTime'] ?? DateTime.now()),
+                    _formatDate(_parseDateTime(order['entryTime'])),
                     style: TextStyle(
                         color: Colors.black,
                         fontSize: 12,
@@ -238,13 +208,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Widget _buildOrderDetailsPanel(Map<String, dynamic> order) {
-    final isDraft = order['status'] == 'Draft';
-    final items = order['items'] as List<dynamic>;
+    final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
+    final items = (order['items'] as List<dynamic>?) ?? [];
     final subtotal = _calculateOrderSubtotal(order);
     final tax = _calculateOrderTax(order);
     final rounding = _calculateRounding(subtotal + tax);
     final total = subtotal + tax + rounding;
-    final isPaid = order['isPaid'] ?? false;
+    final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
     return SingleChildScrollView(
@@ -275,7 +245,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       ),
                       SizedBox(width: 16),
                       Text(
-                        order['orderType'] ?? 'Dine in',
+                        order['orderType']?.toString() ?? 'Dine in',
                         style: TextStyle(
                             color: Colors.black, fontWeight: FontWeight.w600),
                       ),
@@ -313,7 +283,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                         ),
                       ],
                       Text(
-                        _formatDate(order['entryTime'] ?? DateTime.now()),
+                        _formatDate(_parseDateTime(order['entryTime'])),
                         style: TextStyle(
                             color: Colors.black,
                             fontSize: 12,
@@ -327,7 +297,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        order['orderId'] ?? 'ORDER-00',
+                        order['orderId']?.toString() ?? 'ORDER-00',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
@@ -374,14 +344,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   SizedBox(height: 8),
                   // Customer Name
                   Text(
-                    order['customerName'] ?? 'Guest',
+                    order['customerName']?.toString() ?? 'Guest',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   // Remarks if available
-                  if (order['remarks'] != null && order['remarks'].isNotEmpty)
+                  if (order['remarks'] != null && 
+                      order['remarks'].toString().isNotEmpty &&
+                      order['remarks'].toString() != 'No remarks')
                     Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: Text(
@@ -417,38 +389,38 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
-                  // In the Items Section of _buildOrderDetailsPanel, replace the item mapping with:
+                  // Items list
                   ...items
                       .map(
                         (item) => Padding(
                           padding: EdgeInsets.symmetric(vertical: 4),
-                          child: SingleChildScrollView(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Row(
                                   children: [
                                     Text(
-                                      item['name'] ?? 'Item',
+                                      item['name']?.toString() ?? 'Item',
                                       style: TextStyle(
                                           fontWeight: FontWeight.w600),
                                     ),
                                     SizedBox(width: 8),
                                     Text(
-                                      'x${(item['quantity']).toStringAsFixed(0)}',
+                                      'x${(item['quantity'] ?? 1).toStringAsFixed(0)}',
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
-                                Text(
-                                  'RM ${(item['price'] * (item['quantity'])).toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                      color: Color(0xFFE732A0),
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
+                              ),
+                              Text(
+                                'RM ${((item['price'] ?? 0) * (item['quantity'] ?? 1)).toStringAsFixed(2)}',
+                                style: TextStyle(
+                                    color: Color(0xFFE732A0),
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -460,7 +432,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           SizedBox(height: 16),
 
           // Summary Section
-
           Card(
             color: Colors.white,
             elevation: 0,
@@ -474,20 +445,18 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   _buildSummaryRow('Subtotal', order['subtotal']),
                   if (taxBreakdown != null)
                     _buildSummaryRow(
-                      '${taxBreakdown['description']}%',
+                      '${taxBreakdown['description'] ?? 'Tax'}',
                       taxBreakdown['amount'],
                     ),
                   _buildSummaryRow('Total', order['total'], isTotal: true),
                   if (isPaid) ...[
                     Divider(),
-                    _buildSummaryRow('Payment Method', order['paymentMethod']),
-                    _buildSummaryRow(
-                      'Paid Time',
-                      DateFormat('dd MMM yyyy HH:mm').format(
-                          order['paidTime'] is DateTime
-                              ? order['paidTime']
-                              : DateTime.parse(order['paidTime'])),
-                    ),
+                    _buildSummaryRow('Payment Method', order['paymentMethod']?.toString() ?? 'Cash'),
+                    if (order['paidTime'] != null)
+                      _buildSummaryRow(
+                        'Paid Time',
+                        _formatDate(_parseDateTime(order['paidTime'])),
+                      ),
                   ],
                 ],
               ),
@@ -513,7 +482,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             SizedBox(height: 8),
           ],
           OutlinedButton(
-            onPressed: () {}, // Print receipt function
+            onPressed: () {},
             style: OutlinedButton.styleFrom(
               minimumSize: Size(double.infinity, 48),
               side: BorderSide(color: Colors.black),
@@ -528,38 +497,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildOrderItemRow(Map<String, dynamic> item) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              item['name'] ?? 'Item',
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-          Text(
-            'x${item['quantity'] ?? 1}',
-            style: TextStyle(fontWeight: FontWeight.w500),
-          ),
-          SizedBox(width: 16),
-          Text(
-            'RM ${(item['price'] * (item['quantity'] ?? 1)).toStringAsFixed(2)}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFFE732A0),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatCompactDate(DateTime date) {
-    return DateFormat('HH:mm, dd MMM').format(date);
   }
 
   Widget _buildFilterDropdown({
@@ -617,8 +554,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
     if (value is num) {
       formattedValue = 'RM ${value.toStringAsFixed(2)}';
-    } else if (value is DateTime) {
-      formattedValue = DateFormat('dd MMM yyyy HH:mm').format(value);
+    } else if (value is String) {
+      formattedValue = value;
     } else {
       formattedValue = value?.toString() ?? '';
     }
@@ -662,7 +599,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           order: {
             ...order,
             'items': List<Map<String, dynamic>>.from(
-                order['items']), // Explicit type
+                order['items'] ?? []), // Explicit type with null safety
           },
         ),
       ),
@@ -674,8 +611,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
-    return (order['items'] as List).fold(0.0, (sum, item) {
-      return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
+    final items = (order['items'] as List?) ?? [];
+    return items.fold(0.0, (sum, item) {
+      final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+      final quantity = (item['quantity'] as num?)?.toDouble() ?? 1.0;
+      return sum + (price * quantity);
     });
   }
 
@@ -685,6 +625,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   double _calculateOrderTotal(Map<String, dynamic> order) {
     return _calculateOrderSubtotal(order) + _calculateOrderTax(order);
+  }
+
+  DateTime _parseDateTime(dynamic dateTime) {
+    if (dateTime == null) return DateTime.now();
+    if (dateTime is DateTime) return dateTime;
+    if (dateTime is String) {
+      try {
+        return DateTime.parse(dateTime);
+      } catch (e) {
+        return DateTime.now();
+      }
+    }
+    return DateTime.now();
   }
 
   String _formatDate(DateTime date) {

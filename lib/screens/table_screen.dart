@@ -92,41 +92,33 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   }
 
   Future<void> _loadTodayInfo() async {
-    // Check auth state before loading
-    final authState = ref.read(authProvider);
-    if (authState is! AsyncData) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final branch = prefs.getString('branch');
-
-      // Only proceed if we're authenticated and have branch information
-      if (branch == null || _isDisposed) return;
-
-      final posService = PosService();
-      final response = await posService.getTodayInfo();
-
-      if (_isDisposed) return; // Check again before setState
-
-      if (response['success'] == true) {
-        if (!_isDisposed) {
-          // Final check before setState
-          setState(() {
-            _totalRevenue = (response['data']['total_revenue'] ?? 0).toDouble();
-            _totalUnpaidOrders = response['data']['total_unpaid_orders'] ?? 0;
-            _totalTablesFree = response['data']['total_table_free'] ?? 0;
-          });
-        }
-      }
-    } catch (e) {
-      if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load today info: $e')),
-        );
-      }
+  try {
+    final response = await PosService().getTodayInfo();
+    
+    if (response['success'] == true) {
+      setState(() {
+        // Ensure we handle both int and double values
+        _totalRevenue = (response['data']['total_revenue'] is int
+            ? (response['data']['total_revenue'] as int).toDouble()
+            : (response['data']['total_revenue'] ?? 0).toDouble());
+            
+        _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is double
+            ? (response['data']['total_unpaid_orders'] as double).toInt()
+            : (response['data']['total_unpaid_orders'] ?? 0));
+            
+        _totalTablesFree = (response['data']['total_table_free'] is double
+            ? (response['data']['total_table_free'] as double).toInt()
+            : (response['data']['total_table_free'] ?? 0));
+      });
+    }
+  } catch (e) {
+    if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load today info: $e')),
+      );
     }
   }
-
+}
   void _handleTableTap(Map<String, dynamic> table) {
     // Find the existing unpaid order for this table
     var existingOrder = widget.activeOrders.firstWhere(
@@ -425,24 +417,31 @@ Widget _buildFloorSelector() {
 
   // In table_screen.dart, modify the _handleOrderResult method
   void _handleOrderResult(int tableNumber, dynamic result) {
-    if (result == null) return;
+  if (result == null) return;
 
+  try {
     if (result['action'] == 'submitted' || result['action'] == 'updated') {
       widget.onOrderSubmitted({
         'tableNumber': tableNumber,
-        'items': result['items'],
+        'items': result['items'] ?? [],
+        'invoice': result['invoice'] ?? {},
         'action': result['action'],
-        'replaceExisting': result['replaceExisting'] ?? false,
         'entryTime': result['entryTime'] ?? DateTime.now(),
       });
     } else if (result['action'] == 'paid') {
       widget.onOrderPaid(tableNumber);
     }
 
-    // Always refresh table data
+    // Refresh table data
     _loadFloorsAndTables();
     _loadTodayInfo();
+  } catch (e) {
+    print('Error handling order result: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error processing order: $e')),
+    );
   }
+}
 
 // In table_screen.dart, add these methods to _TableScreenState
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
