@@ -149,6 +149,7 @@ Future<Map<String, dynamic>> submitOrder({
       'pos_profile': posProfile,
       'customer': customer,
       'items': items,
+      if (name != null) 'name': name,
       'custom_table': table, // Full table name format
       'custom_order_channel': orderChannel, // "Dine In"
     },

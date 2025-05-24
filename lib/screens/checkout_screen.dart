@@ -702,8 +702,13 @@ Future<void> _completePayment() async {
         'reference_no': 'CASH-${DateTime.now().millisecondsSinceEpoch}',
     }];
 
+    final invoiceName = widget.order['invoiceNumber'];
+    if (invoiceName == null) {
+      throw Exception('Invoice number not available');
+    }
+
     final response = await PosService().checkoutOrder(
-      invoiceName: widget.order['invoiceNumber'] ?? widget.order['orderId'],
+      invoiceName: invoiceName,
       payments: payments,
     );
 
@@ -714,16 +719,26 @@ Future<void> _completePayment() async {
         ...paidOrder,
         'isPaid': true,
         'status': 'Paid',
-        'paidTime': DateTime.now().toIso8601String(), // Explicit string conversion
+        'paidTime': DateTime.now().toIso8601String(),
       };
 
       MainLayout.of(context)?.handleOrderPaid(completeOrder);
-      Navigator.of(context).pop(true);
+      
+      // Return true to indicate successful payment
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
     }
   } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Payment error: ${e.toString()}')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Payment error: ${e.toString()}')),
+      );
+    }
+    // Return false to indicate payment failed
+    if (mounted) {
+      Navigator.of(context).pop(false);
+    }
   } finally {
     if (mounted) {
       setState(() => _isProcessingPayment = false);

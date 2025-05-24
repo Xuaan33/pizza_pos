@@ -73,159 +73,185 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _refreshOrders() async {
-  setState(() => _isOrdersLoading = true);
-  try {
-    final authState = ref.read(authProvider);
-    authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
-          posProfile, branch, paymentMethods, taxes, hasOpening) async {
-        final response = await PosService().getOrders(
-          posProfile: posProfile,
-        );
-        
-        print('Full API response: ${jsonEncode(response)}');
-        
-        if (response['message']?['success'] == true) {
-          final List<dynamic> invoices = (response['message']?['message'] as List?) ?? [];
-          print('Found ${invoices.length} invoices');
-          
-          setState(() {
-            _activeOrders = invoices.map((invoice) {
-              try {
-                print('Processing invoice: ${invoice['name']}');
-                
-                // Safely extract items
-                final items = (invoice['items'] as List? ?? []).map((item) {
-                  return {
-                    'name': item['item_name']?.toString() ?? 'Unknown Item',
-                    'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                    'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-                    'item_code': item['item_code']?.toString() ?? '',
-                  };
-                }).toList();
-                
-                // Safely extract tax breakdown
-                Map<String, dynamic>? taxBreakdown;
-                final taxes = invoice['taxes'] as List?;
-                if (taxes != null && taxes.isNotEmpty) {
-                  taxBreakdown = {
-                    'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                    'amount': (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                    'description': taxes[0]['account_head']?.toString() ?? 'Tax',
-                  };
-                }
-                
-                // Safely parse dates
-                DateTime? parseDate(String? dateString) {
-                  try {
-                    return dateString != null ? DateTime.parse(dateString) : null;
-                  } catch (e) {
-                    return null;
-                  }
-                }
-                
-                return {
-                  'orderId': invoice['name']?.toString() ?? 'Unknown',
-                  'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
-                  'status': invoice['status']?.toString() ?? 'Draft',
-                  'orderType': invoice['custom_order_channel']?.toString() ?? 'Cibai',
-                  'tableNumber': _extractTableNumber(invoice['custom_table'] ?? 'sohai'),
-                  'items': items,
-                  'subtotal': (invoice['rounded_total'] as num?)?.toDouble() ?? 0.0,
-                  'tax': taxBreakdown?['amount'] ?? 0.0,
-                  'total': (invoice['rounded_total'] as num?)?.toDouble() ?? 0.0,
-                  'entryTime': parseDate(invoice['posting_date']?.toString()) ?? DateTime.now(),
-                  'paidTime': invoice['status']?.toString() == 'Paid' 
-                      ? parseDate(invoice['posting_date']?.toString())
-                      : null,
-                  'isPaid': invoice['status']?.toString() == 'Paid',
-                  'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
-                  'customerName': invoice['customer_name']?.toString() ?? 'Guest',
-                  'remarks': invoice['remarks']?.toString() ?? 'No remarks',
-                  'taxBreakdown': taxBreakdown,
-                };
-              } catch (e) {
-                print('Error processing invoice ${invoice['name']}: $e');
-                return null;
-              }
-            }).where((order) => order != null).cast<Map<String, dynamic>>().toList();
-          });
-          
-          print('Successfully mapped ${_activeOrders.length} orders');
-        }
-      },
-    );
-  } catch (e) {
-    print('Error refreshing orders: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
-    );
-  } finally {
-    setState(() => _isOrdersLoading = false);
-  }
-}
+    setState(() => _isOrdersLoading = true);
+    try {
+      final authState = ref.read(authProvider);
+      authState.whenOrNull(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening) async {
+          final response = await PosService().getOrders(
+            posProfile: posProfile,
+          );
 
-int _extractTableNumber(String? tableFullName) {
-  if (tableFullName == null || tableFullName.isEmpty) return 0;
-  
-  try {
-    // Extract from formats like "MK-Floor 1-Table 1" → 1
-    final RegExpMatch? match = RegExp(r'Table (\d+)$').firstMatch(tableFullName);
-    return match != null ? int.tryParse(match.group(1) ?? '0') ?? 0 : 0;
-  } catch (e) {
-    print('Error parsing table number from $tableFullName: $e');
-    return 0;
-  }
-}
+          print('Full API response: ${jsonEncode(response)}');
 
-Map<String, dynamic> _mapApiInvoiceToOrder(Map<String, dynamic> invoice) {
-  final items = ((invoice['items'] as List?) ?? []).map((item) {
+          if (response['message']?['success'] == true) {
+            final List<dynamic> invoices =
+                (response['message']?['message'] as List?) ?? [];
+            print('Found ${invoices.length} invoices');
+
+            setState(() {
+              _activeOrders = invoices
+                  .map((invoice) {
+                    try {
+                      print('Processing invoice: ${invoice['name']}');
+
+                      // Safely extract items
+                      final items =
+                          (invoice['items'] as List? ?? []).map((item) {
+                        return {
+                          'name':
+                              item['item_name']?.toString() ?? 'Unknown Item',
+                          'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+                          'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
+                          'item_code': item['item_code']?.toString() ?? '',
+                        };
+                      }).toList();
+
+                      // Safely extract tax breakdown
+                      Map<String, dynamic>? taxBreakdown;
+                      final taxes = invoice['taxes'] as List?;
+                      if (taxes != null && taxes.isNotEmpty) {
+                        taxBreakdown = {
+                          'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
+                          'amount':
+                              (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
+                          'description':
+                              taxes[0]['account_head']?.toString() ?? 'Tax',
+                        };
+                      }
+
+                      // Safely parse dates
+                      DateTime? parseDate(String? dateString) {
+                        try {
+                          return dateString != null
+                              ? DateTime.parse(dateString)
+                              : null;
+                        } catch (e) {
+                          return null;
+                        }
+                      }
+
+                      return {
+                        'orderId': invoice['name']?.toString() ?? 'Unknown',
+                        'invoiceNumber':
+                            invoice['name']?.toString() ?? 'Unknown',
+                        'status': invoice['status']?.toString() ?? 'Draft',
+                        'orderType':
+                            invoice['custom_order_channel']?.toString() ??
+                                'Cibai',
+                        'tableNumber': _extractTableNumber(
+                            invoice['custom_table'] ?? 'sohai'),
+                        'items': items,
+                        'subtotal':
+                            (invoice['rounded_total'] as num?)?.toDouble() ??
+                                0.0,
+                        'tax': taxBreakdown?['amount'] ?? 0.0,
+                        'total':
+                            (invoice['rounded_total'] as num?)?.toDouble() ??
+                                0.0,
+                        'entryTime':
+                            parseDate(invoice['posting_date']?.toString()) ??
+                                DateTime.now(),
+                        'paidTime': invoice['status']?.toString() == 'Paid'
+                            ? parseDate(invoice['posting_date']?.toString())
+                            : null,
+                        'isPaid': invoice['status']?.toString() == 'Paid',
+                        'paymentMethod':
+                            invoice['mode_of_payment']?.toString() ?? 'Cash',
+                        'customerName':
+                            invoice['customer_name']?.toString() ?? 'Guest',
+                        'remarks':
+                            invoice['remarks']?.toString() ?? 'No remarks',
+                        'taxBreakdown': taxBreakdown,
+                      };
+                    } catch (e) {
+                      print('Error processing invoice ${invoice['name']}: $e');
+                      return null;
+                    }
+                  })
+                  .where((order) => order != null)
+                  .cast<Map<String, dynamic>>()
+                  .toList();
+            });
+
+            print('Successfully mapped ${_activeOrders.length} orders');
+          }
+        },
+      );
+    } catch (e) {
+      print('Error refreshing orders: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isOrdersLoading = false);
+    }
+  }
+
+  int _extractTableNumber(String? tableFullName) {
+    if (tableFullName == null || tableFullName.isEmpty) return 0;
+
+    try {
+      // Extract from formats like "MK-Floor 1-Table 1" → 1
+      final RegExpMatch? match =
+          RegExp(r'Table (\d+)$').firstMatch(tableFullName);
+      return match != null ? int.tryParse(match.group(1) ?? '0') ?? 0 : 0;
+    } catch (e) {
+      print('Error parsing table number from $tableFullName: $e');
+      return 0;
+    }
+  }
+
+  Map<String, dynamic> _mapApiInvoiceToOrder(Map<String, dynamic> invoice) {
+    final items = ((invoice['items'] as List?) ?? []).map((item) {
+      return {
+        'name': item['item_name']?.toString() ?? 'Unknown Item',
+        'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+        'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
+        'item_code': item['item_code']?.toString() ?? '',
+        'description': item['description']?.toString() ?? '',
+      };
+    }).toList();
+
     return {
-      'name': item['item_name']?.toString() ?? 'Unknown Item',
-      'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-      'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-      'item_code': item['item_code']?.toString() ?? '',
-      'description': item['description']?.toString() ?? '',
+      'orderId': invoice['name']?.toString() ?? 'Unknown',
+      'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
+      'status': invoice['status']?.toString() ?? 'Draft',
+      'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
+      'tableNumber': _extractTableNumber(invoice['custom_table']),
+      'items': items,
+      'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
+      'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
+      'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
+      'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
+          DateTime.now(),
+      'paidTime': invoice['status']?.toString() == 'Paid'
+          ? DateTime.tryParse(invoice['posting_date']?.toString() ?? '')
+          : null,
+      'isPaid': invoice['status']?.toString() == 'Paid',
+      'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
+      'customerName': invoice['customer_name']?.toString() ?? 'Guest',
+      'remarks': invoice['remarks']?.toString() ?? 'No remarks',
+      'taxBreakdown': _parseTaxBreakdown(invoice),
     };
-  }).toList();
-
-  return {
-    'orderId': invoice['name']?.toString() ?? 'Unknown',
-    'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
-    'status': invoice['status']?.toString() ?? 'Draft',
-    'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
-    'tableNumber': _extractTableNumber(invoice['custom_table']),
-    'items': items,
-    'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
-    'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
-    'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
-    'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ?? DateTime.now(),
-    'paidTime': invoice['status']?.toString() == 'Paid' 
-        ? DateTime.tryParse(invoice['posting_date']?.toString() ?? '')
-        : null,
-    'isPaid': invoice['status']?.toString() == 'Paid',
-    'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
-    'customerName': invoice['customer_name']?.toString() ?? 'Guest',
-    'remarks': invoice['remarks']?.toString() ?? 'No remarks',
-    'taxBreakdown': _parseTaxBreakdown(invoice),
-  };
-}
-
-Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
-  try {
-    final taxes = invoice['taxes'] as List?;
-    if (taxes == null || taxes.isEmpty) return null;
-    
-    final tax = taxes.first;
-    return {
-      'rate': (tax['rate'] ?? 0).toDouble(),
-      'amount': (tax['amount'] ?? 0).toDouble(),
-      'description': tax['account_head'] ?? 'Tax',
-    };
-  } catch (e) {
-    return null;
   }
-}
+
+  Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
+    try {
+      final taxes = invoice['taxes'] as List?;
+      if (taxes == null || taxes.isEmpty) return null;
+
+      final tax = taxes.first;
+      return {
+        'rate': (tax['rate'] ?? 0).toDouble(),
+        'amount': (tax['amount'] ?? 0).toDouble(),
+        'description': tax['account_head'] ?? 'Tax',
+      };
+    } catch (e) {
+      return null;
+    }
+  }
 
   List<Widget> _getScreensWithOrders() {
     return [
@@ -236,7 +262,7 @@ Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
           _refreshOrders();
         },
         onOrderPaid: _markOrderAsPaid,
-        activeOrders: _activeOrders, // Pass active orders to table screen
+        activeOrders: _activeOrders,
       ),
       DeliveryScreen(),
       OrdersScreen(
@@ -250,7 +276,10 @@ Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
           });
         },
         onEditOrder: _handleEditOrder,
-        onRefresh: _refreshOrders,
+        onRefresh: () async {
+          // Now returns Future<void>
+          await _refreshOrders();
+        },
       ),
       DashboardScreen(),
       SettingsScreen(),
@@ -308,6 +337,12 @@ Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
             } else {
               setState(() => _selectedTabIndex = index);
             }
+
+            if (index == 2) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _refreshOrders();
+                });
+              }
           },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -339,45 +374,45 @@ Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
     );
   }
 
- void handleOrderPaid(Map<String, dynamic> paidOrder) {
-  print('Handling paid order: ${jsonEncode({
-    ...paidOrder,
-    'paidTime': paidOrder['paidTime'] is DateTime 
-        ? paidOrder['paidTime'].toIso8601String()
-        : paidOrder['paidTime']?.toString(),
-    'entryTime': paidOrder['entryTime'] is DateTime
-        ? paidOrder['entryTime'].toIso8601String()
-        : paidOrder['entryTime']?.toString(),
-  })}');
-  
-  setState(() {
-    final index = _activeOrders.indexWhere((o) => 
-      o['orderId'] == paidOrder['orderId'] || 
-      o['invoiceNumber'] == paidOrder['invoiceNumber']);
-    
-    if (index != -1) {
-      _activeOrders[index] = {
-        ..._activeOrders[index] as Map<String, dynamic>,
-        ...paidOrder,
-        'isPaid': true,
-        'status': 'Paid', // Ensure status is updated to 'Paid'
-        'paidTime': paidOrder['paidTime'] is DateTime 
-            ? paidOrder['paidTime'].toIso8601String()
-            : paidOrder['paidTime']?.toString(),
-      };
-      _tablesWithSubmittedOrders.remove(paidOrder['tableNumber']);
-    } else {
-      _activeOrders.add({
-        ...paidOrder,
-        'isPaid': true,
-        'status': 'Paid', // Ensure status is set to 'Paid'
-        'paidTime': paidOrder['paidTime'] is DateTime 
-            ? paidOrder['paidTime'].toIso8601String()
-            : paidOrder['paidTime']?.toString(),
-      });
-    }
-  });
-}
+  void handleOrderPaid(Map<String, dynamic> paidOrder) {
+    print('Handling paid order: ${jsonEncode({
+          ...paidOrder,
+          'paidTime': paidOrder['paidTime'] is DateTime
+              ? paidOrder['paidTime'].toIso8601String()
+              : paidOrder['paidTime']?.toString(),
+          'entryTime': paidOrder['entryTime'] is DateTime
+              ? paidOrder['entryTime'].toIso8601String()
+              : paidOrder['entryTime']?.toString(),
+        })}');
+
+    setState(() {
+      final index = _activeOrders.indexWhere((o) =>
+          o['orderId'] == paidOrder['orderId'] ||
+          o['invoiceNumber'] == paidOrder['invoiceNumber']);
+
+      if (index != -1) {
+        _activeOrders[index] = {
+          ..._activeOrders[index] as Map<String, dynamic>,
+          ...paidOrder,
+          'isPaid': true,
+          'status': 'Paid', // Ensure status is updated to 'Paid'
+          'paidTime': paidOrder['paidTime'] is DateTime
+              ? paidOrder['paidTime'].toIso8601String()
+              : paidOrder['paidTime']?.toString(),
+        };
+        _tablesWithSubmittedOrders.remove(paidOrder['tableNumber']);
+      } else {
+        _activeOrders.add({
+          ...paidOrder,
+          'isPaid': true,
+          'status': 'Paid', // Ensure status is set to 'Paid'
+          'paidTime': paidOrder['paidTime'] is DateTime
+              ? paidOrder['paidTime'].toIso8601String()
+              : paidOrder['paidTime']?.toString(),
+        });
+      }
+    });
+  }
 
   void _handleEditOrder(Map<String, dynamic> order) {
     setState(() {
@@ -471,16 +506,16 @@ Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
     }
   }
 
-  void _addNewOrder(Map<String, dynamic> order) {
-     try {
+void _addNewOrder(Map<String, dynamic> order) {
+  try {
     setState(() {
-       _activeOrders.removeWhere((o) => 
+      _activeOrders.removeWhere((o) => 
           o['tableNumber'] == order['tableNumber'] && 
           !(o['isPaid'] ?? false));
 
       final items = order['items'] is List ? List.from(order['items']) : [];
-
-final newOrder = {
+      
+      final newOrder = {
         'orderId': order['invoice']?['name'] ?? 'Unknown',
         'invoiceNumber': order['invoice']?['name'] ?? 'Unknown',
         'tableNumber': order['tableNumber'],
@@ -498,22 +533,29 @@ final newOrder = {
       _tablesWithSubmittedOrders.add(order['tableNumber']);
     });
   } catch (e) {
-    print('Error adding new order: $e');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error processing order: $e')),
+      SnackBar(content: Text('Error adding order: $e')),
     );
   }
 }
 
-  void _updateOrder(Map<String, dynamic> updatedOrder) {
-    setState(() {
-      final index = _activeOrders.indexWhere((o) =>
-          o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
-      if (index != -1) {
-        _activeOrders[index] = updatedOrder;
-      }
-    });
-  }
+void updateOrder(Map<String, dynamic> updatedOrder) {
+  setState(() {
+    final index = _activeOrders.indexWhere((o) =>
+        o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
+    
+    if (index != -1) {
+      _activeOrders[index] = {
+        ..._activeOrders[index],
+        'items': List<Map<String, dynamic>>.from(updatedOrder['items'] ?? []),
+        'subtotal': updatedOrder['invoice']?['net_total']?.toDouble() ?? 0.0,
+        'tax': updatedOrder['invoice']?['total_taxes_and_charges']?.toDouble() ?? 0.0,
+        'total': updatedOrder['invoice']?['grand_total']?.toDouble() ?? 0.0,
+        'status': updatedOrder['invoice']?['status'] ?? 'Draft',
+      };
+    }
+  });
+}
 
   void _markOrderAsPaid(int tableNumber) {
     setState(() {

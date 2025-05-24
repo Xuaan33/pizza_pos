@@ -848,6 +848,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           items: items,
           table: tableFullName, // e.g. "MK-Floor 1-Table 1"
           orderChannel: 'Dine In', // Hardcoded as requested
+          name: hasExistingOrder ? widget.existingOrder![0]['orderId'] : null,
         );
 
         if (response['success'] == true) {
@@ -870,25 +871,147 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   );
 }
 
-  void _goToCheckout() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CheckoutScreen(
-          order: {
-            'tableNumber': widget.tableNumber,
-            'items': List<Map<String, dynamic>>.from(currentOrderItems),
-            'entryTime': DateTime.now(),
-          },
+void _goToCheckout() async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      title: Text(
+        'Confirm Order',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
         ),
       ),
-    ).then((orderCompleted) {
-      if (orderCompleted == true) {
-        // No need to pop here - just select the Orders tab
-        MainLayout.of(context)?.selectOrdersTab();
-      }
-    });
+      content: Text(
+        'Submit order and proceed to checkout?',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(
+            'CANCEL',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFFE732A0),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          ),
+          child: Text(
+            'CONFIRM',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ) ?? false;
+
+  if (!confirmed) return;
+
+  setState(() => _isLoading = true);
+
+  try {
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
+          posProfile, branch, paymentMethods, taxes, hasOpening) async {
+        
+        // 1. Get the full table name
+        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        String tableFullName = 'Table ${widget.tableNumber}';
+        
+        if (floorsResponse['success'] == true) {
+          for (var floor in floorsResponse['message']) {
+            for (var table in floor['tables']) {
+              if (table['title'] == 'Table ${widget.tableNumber}') {
+                tableFullName = table['name'];
+                break;
+              }
+            }
+          }
+        }
+
+        // 2. Prepare items
+        final items = currentOrderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['remarks'] ?? '',
+            'custom_serve_later': item['serve_later'] == true ? 1 : 0,
+            if (item['options'] != null)
+              'custom_variant_info': [
+                {'options': item['options']}
+              ],
+          };
+        }).toList();
+
+        // 3. Submit order
+        final submitResponse = await PosService().submitOrder(
+          posProfile: posProfile,
+          customer: 'Guest',
+          items: items,
+          table: tableFullName,
+          orderChannel: 'Dine In',
+        );
+
+        if (submitResponse['success'] == true) {
+          // 4. Navigate to checkout screen
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CheckoutScreen(
+                order: {
+                  'tableNumber': widget.tableNumber,
+                  'items': List<Map<String, dynamic>>.from(currentOrderItems),
+                  'entryTime': DateTime.now(),
+                  'invoiceNumber': submitResponse['message']['name'],
+                },
+              ),
+            ),
+          );
+
+          // 5. Handle the result from checkout screen
+          if (result == true && mounted) {
+            MainLayout.of(context)?.selectOrdersTab();
+            Navigator.pop(context, {
+              'action': 'paid',
+              'tableNumber': widget.tableNumber,
+            });
+          }
+        }
+      },
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
+}
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(

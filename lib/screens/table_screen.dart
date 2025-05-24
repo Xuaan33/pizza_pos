@@ -301,11 +301,10 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   }
 
   // In table_screen.dart, modify _buildTableIcon
-// Update the _buildTableIcon method in table_screen.dart
   Widget _buildTableIcon(Map<String, dynamic> table) {
     final tableNumber = table['title'];
     final tableNum = int.parse(table['title'].split(' ').last);
-    final hasOrder = table['active'] == 1 ||
+    final hasOrder = table['active'] == 0 ||
         widget.tablesWithSubmittedOrders.contains(tableNum);
 
     // Calculate unpaid amount for this table
@@ -415,12 +414,11 @@ Widget _buildFloorSelector() {
   );
 }
 
-  // In table_screen.dart, modify the _handleOrderResult method
-  void _handleOrderResult(int tableNumber, dynamic result) {
+void _handleOrderResult(int tableNumber, dynamic result) async {
   if (result == null) return;
 
   try {
-    if (result['action'] == 'submitted' || result['action'] == 'updated') {
+    if (result['action'] == 'submitted') {
       widget.onOrderSubmitted({
         'tableNumber': tableNumber,
         'items': result['items'] ?? [],
@@ -428,22 +426,34 @@ Widget _buildFloorSelector() {
         'action': result['action'],
         'entryTime': result['entryTime'] ?? DateTime.now(),
       });
-    } else if (result['action'] == 'paid') {
+    } 
+    else if (result['action'] == 'updated') {
+      MainLayout.of(context)?.updateOrder({
+        'tableNumber': tableNumber,
+        'items': result['items'] ?? [],
+        'invoice': result['invoice'] ?? {},
+      });
+    }
+    else if (result['action'] == 'paid') {
       widget.onOrderPaid(tableNumber);
     }
 
-    // Refresh table data
-    _loadFloorsAndTables();
-    _loadTodayInfo();
+    await _loadFloorsAndTables();
+    await _loadTodayInfo();
+    
+    if (mounted) {
+      setState(() {});
+    }
   } catch (e) {
     print('Error handling order result: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error processing order: $e')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error processing order: $e')),
+      );
+    }
   }
 }
 
-// In table_screen.dart, add these methods to _TableScreenState
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     return (order['items'] as List).fold(0.0, (sum, item) {
       return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);

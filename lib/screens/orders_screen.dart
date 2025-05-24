@@ -8,7 +8,7 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> orders;
   final Function(Map<String, dynamic>) onOrderPaid;
   final Function(Map<String, dynamic>) onEditOrder;
-  final VoidCallback? onRefresh;
+  final Future<void> Function()? onRefresh;
   final bool isLoading;
 
   const OrdersScreen({
@@ -30,14 +30,21 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Map<String, dynamic>? _selectedOrder;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    // Trigger refresh when screen initializes
+    // Initial load
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.onRefresh != null) {
-        widget.onRefresh!();
-      }
+      _refreshOrders();
     });
+  }
+
+  Future<void> _refreshOrders() async {
+    if (widget.onRefresh != null && mounted) {
+      await widget.onRefresh!();
+    }
   }
 
   @override
@@ -46,30 +53,31 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final authState = ref.watch(authProvider);
 
     return authState.when(
-        initial: () => const Center(child: CircularProgressIndicator()),
-        unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) {
-          return Scaffold(
-            body: Row(
-              children: [
-                // Left panel - Order list
-                Expanded(
-                  flex: 5,
-                  child: _buildOrderListPanel(filteredOrders),
-                ),
+      initial: () => const Center(child: CircularProgressIndicator()),
+      unauthenticated: () => const Center(child: Text('Unauthorized')),
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening) {
+        return Scaffold(
+          body: Row(
+            children: [
+              // Left panel - Order list
+              Expanded(
+                flex: 5,
+                child: _buildOrderListPanel(filteredOrders),
+              ),
 
-                // Right panel - Order details
-                Expanded(
-                  flex: 5,
-                  child: _selectedOrder != null
-                      ? _buildOrderDetailsPanel(_selectedOrder!)
-                      : _buildEmptyDetailsPanel(),
-                ),
-              ],
-            ),
-          );
-        });
+              // Right panel - Order details
+              Expanded(
+                flex: 5,
+                child: _selectedOrder != null
+                    ? _buildOrderDetailsPanel(_selectedOrder!)
+                    : _buildEmptyDetailsPanel(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildOrderListPanel(List<Map<String, dynamic>> orders) {
@@ -351,7 +359,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                   ),
                   // Remarks if available
-                  if (order['remarks'] != null && 
+                  if (order['remarks'] != null &&
                       order['remarks'].toString().isNotEmpty &&
                       order['remarks'].toString() != 'No remarks')
                     Padding(
@@ -451,7 +459,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   _buildSummaryRow('Total', order['total'], isTotal: true),
                   if (isPaid) ...[
                     Divider(),
-                    _buildSummaryRow('Payment Method', order['paymentMethod']?.toString() ?? 'Cash'),
+                    _buildSummaryRow('Payment Method',
+                        order['paymentMethod']?.toString() ?? 'Cash'),
                     if (order['paidTime'] != null)
                       _buildSummaryRow(
                         'Paid Time',
