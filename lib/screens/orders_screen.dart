@@ -42,8 +42,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Future<void> _refreshOrders() async {
+    await widget.onRefresh!();
     if (widget.onRefresh != null && mounted) {
-      await widget.onRefresh!();
+      // Clear the current state to refresh the whole screen
+      setState(() {
+        _selectedOrder = null;
+        _filterStatus = 'All';
+        _filterOrderType = 'All';
+      });
+
+      // Call the refresh function to reload data
     }
   }
 
@@ -477,7 +485,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           // Action Buttons
           if (isDraft) ...[
             ElevatedButton(
-              onPressed: () => _goToCheckout(order),
+              onPressed: () => {
+                _goToCheckout(order),
+                _selectedOrder = null
+                },
               style: ElevatedButton.styleFrom(
                 minimumSize: Size(double.infinity, 48),
                 backgroundColor: Color(0xFFE732A0),

@@ -25,7 +25,7 @@ class TableScreen extends ConsumerStatefulWidget {
   ConsumerState<TableScreen> createState() => _TableScreenState();
 }
 
-class _TableScreenState extends ConsumerState<TableScreen> {
+class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingObserver {
   String _selectedFloor = '';
   List<String> _floors = [];
   Map<String, List<Map<String, dynamic>>> _floorTables = {};
@@ -35,18 +35,43 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   int _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
 
-  @override
+   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadFloorsAndTables();
     _loadTodayInfo();
   }
 
-  @override
+ @override
   void dispose() {
-    _isDisposed = true; // Mark as disposed
+    WidgetsBinding.instance.removeObserver(this);
+    _isDisposed = true;
     super.dispose();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh when the screen is focused
+    if (ModalRoute.of(context)?.isCurrent ?? false) {
+      _refreshData();
+    }
+  }
+
+  @override
+  void didUpdateWidget(TableScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.activeOrders != oldWidget.activeOrders) {
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _loadFloorsAndTables();
+    await _loadTodayInfo();
+  }
+
 
   Future<void> _loadFloorsAndTables() async {
     try {

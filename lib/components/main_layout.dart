@@ -303,7 +303,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               setState(() {
                 _selectedTabIndex = 0; // Go to TableScreen when tapping logo
               });
+              if (_selectedTabIndex == 0) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _refreshOrders();
+              });
+            }
             },
+            
             child: Container(
               padding: const EdgeInsets.all(12),
               child: Image.asset(
@@ -336,6 +342,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
             } else {
               setState(() => _selectedTabIndex = index);
+             if (index == 0) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _refreshOrders();
+              });
+            }
             }
 
             if (index == 2) {
@@ -412,6 +423,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         });
       }
     });
+
+    if (_selectedTabIndex == 0) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshOrders();
+    });
+  }
   }
 
   void _handleEditOrder(Map<String, dynamic> order) {
