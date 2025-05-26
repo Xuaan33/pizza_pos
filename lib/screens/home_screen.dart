@@ -10,7 +10,7 @@ import 'checkout_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final int tableNumber;
-  final List<Map<String, dynamic>>? existingOrder;
+final Map<String, dynamic>? existingOrder;
 
   const HomeScreen({
     Key? key,
@@ -38,7 +38,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _loadItemGroups();
     _loadAvailableItems();
     currentOrderItems =
-        widget.existingOrder != null ? List.from(widget.existingOrder!) : [];
+        widget.existingOrder != null ? List.from(widget.existingOrder!['items']!) : [];
     _itemRemarkControllers = currentOrderItems
         .map((item) => TextEditingController(text: item['remarks'] ?? ''))
         .toList();
@@ -742,7 +742,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _submitOrder() async {
   final authState = ref.read(authProvider);
-  bool hasExistingOrder =
+  bool hasExistingOrder = 
       widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
   final confirmed = await showDialog<bool>(
@@ -848,7 +848,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           items: items,
           table: tableFullName, // e.g. "MK-Floor 1-Table 1"
           orderChannel: 'Dine In', // Hardcoded as requested
-          name: hasExistingOrder ? widget.existingOrder![0]['orderId'] : null,
+          name: hasExistingOrder ? widget.existingOrder!['orderId'] : null,
         );
 
         if (response['success'] == true) {
@@ -872,6 +872,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 void _goToCheckout() async {
+  final hasExistingOrder =
+      widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -880,14 +883,16 @@ void _goToCheckout() async {
         borderRadius: BorderRadius.circular(15),
       ),
       title: Text(
-        'Confirm Order',
+        hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
         style: TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 18,
         ),
       ),
       content: Text(
-        'Submit order and proceed to checkout?',
+        hasExistingOrder
+            ? 'Proceed to checkout for the existing order?'
+            : 'Submit order and proceed to checkout?',
         style: TextStyle(
           fontWeight: FontWeight.bold,
         ),
@@ -934,10 +939,37 @@ void _goToCheckout() async {
       authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
           posProfile, branch, paymentMethods, taxes, hasOpening) async {
         
-        // 1. Get the full table name
-        final floorsResponse = await PosService().getFloorsAndTables(branch);
         String tableFullName = 'Table ${widget.tableNumber}';
-        
+
+        // If existing order, skip submit
+        if (hasExistingOrder) {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CheckoutScreen(
+                order: {
+                  'tableNumber': widget.tableNumber,
+                  'items': List<Map<String, dynamic>>.from(widget.existingOrder!['items']),
+                  'entryTime': widget.existingOrder!['entryTime'] ?? DateTime.now(),
+                  'invoiceNumber': widget.existingOrder!['orderId'],
+                },
+              ),
+            ),
+          );
+
+          if (result == true && mounted) {
+            MainLayout.of(context)?.selectOrdersTab();
+            Navigator.pop(context, {
+              'action': 'paid',
+              'tableNumber': widget.tableNumber,
+            });
+          }
+
+          return; // ✅ exit early
+        }
+
+        // 🔁 Otherwise, submit order as normal
+        final floorsResponse = await PosService().getFloorsAndTables(branch);
         if (floorsResponse['success'] == true) {
           for (var floor in floorsResponse['message']) {
             for (var table in floor['tables']) {
@@ -949,7 +981,6 @@ void _goToCheckout() async {
           }
         }
 
-        // 2. Prepare items
         final items = currentOrderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -964,7 +995,6 @@ void _goToCheckout() async {
           };
         }).toList();
 
-        // 3. Submit order
         final submitResponse = await PosService().submitOrder(
           posProfile: posProfile,
           customer: 'Guest',
@@ -974,7 +1004,6 @@ void _goToCheckout() async {
         );
 
         if (submitResponse['success'] == true) {
-          // 4. Navigate to checkout screen
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
@@ -989,7 +1018,6 @@ void _goToCheckout() async {
             ),
           );
 
-          // 5. Handle the result from checkout screen
           if (result == true && mounted) {
             MainLayout.of(context)?.selectOrdersTab();
             Navigator.pop(context, {
@@ -1012,6 +1040,7 @@ void _goToCheckout() async {
     }
   }
 }
+
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(

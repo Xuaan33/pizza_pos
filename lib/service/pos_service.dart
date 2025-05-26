@@ -130,7 +130,6 @@ class PosService {
     }
   }
 
-  // Ensure the submitOrder method is properly formatted
 Future<Map<String, dynamic>> submitOrder({
   required String posProfile,
   required String customer,
@@ -146,12 +145,13 @@ Future<Map<String, dynamic>> submitOrder({
     endpoint: 'shiok_pos.api.submit_order',
     method: 'POST',
     body: {
+      if (name != null) 'name': name,
       'pos_profile': posProfile,
       'customer': customer,
       'items': items,
       if (name != null) 'name': name,
-      'custom_table': table, // Full table name format
-      'custom_order_channel': orderChannel, // "Dine In"
+      if (table != null) 'custom_table': table,
+      if (orderChannel != null) 'custom_order_channel': orderChannel,
     },
   );
 }

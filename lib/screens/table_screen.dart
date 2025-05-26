@@ -133,9 +133,8 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       MaterialPageRoute(
         builder: (context) => HomeScreen(
           tableNumber: int.parse(table['title'].split(' ').last),
-          existingOrder: existingOrder.isNotEmpty
-              ? List<Map<String, dynamic>>.from(existingOrder['items'])
-              : null,
+          existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
+
         ),
       ),
     ).then((result) {
