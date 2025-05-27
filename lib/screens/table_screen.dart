@@ -32,7 +32,7 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
   bool _isLoading = true;
   bool _isDisposed = false;
   double _totalRevenue = 0.0;
-  int _totalUnpaidOrders = 0;
+  double _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
 
    @override
@@ -127,9 +127,9 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
             ? (response['data']['total_revenue'] as int).toDouble()
             : (response['data']['total_revenue'] ?? 0).toDouble());
             
-        _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is double
-            ? (response['data']['total_unpaid_orders'] as double).toInt()
-            : (response['data']['total_unpaid_orders'] ?? 0));
+        _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is int
+            ? (response['data']['total_unpaid_orders'] as int).toDouble()
+            : (response['data']['total_unpaid_orders'] ?? 0).toDouble());
             
         _totalTablesFree = (response['data']['total_table_free'] is double
             ? (response['data']['total_table_free'] as double).toInt()
@@ -243,7 +243,7 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
                   const SizedBox(width: 10),
                   _buildStatPill(
                     'Unpaid Orders',
-                    '$_totalUnpaidOrders',
+                    '${(_totalUnpaidOrders).toStringAsFixed(2)}',
                     Colors.black,
                   ),
                   const SizedBox(width: 10),
@@ -427,7 +427,7 @@ Widget _buildFloorSelector() {
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.black87,
                   fontWeight: FontWeight.w600,
-                  fontSize: 16,
+                  fontSize: 18,
                 ),
               ),
             ),

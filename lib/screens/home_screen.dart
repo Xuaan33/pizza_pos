@@ -159,7 +159,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             Text(
                                               'Welcome back, $username - Table ${widget.tableNumber}',
                                               style: const TextStyle(
-                                                fontSize: 18,
+                                                fontSize: 24,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
@@ -176,6 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           child: Text(
                                             'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
                                             style: const TextStyle(
+                                              fontSize: 16,
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -367,7 +368,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                       'Submit Order',
                                                       style: TextStyle(
                                                           color: Colors.white,
-                                                          fontSize: 16,
+                                                          fontSize: 20,
                                                           fontWeight:
                                                               FontWeight.w600),
                                                     ),
@@ -387,7 +388,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               child: Text(
                                                 'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
                                                 style: const TextStyle(
-                                                  fontSize: 16,
+                                                  fontSize: 20,
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -1212,7 +1213,7 @@ void _goToCheckout() async {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        '${item['quantity']}',
+                        '${(item['quantity']).toStringAsFixed(0)}',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -1319,10 +1320,14 @@ void _goToCheckout() async {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label),
+          Text(label,
+          style: TextStyle(
+                fontWeight: FontWeight.bold),
+                ),
           Text(
             amount,
             style: TextStyle(
+              fontSize: 16,
                 fontWeight: FontWeight.bold, color: const Color(0xFFE732A0)),
           ),
         ],

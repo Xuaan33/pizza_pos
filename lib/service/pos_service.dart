@@ -26,8 +26,8 @@ class PosService {
       if (body != null) print('Request Body: ${jsonEncode(body)}');
 
       final response = await (method == 'GET'
-          ? http.get(uri, headers: headers)
-          : http.post(uri, headers: headers, body: jsonEncode(body)))
+              ? http.get(uri, headers: headers)
+              : http.post(uri, headers: headers, body: jsonEncode(body)))
           .timeout(timeout);
 
       //print('API Response: ${response.statusCode} - ${response.body}');
@@ -36,7 +36,8 @@ class PosService {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
         final error = jsonDecode(response.body);
-        throw Exception(error['message'] ?? 'Request failed with status ${response.statusCode}');
+        throw Exception(error['message'] ??
+            'Request failed with status ${response.statusCode}');
       }
     } catch (e) {
       print('API Error: $e');
@@ -130,31 +131,31 @@ class PosService {
     }
   }
 
-Future<Map<String, dynamic>> submitOrder({
-  required String posProfile,
-  required String customer,
-  required List<Map<String, dynamic>> items,
-  String? name,
-  String? couponCode,
-  String? applyDiscountOn,
-  double? discountAmount,
-  String? table,
-  String? orderChannel,
-}) async {
-  return _makeRequest(
-    endpoint: 'shiok_pos.api.submit_order',
-    method: 'POST',
-    body: {
-      if (name != null) 'name': name,
-      'pos_profile': posProfile,
-      'customer': customer,
-      'items': items,
-      if (name != null) 'name': name,
-      if (table != null) 'custom_table': table,
-      if (orderChannel != null) 'custom_order_channel': orderChannel,
-    },
-  );
-}
+  Future<Map<String, dynamic>> submitOrder({
+    required String posProfile,
+    required String customer,
+    required List<Map<String, dynamic>> items,
+    String? name,
+    String? couponCode,
+    String? applyDiscountOn,
+    double? discountAmount,
+    String? table,
+    String? orderChannel,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.submit_order',
+      method: 'POST',
+      body: {
+        if (name != null) 'name': name,
+        'pos_profile': posProfile,
+        'customer': customer,
+        'items': items,
+        if (name != null) 'name': name,
+        if (table != null) 'custom_table': table,
+        if (orderChannel != null) 'custom_order_channel': orderChannel,
+      },
+    );
+  }
 
   Future<Map<String, dynamic>> checkoutOrder({
     required String invoiceName,
@@ -169,21 +170,38 @@ Future<Map<String, dynamic>> submitOrder({
       },
     );
   }
+
+  Future<Map<String, dynamic>> createOpeningVoucher({
+    required String posProfile,
+    required List<Map<String, dynamic>> balanceDetails,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.create_opening_voucher',
+      method: 'POST',
+      body: {
+        'pos_profile': posProfile,
+        'balance_details': balanceDetails,
+      },
+    );
+  }
 }
 
 class OrderMapper {
-  static Map<String, dynamic> mapSubmittedOrder(Map<String, dynamic> apiResponse) {
+  static Map<String, dynamic> mapSubmittedOrder(
+      Map<String, dynamic> apiResponse) {
     try {
       final order = apiResponse['message'] as Map<String, dynamic>;
       return {
         'orderId': order['name'] as String,
         'status': order['status'] as String,
-        'items': (order['items'] as List).map((item) => {
-          'name': item['item_name'] as String,
-          'price': (item['rate'] as num).toDouble(),
-          'quantity': (item['qty'] as num).toDouble(),
-          'item_code': item['item_code'] as String?,
-        }).toList(),
+        'items': (order['items'] as List)
+            .map((item) => {
+                  'name': item['item_name'] as String,
+                  'price': (item['rate'] as num).toDouble(),
+                  'quantity': (item['qty'] as num).toDouble(),
+                  'item_code': item['item_code'] as String?,
+                })
+            .toList(),
         'total': (order['rounded_total'] as num).toDouble(),
         'postingDate': DateTime.parse(order['posting_date'] as String),
         'customerName': order['customer_name'] as String? ?? 'Guest',
@@ -205,23 +223,24 @@ class OrderMapper {
     };
   }
 
-static Map<String, dynamic> mapPaidOrder(Map<String, dynamic> apiResponse) {
-  try {
-    final order = apiResponse['message'] as Map<String, dynamic>;
-    final payments = order['payments'] as List<dynamic>? ?? [];
-    
-    return {
-      'isPaid': true,
-      'paidAmount': (order['paid_amount'] as num).toDouble(),
-      'paymentMethod': payments.isNotEmpty 
-          ? payments.first['mode_of_payment'] as String? 
-          : null,
-      'paymentDate': order['posting_date']?.toString(), // Already a string from API
-      'invoiceNumber': order['name'] as String,
-    };
-  } catch (e) {
-    print('Error mapping paid order: $e');
-    throw Exception('Failed to map payment data');
+  static Map<String, dynamic> mapPaidOrder(Map<String, dynamic> apiResponse) {
+    try {
+      final order = apiResponse['message'] as Map<String, dynamic>;
+      final payments = order['payments'] as List<dynamic>? ?? [];
+
+      return {
+        'isPaid': true,
+        'paidAmount': (order['paid_amount'] as num).toDouble(),
+        'paymentMethod': payments.isNotEmpty
+            ? payments.first['mode_of_payment'] as String?
+            : null,
+        'paymentDate':
+            order['posting_date']?.toString(), // Already a string from API
+        'invoiceNumber': order['name'] as String,
+      };
+    } catch (e) {
+      print('Error mapping paid order: $e');
+      throw Exception('Failed to map payment data');
+    }
   }
-}
 }

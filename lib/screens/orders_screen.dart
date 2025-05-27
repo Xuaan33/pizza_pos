@@ -103,7 +103,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               children: [
                 Text('Recent Orders',
                     style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
                 SizedBox(height: 16),
                 Row(
                   children: [

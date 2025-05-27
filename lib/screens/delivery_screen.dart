@@ -52,7 +52,7 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
         const Text(
           'Delivery',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 30,
             fontWeight: FontWeight.bold,
           ),
         ),

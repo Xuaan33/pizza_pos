@@ -294,10 +294,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   Widget _buildNavigationSidebar() {
     return Container(
-      width: 80,
+      width: 100,
       color: Colors.white,
       child: Column(
         children: [
+          const SizedBox(height: 12),
           GestureDetector(
             onTap: () {
               setState(() {
@@ -311,11 +312,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             },
             
             child: Container(
+              
               padding: const EdgeInsets.all(12),
               child: Image.asset(
                 'assets/logo-shiokpos.png',
-                width: 50,
-                height: 50,
+                width: 60,
+                height: 60,
               ),
             ),
           ),
@@ -369,15 +371,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               ),
               child: Image.asset(
                 imagePath,
-                color: isSelected ? Colors.pink : const Color(0xFF9B9B9B),
-                width: 26,
-                height: 26,
+                color: isSelected ? Colors.pink : const Color(0xFF555555),
+                width: 40,
+                height: 40,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 10),
             Text(label,
                 style: TextStyle(
-                    color: isSelected ? Colors.pink : const Color(0xFF9B9B9B),
+                    color: isSelected ? Colors.pink : const Color(0xFF555555),
                     fontSize: 10)),
           ],
         ),

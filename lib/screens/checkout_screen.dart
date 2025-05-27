@@ -205,7 +205,7 @@ Future<void> _loadTodayInfo() async {
               children: [
                 Text(
                   'Welcome back, $username',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 _buildStatPill(
@@ -234,7 +234,7 @@ Future<void> _loadTodayInfo() async {
             title,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -480,21 +480,21 @@ Future<void> _loadTodayInfo() async {
                 const SizedBox(), // Empty for image column
                 const Text(
                   'Item Name',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold),
                 ),
                 Center(
                   child: Text('Quantity',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold)),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text('Price (RM)',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold)),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text('Amount (RM)',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -546,7 +546,7 @@ Future<void> _loadTodayInfo() async {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
-                    'x${item['quantity']}',
+                    'x${item['quantity'].toStringAsFixed(0)}',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -639,10 +639,12 @@ Future<void> _loadTodayInfo() async {
       children: [
         Text(label,
             style: TextStyle(
+              fontSize: 14,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
             )),
         Text(formattedValue,
             style: TextStyle(
+              fontSize: 18,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
               color: isTotal ? Color(0xFFE732A0) : Colors.black,
             )),
