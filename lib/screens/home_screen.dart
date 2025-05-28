@@ -10,7 +10,7 @@ import 'checkout_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final int tableNumber;
-final Map<String, dynamic>? existingOrder;
+  final Map<String, dynamic>? existingOrder;
 
   const HomeScreen({
     Key? key,
@@ -37,10 +37,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _loadItemGroups();
     _loadAvailableItems();
-    currentOrderItems =
-        widget.existingOrder != null ? List.from(widget.existingOrder!['items']!) : [];
+    _initializeOrderItems();
+  }
+
+  void _initializeOrderItems() {
+    if (widget.existingOrder != null &&
+        widget.existingOrder!['items'] != null) {
+      currentOrderItems = (widget.existingOrder!['items'] as List).map((item) {
+        return {
+          'item_code': item['item_code'] ?? '',
+          'name': item['item_name'] ?? item['name'] ?? '',
+          'price': (item['price_list_rate'] ?? item['price'] ?? 0).toDouble(),
+          'image': item['image'] ?? 'assets/pizza.png',
+          'quantity': (item['qty'] ?? item['quantity'] ?? 1).toDouble(),
+          'options': item['options'] ?? {},
+          'option_text': item['option_text'] ?? '',
+          'custom_serve_later':
+              item['custom_serve_later'] == 1, // Fixed mapping
+          'custom_item_remarks':
+              item['custom_item_remarks'] ?? '', // Fixed mapping
+        };
+      }).toList();
+    } else {
+      currentOrderItems = [];
+    }
+
+    // Initialize remark controllers for existing items
     _itemRemarkControllers = currentOrderItems
-        .map((item) => TextEditingController(text: item['remarks'] ?? ''))
+        .map((item) =>
+            TextEditingController(text: item['custom_item_remarks'] ?? ''))
         .toList();
   }
 
@@ -643,8 +668,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'quantity': 1,
           'options': selectedOptions,
           'option_text': optionTexts.join(', '),
-          'serve_later': false, // Default to serve now
-          'remarks': '', // Initialize remarks
+          'custom_serve_later': false, // Default to serve now
+          'custom_item_remarks': '',
         };
         currentOrderItems.add(newOrderItem);
       }
@@ -742,306 +767,321 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _submitOrder() async {
-  final authState = ref.read(authProvider);
-  bool hasExistingOrder = 
-      widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
-
-  final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          title: Text(
-            hasExistingOrder ? 'Update Order' : 'Submit Order',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-          content: Text(
-            hasExistingOrder
-                ? 'Are you sure you want to update this order?'
-                : 'Are you sure you want to submit this order to kitchen?',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(
-                'CANCEL',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFE732A0),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: Text(
-                hasExistingOrder ? 'UPDATE' : 'SUBMIT',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ) ??
-      false;
-
-  if (!confirmed) return;
-
-  authState.whenOrNull(
-    authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
-        posProfile, branch, paymentMethods, taxes, hasOpening) async {
-      setState(() => _isLoading = true);
-      
-      try {
-        // 1. Get the full table name from floors and tables API
-        final floorsResponse = await PosService().getFloorsAndTables(branch);
-        String tableFullName = 'Table ${widget.tableNumber}'; // fallback
-        
-        if (floorsResponse['success'] == true) {
-          for (var floor in floorsResponse['message']) {
-            for (var table in floor['tables']) {
-              if (table['title'] == 'Table ${widget.tableNumber}') {
-                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
-                break;
-              }
-            }
-          }
-        }
-
-        // 2. Prepare items with proper structure
-        final items = currentOrderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'],
-            'custom_item_remarks': item['remarks'] ?? '',
-            'custom_serve_later': item['serve_later'] == true ? 1 : 0,
-            if (item['options'] != null)
-              'custom_variant_info': [
-                {'options': item['options']}
-              ],
-          };
-        }).toList();
-
-        print('Submitting order for table: $tableFullName'); // Debug log
-        print('Order channel: Dine In'); // Debug log
-
-        // 3. Submit with proper table format and order channel
-        final response = await PosService().submitOrder(
-          posProfile: posProfile,
-          customer: 'Guest',
-          items: items,
-          table: tableFullName, // e.g. "MK-Floor 1-Table 1"
-          orderChannel: 'Dine In', // Hardcoded as requested
-          name: hasExistingOrder ? widget.existingOrder!['orderId'] : null,
-        );
-
-        if (response['success'] == true) {
-          Navigator.pop(context, {
-            'action': hasExistingOrder ? 'updated' : 'submitted',
-            'invoice': response['message'],
-            'tableNumber': widget.tableNumber,
-            'tableFullName': tableFullName, // Pass both for reference
-          });
-        }
-      } catch (e) {
-        print('Submit order error: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting order: $e')),
-        );
-      } finally {
-        setState(() => _isLoading = false);
-      }
-    },
-  );
-}
-
-void _goToCheckout() async {
-  final hasExistingOrder =
-      widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
-
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      title: Text(
-        hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-        ),
-      ),
-      content: Text(
-        hasExistingOrder
-            ? 'Proceed to checkout for the existing order?'
-            : 'Submit order and proceed to checkout?',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(
-            'CANCEL',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFFE732A0),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          ),
-          child: Text(
-            'CONFIRM',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
-    ),
-  ) ?? false;
-
-  if (!confirmed) return;
-
-  setState(() => _isLoading = true);
-
-  try {
     final authState = ref.read(authProvider);
-    await authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
-          posProfile, branch, paymentMethods, taxes, hasOpening) async {
-        
-        String tableFullName = 'Table ${widget.tableNumber}';
+    bool hasExistingOrder =
+        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
-        // If existing order, skip submit
-        if (hasExistingOrder) {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CheckoutScreen(
-                order: {
-                  'tableNumber': widget.tableNumber,
-                  'items': List<Map<String, dynamic>>.from(widget.existingOrder!['items']),
-                  'entryTime': widget.existingOrder!['entryTime'] ?? DateTime.now(),
-                  'invoiceNumber': widget.existingOrder!['orderId'],
-                },
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: Text(
+              hasExistingOrder ? 'Update Order' : 'Submit Order',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
               ),
             ),
-          );
+            content: Text(
+              hasExistingOrder
+                  ? 'Are you sure you want to update this order?'
+                  : 'Are you sure you want to submit this order to kitchen?',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'CANCEL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFE732A0),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: Text(
+                  hasExistingOrder ? 'UPDATE' : 'SUBMIT',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
 
-          if (result == true && mounted) {
-            MainLayout.of(context)?.selectOrdersTab();
-            Navigator.pop(context, {
-              'action': 'paid',
-              'tableNumber': widget.tableNumber,
-            });
-          }
+    if (!confirmed) return;
 
-          return; // ✅ exit early
-        }
+    authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening) async {
+        setState(() => _isLoading = true);
 
-        // 🔁 Otherwise, submit order as normal
-        final floorsResponse = await PosService().getFloorsAndTables(branch);
-        if (floorsResponse['success'] == true) {
-          for (var floor in floorsResponse['message']) {
-            for (var table in floor['tables']) {
-              if (table['title'] == 'Table ${widget.tableNumber}') {
-                tableFullName = table['name'];
-                break;
+        try {
+          // 1. Get the full table name from floors and tables API
+          final floorsResponse = await PosService().getFloorsAndTables(branch);
+          String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+
+          if (floorsResponse['success'] == true) {
+            for (var floor in floorsResponse['message']) {
+              for (var table in floor['tables']) {
+                if (table['title'] == 'Table ${widget.tableNumber}') {
+                  tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                  break;
+                }
               }
             }
           }
-        }
 
-        final items = currentOrderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'],
-            'custom_item_remarks': item['remarks'] ?? '',
-            'custom_serve_later': item['serve_later'] == true ? 1 : 0,
-            if (item['options'] != null)
-              'custom_variant_info': [
-                {'options': item['options']}
-              ],
-          };
-        }).toList();
+          // 2. Prepare items with proper structure
+          final items = currentOrderItems.map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['options'] != null)
+                'custom_variant_info': [
+                  {'options': item['options']}
+                ],
+            };
+          }).toList();
 
-        final submitResponse = await PosService().submitOrder(
-          posProfile: posProfile,
-          customer: 'Guest',
-          items: items,
-          table: tableFullName,
-          orderChannel: 'Dine In',
-        );
+          print('Submitting order for table: $tableFullName'); // Debug log
+          print('Order channel: Dine In'); // Debug log
 
-        if (submitResponse['success'] == true) {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CheckoutScreen(
-                order: {
-                  'tableNumber': widget.tableNumber,
-                  'items': List<Map<String, dynamic>>.from(currentOrderItems),
-                  'entryTime': DateTime.now(),
-                  'invoiceNumber': submitResponse['message']['name'],
-                },
-              ),
-            ),
+          // 3. Submit with proper table format and order channel
+          final response = await PosService().submitOrder(
+            posProfile: posProfile,
+            customer: 'Guest',
+            items: items,
+            table: tableFullName, // e.g. "MK-Floor 1-Table 1"
+            orderChannel: 'Dine In', // Hardcoded as requested
+            name: hasExistingOrder ? widget.existingOrder!['orderId'] : null,
           );
 
-          if (result == true && mounted) {
-            MainLayout.of(context)?.selectOrdersTab();
+          if (response['success'] == true) {
             Navigator.pop(context, {
-              'action': 'paid',
+              'action': hasExistingOrder ? 'updated' : 'submitted',
+              'invoice': response['message'],
               'tableNumber': widget.tableNumber,
+              'tableFullName': tableFullName, // Pass both for reference
             });
           }
+        } catch (e) {
+          print('Submit order error: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error submitting order: $e')),
+          );
+        } finally {
+          setState(() => _isLoading = false);
         }
       },
     );
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+  }
+
+  void _goToCheckout() async {
+    final hasExistingOrder =
+        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: Text(
+              hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            content: Text(
+              hasExistingOrder
+                  ? 'Proceed to checkout for the existing order?'
+                  : 'Submit order and proceed to checkout?',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'CANCEL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFE732A0),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: Text(
+                  'CONFIRM',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening) async {
+          String tableFullName = 'Table ${widget.tableNumber}';
+
+          // If existing order, skip submit
+          if (hasExistingOrder) {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CheckoutScreen(
+                  order: {
+                    'tableNumber': widget.tableNumber,
+                    'items': List<Map<String, dynamic>>.from(
+                        widget.existingOrder!['items']),
+                    'entryTime':
+                        widget.existingOrder!['entryTime'] ?? DateTime.now(),
+                    'invoiceNumber': widget.existingOrder!['orderId'],
+                  },
+                ),
+              ),
+            );
+
+            if (result == true && mounted) {
+              MainLayout.of(context)?.selectOrdersTab();
+              Navigator.pop(context, {
+                'action': 'paid',
+                'tableNumber': widget.tableNumber,
+              });
+            }
+
+            return; // ✅ exit early
+          }
+
+          // 🔁 Otherwise, submit order as normal
+          final floorsResponse = await PosService().getFloorsAndTables(branch);
+          if (floorsResponse['success'] == true) {
+            for (var floor in floorsResponse['message']) {
+              for (var table in floor['tables']) {
+                if (table['title'] == 'Table ${widget.tableNumber}') {
+                  tableFullName = table['name'];
+                  break;
+                }
+              }
+            }
+          }
+
+          final items = currentOrderItems.map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['options'] != null)
+                'custom_variant_info': [
+                  {'options': item['options']}
+                ],
+            };
+          }).toList();
+
+          final submitResponse = await PosService().submitOrder(
+            posProfile: posProfile,
+            customer: 'Guest',
+            items: currentOrderItems.map((item) {
+              return {
+                'item_code': item['item_code'] ?? '',
+                'qty': item['quantity'],
+                'price_list_rate': item['price'],
+                'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                'custom_serve_later': item['custom_serve_later'] == true
+                    ? 1
+                    : 0, // Include serve later status
+                if (item['options'] != null)
+                  'custom_variant_info': [
+                    {'options': item['options']}
+                  ],
+              };
+            }).toList(),
+            table: tableFullName,
+            orderChannel: 'Dine In',
+          );
+
+          if (submitResponse['success'] == true) {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CheckoutScreen(
+                  order: {
+                    'tableNumber': widget.tableNumber,
+                    'items': List<Map<String, dynamic>>.from(currentOrderItems),
+                    'entryTime': DateTime.now(),
+                    'invoiceNumber': submitResponse['message']['name'],
+                  },
+                ),
+              ),
+            );
+
+            if (result == true && mounted) {
+              MainLayout.of(context)?.selectOrdersTab();
+              Navigator.pop(context, {
+                'action': 'paid',
+                'tableNumber': widget.tableNumber,
+              });
+            }
+          }
+        },
       );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
-}
-
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(
@@ -1133,9 +1173,9 @@ void _goToCheckout() async {
     // Ensure we have a controller for this item
     if (index >= _itemRemarkControllers.length) {
       _itemRemarkControllers
-          .add(TextEditingController(text: item['remarks'] ?? ''));
+          .add(TextEditingController(text: item['custom_item_remarks'] ?? ''));
     } else {
-      _itemRemarkControllers[index].text = item['remarks'] ?? '';
+      _itemRemarkControllers[index].text = item['custom_item_remarks'] ?? '';
     }
 
     return Padding(
@@ -1235,15 +1275,39 @@ void _goToCheckout() async {
             ],
           ),
 
-          Switch(
-            value: item['serve_later'] ?? false,
-            onChanged: (value) {
-              setState(() {
-                currentOrderItems[index]['serve_later'] = value;
-              });
-            },
+          // Replace this section in your _buildOrderItem method:
+
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 215, bottom: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Serve Later',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Switch(
+                      value: item['custom_serve_later'] ??
+                          false, // Fixed: directly use the boolean value
+                      onChanged: (value) {
+                        setState(() {
+                          currentOrderItems[index]['custom_serve_later'] =
+                              value; // Fixed: directly set the value
+                        });
+                      },
+                      activeColor: Color(0xFFE732A0),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          // Enhanced remarks field for this item
           Padding(
             padding: const EdgeInsets.only(top: 8.0, left: 70, bottom: 8.0),
             child: Container(
@@ -1304,7 +1368,8 @@ void _goToCheckout() async {
 
   void _saveRemarks(int index) {
     setState(() {
-      currentOrderItems[index]['remarks'] = _itemRemarkControllers[index].text;
+      currentOrderItems[index]['custom_item_remarks'] =
+          _itemRemarkControllers[index].text;
     });
   }
 
@@ -1320,15 +1385,16 @@ void _goToCheckout() async {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-          style: TextStyle(
-                fontWeight: FontWeight.bold),
-                ),
+          Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           Text(
             amount,
             style: TextStyle(
-              fontSize: 16,
-                fontWeight: FontWeight.bold, color: const Color(0xFFE732A0)),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFFE732A0)),
           ),
         ],
       ),

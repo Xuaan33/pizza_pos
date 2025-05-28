@@ -105,6 +105,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
                           'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
                           'item_code': item['item_code']?.toString() ?? '',
+                          'custom_serve_later': item['custom_serve_later'],
+                          'custom_item_remarks': item['custom_item_remarks']?.toString() ?? '',
                         };
                       }).toList();
 
@@ -161,8 +163,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             invoice['mode_of_payment']?.toString() ?? 'Cash',
                         'customerName':
                             invoice['customer_name']?.toString() ?? 'Guest',
-                        'remarks':
-                            invoice['remarks']?.toString() ?? 'No remarks',
+                        'custom_item_remarks':
+                            invoice['custom_item_remarks']?.toString() ?? 'No remarks',
                         'taxBreakdown': taxBreakdown,
                       };
                     } catch (e) {
@@ -204,38 +206,39 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Map<String, dynamic> _mapApiInvoiceToOrder(Map<String, dynamic> invoice) {
-    final items = ((invoice['items'] as List?) ?? []).map((item) {
-      return {
-        'name': item['item_name']?.toString() ?? 'Unknown Item',
-        'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-        'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-        'item_code': item['item_code']?.toString() ?? '',
-        'description': item['description']?.toString() ?? '',
-      };
-    }).toList();
-
+  final items = ((invoice['items'] as List?) ?? []).map((item) {
     return {
-      'orderId': invoice['name']?.toString() ?? 'Unknown',
-      'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
-      'status': invoice['status']?.toString() ?? 'Draft',
-      'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
-      'tableNumber': _extractTableNumber(invoice['custom_table']),
-      'items': items,
-      'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
-      'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
-      'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
-      'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
-          DateTime.now(),
-      'paidTime': invoice['status']?.toString() == 'Paid'
-          ? DateTime.tryParse(invoice['posting_date']?.toString() ?? '')
-          : null,
-      'isPaid': invoice['status']?.toString() == 'Paid',
-      'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
-      'customerName': invoice['customer_name']?.toString() ?? 'Guest',
-      'remarks': invoice['remarks']?.toString() ?? 'No remarks',
-      'taxBreakdown': _parseTaxBreakdown(invoice),
+      'name': item['item_name']?.toString() ?? 'Unknown Item',
+      'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+      'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
+      'item_code': item['item_code']?.toString() ?? '',
+      'custom_item_remarks': item['custom_item_remarks']?.toString() ?? '',
+      'custom_serve_later': item['custom_serve_later'] == 1, // Add serve later
     };
-  }
+  }).toList();
+
+  return {
+    'orderId': invoice['name']?.toString() ?? 'Unknown',
+    'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
+    'status': invoice['status']?.toString() ?? 'Draft',
+    'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
+    'tableNumber': _extractTableNumber(invoice['custom_table']),
+    'items': items,
+    'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
+    'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
+    'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
+    'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
+        DateTime.now(),
+    'paidTime': invoice['status']?.toString() == 'Paid'
+        ? DateTime.tryParse(invoice['posting_date']?.toString() ?? '')
+        : null,
+    'isPaid': invoice['status']?.toString() == 'Paid',
+    'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
+    'customerName': invoice['customer_name']?.toString() ?? 'Guest',
+    'custom_item_remarks': invoice['custom_item_remarks']?.toString() ?? 'No remarks',
+    'taxBreakdown': _parseTaxBreakdown(invoice),
+  };
+}
 
   Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
     try {

@@ -200,6 +200,8 @@ class OrderMapper {
                   'price': (item['rate'] as num).toDouble(),
                   'quantity': (item['qty'] as num).toDouble(),
                   'item_code': item['item_code'] as String?,
+                  'custom_item_remarks': item['custom_item_remarks'] as String?,
+                'serve_later': item['custom_serve_later'] == 1, // Add serve later
                 })
             .toList(),
         'total': (order['rounded_total'] as num).toDouble(),

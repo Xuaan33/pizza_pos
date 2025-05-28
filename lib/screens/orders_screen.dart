@@ -367,13 +367,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                   ),
                   // Remarks if available
-                  if (order['remarks'] != null &&
-                      order['remarks'].toString().isNotEmpty &&
-                      order['remarks'].toString() != 'No remarks')
+                  if (order['custom_item_remarks'] != null &&
+                      order['custom_item_remarks'].toString().isNotEmpty &&
+                      order['custom_item_remarks'].toString() != 'No remarks')
                     Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: Text(
-                        'Remarks: ${order['remarks']}',
+                        'Remarks: ${order['custom_item_remarks']}',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
