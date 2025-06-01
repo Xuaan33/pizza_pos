@@ -22,7 +22,7 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  String _selectedPaymentMethod = 'Cash';
+  String _selectedPaymentMethod = '';
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
   double _totalRevenue = 0.0;
@@ -32,8 +32,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isProcessingPayment = false;
   bool _isDisposed = false;
 
-
-@override
+  @override
   void dispose() {
     _isDisposed = true; // Mark as disposed
     super.dispose();
@@ -44,6 +43,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.initState();
     _loadPaymentMethods();
     _loadTodayInfo();
+    _fetchOrderDetails();
   }
 
   void _loadPaymentMethods() {
@@ -54,42 +54,88 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() {
           _paymentMethods = paymentMethods;
           _isLoadingPaymentMethods = false;
-          if (_paymentMethods.isNotEmpty) {
-            _selectedPaymentMethod = _paymentMethods.first['name'];
-          }
         });
       },
     );
   }
 
-Future<void> _loadTodayInfo() async {
-  try {
-    final response = await PosService().getTodayInfo();
-    
-    if (response['success'] == true) {
-      setState(() {
-        // Ensure we handle both int and double values
-        _totalRevenue = (response['data']['total_revenue'] is int
-            ? (response['data']['total_revenue'] as int).toDouble()
-            : (response['data']['total_revenue'] ?? 0).toDouble());
-            
-        _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is double
-            ? (response['data']['total_unpaid_orders'] as double).toInt()
-            : (response['data']['total_unpaid_orders'] ?? 0));
-            
-        _totalTablesFree = (response['data']['total_table_free'] is double
-            ? (response['data']['total_table_free'] as double).toInt()
-            : (response['data']['total_table_free'] ?? 0));
-      });
-    }
-  } catch (e) {
-    if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load today info: $e')),
-      );
+  Future<void> _loadTodayInfo() async {
+    try {
+      final response = await PosService().getTodayInfo();
+
+      if (response['success'] == true) {
+        setState(() {
+          // Ensure we handle both int and double values
+          _totalRevenue = (response['data']['total_revenue'] is int
+              ? (response['data']['total_revenue'] as int).toDouble()
+              : (response['data']['total_revenue'] ?? 0).toDouble());
+
+          _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is int
+              ? (response['data']['total_unpaid_orders'] as int).toDouble()
+              : (response['data']['total_unpaid_orders'] ?? 0).toDouble());
+
+          _totalTablesFree = (response['data']['total_table_free'] is double
+              ? (response['data']['total_table_free'] as double).toInt()
+              : (response['data']['total_table_free'] ?? 0));
+        });
+      }
+    } catch (e) {
+      if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load today info: $e')),
+        );
+      }
     }
   }
-}
+
+  Future<void> _fetchOrderDetails() async {
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().getOrders(
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        search: invoiceName,
+      );
+
+      if (response['message']?['success'] == true) {
+        final List<dynamic> invoices = response['message']?['message'] ?? [];
+        if (invoices.isNotEmpty) {
+          final invoice = invoices.first;
+          setState(() {
+            widget.order['grand_total'] =
+                invoice['grand_total']?.toDouble() ?? 0.0;
+            widget.order['base_rounding_adjustment'] =
+                invoice['base_rounding_adjustment']?.toDouble() ?? 0.0;
+            widget.order['rounded_total'] =
+                invoice['rounded_total']?.toDouble() ?? 0.0;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to fetch order details: $e')),
+        );
+      }
+    }
+  }
 
   List<Map<String, dynamic>> get orderItems {
     return List<Map<String, dynamic>>.from(widget.order['items']);
@@ -140,7 +186,6 @@ Future<void> _loadTodayInfo() async {
                         ),
 
                         // Right side - Order details
-                        // Right side - Order details with fixed bottom summary
                         Expanded(
                           flex: 3,
                           child: Column(
@@ -211,7 +256,8 @@ Future<void> _loadTodayInfo() async {
                 _buildStatPill(
                     'Revenue', 'RM${_totalRevenue.toStringAsFixed(2)}'),
                 const SizedBox(width: 8),
-                _buildStatPill('Unpaid Orders', '$_totalUnpaidOrders'),
+                _buildStatPill('Unpaid Orders',
+                    '${_totalUnpaidOrders.toStringAsFixed(2)}'),
                 const SizedBox(width: 8),
                 _buildStatPill('Tables Free', '$_totalTablesFree'),
               ],
@@ -322,11 +368,24 @@ Future<void> _loadTodayInfo() async {
           return GestureDetector(
             onTap: () async {
               if (isCash) {
-                await _showCashPaymentDialog();
+                // Show cash dialog and only select if user confirms
+                final confirmed = await _showCashPaymentDialog();
+                if (confirmed) {
+                  setState(() {
+                    _selectedPaymentMethod = method['name'];
+                  });
+                } else {
+                  // If dialog is cancelled, deselect the payment method
+                  setState(() {
+                    _selectedPaymentMethod = '';
+                  });
+                }
+              } else {
+                // For non-cash methods, select immediately
+                setState(() {
+                  _selectedPaymentMethod = method['name'];
+                });
               }
-              setState(() {
-                _selectedPaymentMethod = method['name'];
-              });
             },
             child: Container(
               decoration: BoxDecoration(
@@ -480,21 +539,24 @@ Future<void> _loadTodayInfo() async {
                 const SizedBox(), // Empty for image column
                 const Text(
                   'Item Name',
-                  style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Center(
                   child: Text('Quantity',
-                      style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text('Price (RM)',
-                      style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text('Amount (RM)',
-                      style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -578,8 +640,10 @@ Future<void> _loadTodayInfo() async {
   }
 
   Widget _buildOrderSummary() {
-    final changeAmount =
-        _amountGiven > 0 ? _amountGiven - _calculateTotal() : 0.0;
+    final totalAmount = _calculateTotal();
+    final isCashPayment = _selectedPaymentMethod == 'Cash';
+    final paidAmount = isCashPayment ? _amountGiven : totalAmount;
+    final changeAmount = isCashPayment ? _amountGiven - totalAmount : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -599,154 +663,180 @@ Future<void> _loadTodayInfo() async {
               'GST @ 6.0%', "RM ${_calculateGST().toStringAsFixed(2)}"),
           const Divider(thickness: 1, height: 24),
           _buildSummaryRow(
-              'Grand Total', "RM ${_calculateTotal().toStringAsFixed(2)}",
+              'Grand Total', "RM ${totalAmount.toStringAsFixed(2)}",
               isTotal: true),
           const SizedBox(height: 8),
-          _buildSummaryRow(
-            'Change Amount',
-            "RM ${changeAmount.toStringAsFixed(2)}",
-            isTotal: true,
-          ),
+          if (isCashPayment) ...[
+            _buildSummaryRow(
+              'Amount Given',
+              "RM ${paidAmount.toStringAsFixed(2)}",
+            ),
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              'Change Amount',
+              "RM ${changeAmount.toStringAsFixed(2)}",
+              isTotal: true,
+            ),
+          ] else ...[
+            _buildSummaryRow(
+              'Payment Method',
+              _selectedPaymentMethod,
+              isTotal: true,
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildSummaryRow(String label, dynamic value, {bool isTotal = false}) {
-  String formattedValue;
+    String formattedValue;
 
-  if (value == null) {
-    formattedValue = '';
-  } else if (value is num) {
-    formattedValue = 'RM ${value.toStringAsFixed(2)}';
-  } else if (value is DateTime) {
-    formattedValue = DateFormat('dd MMM yyyy HH:mm').format(value);
-  } else if (value is String && value.contains('T')) {
-    // Handle ISO date strings
-    try {
-      formattedValue = DateFormat('dd MMM yyyy HH:mm').format(DateTime.parse(value));
-    } catch (e) {
-      formattedValue = value;
+    if (value == null) {
+      formattedValue = '';
+    } else if (value is num) {
+      formattedValue = 'RM ${value.toStringAsFixed(2)}';
+    } else if (value is DateTime) {
+      formattedValue = DateFormat('dd MMM yyyy HH:mm').format(value);
+    } else if (value is String && value.contains('T')) {
+      // Handle ISO date strings
+      try {
+        formattedValue =
+            DateFormat('dd MMM yyyy HH:mm').format(DateTime.parse(value));
+      } catch (e) {
+        formattedValue = value;
+      }
+    } else {
+      formattedValue = value.toString();
     }
-  } else {
-    formattedValue = value.toString();
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
+              )),
+          Text(formattedValue,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
+                color: isTotal ? Color(0xFFE732A0) : Colors.black,
+              )),
+        ],
+      ),
+    );
   }
 
-  return Padding(
-    padding: EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
-            )),
-        Text(formattedValue,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
-              color: isTotal ? Color(0xFFE732A0) : Colors.black,
-            )),
-      ],
-    ),
-  );
-}
-
   Widget _buildPayNowButton() {
-  return SizedBox(
-    height: 50,
-    child: ElevatedButton(
-      onPressed: () async {
-        if (_selectedPaymentMethod == 'Cash') {
-          // Show cash dialog and wait for amount input
-          await _showCashPaymentDialog();
-          
-          // Only proceed if amount given is sufficient
-          if (_amountGiven >= _calculateTotal()) {
-            _completePayment();
-          } else {
+    return SizedBox(
+      height: 50,
+      child: ElevatedButton(
+        onPressed: () async {
+          if (_selectedPaymentMethod.isEmpty) {
             Fluttertoast.showToast(
-              msg: "Please enter sufficient cash amount",
+              msg: "Please select a payment method",
               gravity: ToastGravity.BOTTOM,
               backgroundColor: Colors.red,
               textColor: Colors.white,
             );
+            return;
           }
-        } else {
-          // For non-cash payments, proceed directly
+
           _completePayment();
-        }
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFE732A0),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFE732A0),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        child: const Text(
+          'Pay Now',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
-      child: const Text(
-        'Pay Now',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-    ),
-  );
-}
-
-Future<void> _completePayment() async {
-  setState(() => _isProcessingPayment = true);
-  
-  try {
-    final List<Map<String, dynamic>> payments = [{
-      'mode_of_payment': _selectedPaymentMethod,
-      'amount': _calculateTotal(),
-      if (_selectedPaymentMethod == 'Cash')
-        'reference_no': 'CASH-${DateTime.now().millisecondsSinceEpoch}',
-    }];
-
-    final invoiceName = widget.order['invoiceNumber'];
-    if (invoiceName == null) {
-      throw Exception('Invoice number not available');
-    }
-
-    final response = await PosService().checkoutOrder(
-      invoiceName: invoiceName,
-      payments: payments,
     );
+  }
 
-    if (response['success'] == true) {
-      final paidOrder = OrderMapper.mapPaidOrder(response);
-      final completeOrder = {
-        ...widget.order as Map<String, dynamic>,
-        ...paidOrder,
-        'isPaid': true,
-        'status': 'Paid',
-        'paidTime': DateTime.now().toIso8601String(),
-      };
+  Future<void> _completePayment() async {
+    setState(() => _isProcessingPayment = true);
 
-      MainLayout.of(context)?.handleOrderPaid(completeOrder);
-      
-      // Return true to indicate successful payment
+    try {
+      final totalAmount = _calculateTotal();
+      final List<Map<String, dynamic>> payments = [
+        {
+          'mode_of_payment': _selectedPaymentMethod,
+          'amount':
+              _selectedPaymentMethod == 'Cash' ? _amountGiven : totalAmount,
+          if (_selectedPaymentMethod == 'Cash')
+            'reference_no': 'CASH-${DateTime.now().millisecondsSinceEpoch}',
+        }
+      ];
+
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) {
+        throw Exception('Invoice number not available');
+      }
+
+      final response = await PosService().checkoutOrder(
+        invoiceName: invoiceName,
+        payments: payments,
+      );
+
+      if (response['success'] == true) {
+        final paidOrder = OrderMapper.mapPaidOrder(response);
+        final completeOrder = {
+          ...widget.order as Map<String, dynamic>,
+          ...paidOrder,
+          'isPaid': true,
+          'status': 'Paid',
+          'paidTime': DateTime.now().toIso8601String(),
+          'paymentMethod': _selectedPaymentMethod,
+          'net_total': _calculateSubtotal(),
+          'base_rounding_adjustment': _calculateRounding(),
+          'rounded_total': totalAmount,
+          if (_selectedPaymentMethod == 'Cash') ...{
+            'changeAmount': _amountGiven - totalAmount,
+            'paidAmount': _amountGiven,
+          },
+          if (_selectedPaymentMethod != 'Cash') ...{
+            'paidAmount': totalAmount,
+            'changeAmount': 0.0,
+          },
+        };
+
+        MainLayout.of(context)?.handleOrderPaid(completeOrder);
+
+        if (mounted) {
+          Navigator.of(context).pop(true);
+          Fluttertoast.showToast(
+            msg: "Checkout Successfully",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+        }
+      }
+    } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payment error: ${e.toString()}')),
+        );
+      }
+      if (mounted) {
+        Navigator.of(context).pop(false);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
       }
     }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment error: ${e.toString()}')),
-      );
-    }
-    // Return false to indicate payment failed
-    if (mounted) {
-      Navigator.of(context).pop(false);
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isProcessingPayment = false);
-    }
   }
-}
 
   Future<bool> _showCashPaymentDialog() async {
     final totalAmount = _calculateTotal();
@@ -830,31 +920,39 @@ Future<void> _completePayment() async {
   }
 
   double _calculateSubtotal() {
-    return orderItems.fold(
-        0.0, (sum, item) => sum + (item['price'] * item['quantity']));
+    // Use server value if available, otherwise calculate from items
+    return (widget.order['grand_total'] as num?)?.toDouble() ??
+        orderItems.fold(
+            0.0, (sum, item) => sum + (item['price'] * item['quantity']));
   }
 
-  double _calculateGST() {
-  final authState = ref.read(authProvider);
-  return authState.whenOrNull(
-    authenticated: (sid, apiKey, apiSecret, username, email, fullName, 
-        posProfile, branch, paymentMethods, taxes, hasOpening) {
-      // Find the GST tax rate
-      final gstTax = taxes.firstWhere(
-        (tax) => tax['description']?.contains('GST') ?? false,
-        orElse: () => {'rate': 6.0}, // Default to 6% if not found
-      );
-      return _calculateSubtotal() * (gstTax['rate'] ?? 6.0) / 100;
-    },
-  ) ?? (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
-}
   double _calculateRounding() {
-    final total = _calculateSubtotal() + _calculateGST();
-    return ((total * 100).round() / 100) - total;
+    // Use server value if available, otherwise calculate
+    return (widget.order['base_rounding_adjustment'] as num?)?.toDouble() ??
+        ((_calculateSubtotal() + _calculateGST()) * 100).round() / 100 -
+            (_calculateSubtotal() + _calculateGST());
   }
 
   double _calculateTotal() {
-    return _calculateSubtotal() + _calculateGST() + _calculateRounding();
+    // Use server value if available, otherwise calculate
+    return (widget.order['rounded_total'] as num?)?.toDouble() ??
+        (_calculateSubtotal() + _calculateGST() + _calculateRounding());
+  }
+
+  double _calculateGST() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+              posProfile, branch, paymentMethods, taxes, hasOpening) {
+            // Find the GST tax rate
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 6.0}, // Default to 6% if not found
+            );
+            return _calculateSubtotal() * (gstTax['rate'] ?? 6.0) / 100;
+          },
+        ) ??
+        (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
   }
 
   String _formatTime(DateTime time) {

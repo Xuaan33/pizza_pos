@@ -95,7 +95,7 @@ class PosService {
         if (search != null) 'search': search,
         if (status != null) 'status': status,
         if (customer != null) 'customer': customer,
-        if (postingDate != null) 'posting_date': postingDate,
+        if (postingDate != null) 'creation': postingDate,
         if (customTable != null) 'custom_table': customTable,
         if (customOrderChannel != null)
           'custom_order_channel': customOrderChannel,
@@ -194,18 +194,43 @@ class OrderMapper {
       return {
         'orderId': order['name'] as String,
         'status': order['status'] as String,
-        'items': (order['items'] as List)
-            .map((item) => {
-                  'name': item['item_name'] as String,
-                  'price': (item['rate'] as num).toDouble(),
-                  'quantity': (item['qty'] as num).toDouble(),
-                  'item_code': item['item_code'] as String?,
-                  'custom_item_remarks': item['custom_item_remarks'] as String?,
-                'serve_later': item['custom_serve_later'] == 1, // Add serve later
-                })
-            .toList(),
+        'items': (order['items'] as List).map((item) {
+          // Parse variant info if exists
+          Map<String, dynamic>? options;
+          String? optionText;
+          dynamic customVariantInfo = item['custom_variant_info'];
+
+          if (customVariantInfo != null) {
+            try {
+              dynamic parsed = customVariantInfo is String
+                  ? jsonDecode(customVariantInfo)
+                  : customVariantInfo;
+
+              if (parsed is List && parsed.isNotEmpty) {
+                options = Map<String, dynamic>.from(parsed[0]['options'] ?? {});
+                optionText = options.entries
+                    .map((e) => '${e.key}: ${e.value}')
+                    .join(', ');
+              }
+            } catch (e) {
+              print('Error parsing variant info: $e');
+            }
+          }
+
+          return {
+            'name': item['item_name'] as String,
+            'price': (item['rate'] as num).toDouble(),
+            'quantity': (item['qty'] as num).toDouble(),
+            'item_code': item['item_code'] as String?,
+            'custom_item_remarks': item['custom_item_remarks'] as String?,
+            'serve_later': item['custom_serve_later'] == 1,
+            'options': options ?? {},
+            'option_text': optionText ?? '',
+            'custom_variant_info': customVariantInfo, // Preserve original
+          };
+        }).toList(),
         'total': (order['rounded_total'] as num).toDouble(),
-        'postingDate': DateTime.parse(order['posting_date'] as String),
+        'postingDate': DateTime.parse(order['creation'] as String),
         'customerName': order['customer_name'] as String? ?? 'Guest',
         'taxBreakdown': _mapTaxes(order['taxes'] as List?),
       };
@@ -230,18 +255,21 @@ class OrderMapper {
       final order = apiResponse['message'] as Map<String, dynamic>;
       final payments = order['payments'] as List<dynamic>? ?? [];
 
+      print('[OrderMapper] Raw order data: ${jsonEncode(order)}');
+      print('[OrderMapper] Payments data: ${jsonEncode(payments)}');
+
       return {
         'isPaid': true,
         'paidAmount': (order['paid_amount'] as num).toDouble(),
+        'changeAmount': (order['change_amount'] as num?)?.toDouble() ?? 0.0,
         'paymentMethod': payments.isNotEmpty
             ? payments.first['mode_of_payment'] as String?
             : null,
-        'paymentDate':
-            order['posting_date']?.toString(), // Already a string from API
+        'paymentDate': order['creation']?.toString(),
         'invoiceNumber': order['name'] as String,
       };
     } catch (e) {
-      print('Error mapping paid order: $e');
+      print('[OrderMapper] Error mapping paid order: $e');
       throw Exception('Failed to map payment data');
     }
   }

@@ -105,8 +105,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
                           'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
                           'item_code': item['item_code']?.toString() ?? '',
+                          'options': item['options'] ?? {},
+                          'option_text': item['option_text'] ?? '',
                           'custom_serve_later': item['custom_serve_later'],
-                          'custom_item_remarks': item['custom_item_remarks']?.toString() ?? '',
+                          'custom_item_remarks':
+                              item['custom_item_remarks']?.toString() ?? '',
                         };
                       }).toList();
 
@@ -153,10 +156,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             (invoice['rounded_total'] as num?)?.toDouble() ??
                                 0.0,
                         'entryTime':
-                            parseDate(invoice['posting_date']?.toString()) ??
+                            parseDate(invoice['creation']?.toString()) ??
                                 DateTime.now(),
                         'paidTime': invoice['status']?.toString() == 'Paid'
-                            ? parseDate(invoice['posting_date']?.toString())
+                            ? parseDate(invoice['modified']?.toString())
                             : null,
                         'isPaid': invoice['status']?.toString() == 'Paid',
                         'paymentMethod':
@@ -164,8 +167,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                         'customerName':
                             invoice['customer_name']?.toString() ?? 'Guest',
                         'custom_item_remarks':
-                            invoice['custom_item_remarks']?.toString() ?? 'No remarks',
+                            invoice['custom_item_remarks']?.toString() ??
+                                'No remarks',
                         'taxBreakdown': taxBreakdown,
+                        'paidAmount':
+                            (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
+                        'changeAmount':
+                            (invoice['change_amount'] as num?)?.toDouble() ?? 0.0,
+                        'base_rounding_adjustment': (invoice['base_rounding_adjustment'] as num?)?.toDouble() ?? 0.0
                       };
                     } catch (e) {
                       print('Error processing invoice ${invoice['name']}: $e');
@@ -206,39 +215,69 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Map<String, dynamic> _mapApiInvoiceToOrder(Map<String, dynamic> invoice) {
-  final items = ((invoice['items'] as List?) ?? []).map((item) {
-    return {
-      'name': item['item_name']?.toString() ?? 'Unknown Item',
-      'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-      'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-      'item_code': item['item_code']?.toString() ?? '',
-      'custom_item_remarks': item['custom_item_remarks']?.toString() ?? '',
-      'custom_serve_later': item['custom_serve_later'] == 1, // Add serve later
-    };
-  }).toList();
+    final items = ((invoice['items'] as List?) ?? []).map((item) {
+      // Always include the raw custom_variant_info exactly as received
+      dynamic customVariantInfo = item['custom_variant_info'];
 
-  return {
-    'orderId': invoice['name']?.toString() ?? 'Unknown',
-    'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
-    'status': invoice['status']?.toString() ?? 'Draft',
-    'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
-    'tableNumber': _extractTableNumber(invoice['custom_table']),
-    'items': items,
-    'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
-    'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
-    'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
-    'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
-        DateTime.now(),
-    'paidTime': invoice['status']?.toString() == 'Paid'
-        ? DateTime.tryParse(invoice['posting_date']?.toString() ?? '')
-        : null,
-    'isPaid': invoice['status']?.toString() == 'Paid',
-    'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
-    'customerName': invoice['customer_name']?.toString() ?? 'Guest',
-    'custom_item_remarks': invoice['custom_item_remarks']?.toString() ?? 'No remarks',
-    'taxBreakdown': _parseTaxBreakdown(invoice),
-  };
-}
+      // Parse options if variant info exists
+      Map<String, dynamic> options = {};
+      String optionText = '';
+
+      if (customVariantInfo != null) {
+        try {
+          dynamic parsed = customVariantInfo is String
+              ? jsonDecode(customVariantInfo)
+              : customVariantInfo;
+
+          if (parsed is List &&
+              parsed.isNotEmpty &&
+              parsed[0]['options'] != null) {
+            options = Map<String, dynamic>.from(parsed[0]['options']);
+            optionText =
+                options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+          }
+        } catch (e) {
+          debugPrint('Variant parsing error: $e');
+        }
+      }
+
+      return {
+        'item_code': item['item_code'] ?? '',
+        'name': item['item_name'] ?? item['name'] ?? '',
+        'price': (item['price_list_rate'] ?? item['rate'] ?? 0).toDouble(),
+        'image': item['image'] ?? 'assets/pizza.png',
+        'quantity': (item['qty'] ?? item['quantity'] ?? 1).toDouble(),
+        'options': options,
+        'option_text': optionText,
+        'custom_serve_later': item['custom_serve_later'] == 1,
+        'custom_item_remarks': item['custom_item_remarks'] ?? '',
+        'custom_variant_info': customVariantInfo, // Include exactly as received
+      };
+    }).toList();
+
+    return {
+      'orderId': invoice['name']?.toString() ?? 'Unknown',
+      'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
+      'status': invoice['status']?.toString() ?? 'Draft',
+      'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
+      'tableNumber': _extractTableNumber(invoice['custom_table']),
+      'items': items,
+      'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
+      'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
+      'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
+      'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
+          DateTime.now(),
+      'paidTime': invoice['status']?.toString() == 'Paid'
+          ? DateTime.tryParse(invoice['modified']?.toString() ?? '')
+          : null,
+      'isPaid': invoice['status']?.toString() == 'Paid',
+      'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
+      'customerName': invoice['customer_name']?.toString() ?? 'Guest',
+      'custom_item_remarks':
+          invoice['custom_item_remarks']?.toString() ?? 'No remarks',
+      'taxBreakdown': _parseTaxBreakdown(invoice),
+    };
+  }
 
   Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
     try {
@@ -301,21 +340,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       color: Colors.white,
       child: Column(
         children: [
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           GestureDetector(
             onTap: () {
               setState(() {
                 _selectedTabIndex = 0; // Go to TableScreen when tapping logo
               });
               if (_selectedTabIndex == 0) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _refreshOrders();
-              });
-            }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _refreshOrders();
+                });
+              }
             },
-            
             child: Container(
-              
               padding: const EdgeInsets.all(12),
               child: Image.asset(
                 'assets/logo-shiokpos.png',
@@ -347,18 +384,18 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
             } else {
               setState(() => _selectedTabIndex = index);
-             if (index == 0) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _refreshOrders();
-              });
-            }
-            }
-
-            if (index == 2) {
+              if (index == 0) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _refreshOrders();
                 });
               }
+            }
+
+            if (index == 2) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _refreshOrders();
+              });
+            }
           },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -411,29 +448,42 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           ..._activeOrders[index] as Map<String, dynamic>,
           ...paidOrder,
           'isPaid': true,
-          'status': 'Paid', // Ensure status is updated to 'Paid'
+          'status': 'Paid',
           'paidTime': paidOrder['paidTime'] is DateTime
               ? paidOrder['paidTime'].toIso8601String()
               : paidOrder['paidTime']?.toString(),
+          // Preserve change amount if it exists
+          if (paidOrder['changeAmount'] != null)
+            'changeAmount': paidOrder['changeAmount'],
+          // Use actual paid amount for cash payments
+          if (paidOrder['paymentMethod'] == 'Cash' &&
+              paidOrder['paidAmount'] != null)
+            'paidAmount': paidOrder['paidAmount'],
         };
         _tablesWithSubmittedOrders.remove(paidOrder['tableNumber']);
       } else {
         _activeOrders.add({
           ...paidOrder,
           'isPaid': true,
-          'status': 'Paid', // Ensure status is set to 'Paid'
+          'status': 'Paid',
           'paidTime': paidOrder['paidTime'] is DateTime
               ? paidOrder['paidTime'].toIso8601String()
               : paidOrder['paidTime']?.toString(),
+          // Preserve change amount if it exists
+          if (paidOrder['changeAmount'] != null)
+            'changeAmount': paidOrder['changeAmount'],
+          // Use actual paid amount for cash payments
+          if (paidOrder['paymentMethod'] == 'Cash')
+            'paidAmount': paidOrder['paidAmount'],
         });
       }
     });
 
     if (_selectedTabIndex == 0) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshOrders();
-    });
-  }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _refreshOrders();
+      });
+    }
   }
 
   void _handleEditOrder(Map<String, dynamic> order) {
@@ -528,56 +578,59 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-void _addNewOrder(Map<String, dynamic> order) {
-  try {
-    setState(() {
-      _activeOrders.removeWhere((o) => 
-          o['tableNumber'] == order['tableNumber'] && 
-          !(o['isPaid'] ?? false));
+  void _addNewOrder(Map<String, dynamic> order) {
+    try {
+      setState(() {
+        _activeOrders.removeWhere((o) =>
+            o['tableNumber'] == order['tableNumber'] &&
+            !(o['isPaid'] ?? false));
 
-      final items = order['items'] is List ? List.from(order['items']) : [];
-      
-      final newOrder = {
-        'orderId': order['invoice']?['name'] ?? 'Unknown',
-        'invoiceNumber': order['invoice']?['name'] ?? 'Unknown',
-        'tableNumber': order['tableNumber'],
-        'items': items,
-        'status': order['invoice']?['status'] ?? 'Draft',
-        'orderType': order['invoice']?['custom_order_channel'] ?? 'Dine in',
-        'subtotal': order['invoice']?['net_total']?.toDouble() ?? 0.0,
-        'tax': order['invoice']?['total_taxes_and_charges']?.toDouble() ?? 0.0,
-        'total': order['invoice']?['grand_total']?.toDouble() ?? 0.0,
-        'entryTime': DateTime.now(),
-        'isPaid': false,
-      };
+        final items = order['items'] is List ? List.from(order['items']) : [];
 
-      _activeOrders.add(newOrder);
-      _tablesWithSubmittedOrders.add(order['tableNumber']);
-    });
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error adding order: $e')),
-    );
-  }
-}
+        final newOrder = {
+          'orderId': order['invoice']?['name'] ?? 'Unknown',
+          'invoiceNumber': order['invoice']?['name'] ?? 'Unknown',
+          'tableNumber': order['tableNumber'],
+          'items': items,
+          'status': order['invoice']?['status'] ?? 'Draft',
+          'orderType': order['invoice']?['custom_order_channel'] ?? 'Dine in',
+          'subtotal': order['invoice']?['net_total']?.toDouble() ?? 0.0,
+          'tax':
+              order['invoice']?['total_taxes_and_charges']?.toDouble() ?? 0.0,
+          'total': order['invoice']?['grand_total']?.toDouble() ?? 0.0,
+          'entryTime': DateTime.now(),
+          'isPaid': false,
+        };
 
-void updateOrder(Map<String, dynamic> updatedOrder) {
-  setState(() {
-    final index = _activeOrders.indexWhere((o) =>
-        o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
-    
-    if (index != -1) {
-      _activeOrders[index] = {
-        ..._activeOrders[index],
-        'items': List<Map<String, dynamic>>.from(updatedOrder['items'] ?? []),
-        'subtotal': updatedOrder['invoice']?['net_total']?.toDouble() ?? 0.0,
-        'tax': updatedOrder['invoice']?['total_taxes_and_charges']?.toDouble() ?? 0.0,
-        'total': updatedOrder['invoice']?['grand_total']?.toDouble() ?? 0.0,
-        'status': updatedOrder['invoice']?['status'] ?? 'Draft',
-      };
+        _activeOrders.add(newOrder);
+        _tablesWithSubmittedOrders.add(order['tableNumber']);
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error adding order: $e')),
+      );
     }
-  });
-}
+  }
+
+  void updateOrder(Map<String, dynamic> updatedOrder) {
+    setState(() {
+      final index = _activeOrders.indexWhere((o) =>
+          o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
+
+      if (index != -1) {
+        _activeOrders[index] = {
+          ..._activeOrders[index],
+          'items': List<Map<String, dynamic>>.from(updatedOrder['items'] ?? []),
+          'subtotal': updatedOrder['invoice']?['net_total']?.toDouble() ?? 0.0,
+          'tax':
+              updatedOrder['invoice']?['total_taxes_and_charges']?.toDouble() ??
+                  0.0,
+          'total': updatedOrder['invoice']?['grand_total']?.toDouble() ?? 0.0,
+          'status': updatedOrder['invoice']?['status'] ?? 'Draft',
+        };
+      }
+    });
+  }
 
   void _markOrderAsPaid(int tableNumber) {
     setState(() {

@@ -442,7 +442,7 @@ void _handleOrderResult(int tableNumber, dynamic result) async {
   if (result == null) return;
 
   try {
-    if (result['action'] == 'submitted') {
+    if (result['action'] == 'submitted' || result['action'] == 'updated' ) {
       widget.onOrderSubmitted({
         'tableNumber': tableNumber,
         'items': result['items'] ?? [],
@@ -451,13 +451,6 @@ void _handleOrderResult(int tableNumber, dynamic result) async {
         'entryTime': result['entryTime'] ?? DateTime.now(),
       });
     } 
-    else if (result['action'] == 'updated') {
-      MainLayout.of(context)?.updateOrder({
-        'tableNumber': tableNumber,
-        'items': result['items'] ?? [],
-        'invoice': result['invoice'] ?? {},
-      });
-    }
     else if (result['action'] == 'paid') {
       widget.onOrderPaid(tableNumber);
     }

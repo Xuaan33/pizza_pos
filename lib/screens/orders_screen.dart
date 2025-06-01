@@ -226,10 +226,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Widget _buildOrderDetailsPanel(Map<String, dynamic> order) {
     final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
     final items = (order['items'] as List<dynamic>?) ?? [];
-    final subtotal = _calculateOrderSubtotal(order);
-    final tax = _calculateOrderTax(order);
-    final rounding = _calculateRounding(subtotal + tax);
-    final total = subtotal + tax + rounding;
+    final subtotal = (order['net_total'] as num?)?.toDouble() ??
+        _calculateOrderSubtotal(order);
+    final tax = (order['total_taxes_and_charges'] as num?)?.toDouble() ??
+        _calculateOrderTax(order);
+    final rounding = (order['base_rounding_adjustment'] as num?)?.toDouble() ??
+        _calculateRounding(subtotal + tax);
+    final total = (order['total'] as num?)?.toDouble() ??
+        (subtotal + tax + rounding);
     final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
@@ -458,17 +462,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               padding: EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _buildSummaryRow('Subtotal', order['subtotal']),
+                  _buildSummaryRow('Subtotal', subtotal),
                   if (taxBreakdown != null)
                     _buildSummaryRow(
-                      '${taxBreakdown['description'] ?? 'Tax'}',
-                      taxBreakdown['amount'],
+                      '${taxBreakdown['description'] ?? 'Tax'} @ ${taxBreakdown['rate']?.toStringAsFixed(1) ?? '6.0'}%',
+                      tax,
                     ),
-                  _buildSummaryRow('Total', order['total'], isTotal: true),
+                  _buildSummaryRow('Rounding Adjustment', rounding),
+                  _buildSummaryRow('Total', total, isTotal: true),
                   if (isPaid) ...[
                     Divider(),
                     _buildSummaryRow('Payment Method',
                         order['paymentMethod']?.toString() ?? 'Cash'),
+                    if (order['paymentMethod'] == 'Cash') ...[
+                      _buildSummaryRow('Paid Amount',
+                          'RM ${order['paidAmount']?.toStringAsFixed(2) ?? order['paidAmount']?.toStringAsFixed(2) ?? '0.00'}'),
+                      _buildSummaryRow('Change Amount',
+                          'RM ${order['changeAmount']?.toStringAsFixed(2) ?? order['changeAmount']?.toStringAsFixed(2) ?? '0.00'}'),
+                    ],
                     if (order['paidTime'] != null)
                       _buildSummaryRow(
                         'Paid Time',
@@ -485,10 +496,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           // Action Buttons
           if (isDraft) ...[
             ElevatedButton(
-              onPressed: () => {
-                _goToCheckout(order),
-                _selectedOrder = null
-                },
+              onPressed: () => {_goToCheckout(order), _selectedOrder = null},
               style: ElevatedButton.styleFrom(
                 minimumSize: Size(double.infinity, 48),
                 backgroundColor: Color(0xFFE732A0),
@@ -640,11 +648,41 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   double _calculateOrderTax(Map<String, dynamic> order) {
-    return _calculateOrderSubtotal(order) * 0.06; // 6% GST
+    // Use server tax value if available
+    if (order['total_taxes_and_charges'] != null) {
+      return (order['total_taxes_and_charges'] as num).toDouble();
+    }
+
+    // Fallback to calculating from tax breakdown
+    if (order['taxBreakdown'] != null) {
+      return _calculateOrderSubtotal(order) * ((order['taxBreakdown']['rate'] as num).toDouble()) /100;
+    }
+
+    // Default to 6% GST if no tax info available
+    return  _calculateOrderSubtotal(order) * 0.06;
+  }
+
+  double _calculateRounding(double amount) {
+    // Use server rounding value if available
+    // if (order['base_rounding_adjustment'] != null) {
+    //   return (order['base_rounding_adjustment'] as num).toDouble();
+    // }
+
+    // Fallback to rounding calculation
+    return (amount * 20).round() / 20 - amount;
   }
 
   double _calculateOrderTotal(Map<String, dynamic> order) {
-    return _calculateOrderSubtotal(order) + _calculateOrderTax(order);
+    // Use server values if available
+    if (order['total'] != null) {
+      return (order['total'] as num).toDouble();
+    }
+
+    // Calculate from components
+    final subtotal = _calculateOrderSubtotal(order);
+    final tax = _calculateOrderTax(order);
+    final rounding = _calculateRounding(subtotal + tax);
+    return subtotal + tax + rounding;
   }
 
   DateTime _parseDateTime(dynamic dateTime) {
@@ -662,10 +700,5 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   String _formatDate(DateTime date) {
     return DateFormat('HH:mm, dd MMM').format(date);
-  }
-
-  double _calculateRounding(double amount) {
-    // Round to nearest 0.05
-    return (amount * 20).round() / 20 - amount;
   }
 }

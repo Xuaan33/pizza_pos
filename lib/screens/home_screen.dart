@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -44,6 +45,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (widget.existingOrder != null &&
         widget.existingOrder!['items'] != null) {
       currentOrderItems = (widget.existingOrder!['items'] as List).map((item) {
+        // Force include all fields exactly as they exist in the item
         return {
           'item_code': item['item_code'] ?? '',
           'name': item['item_name'] ?? item['name'] ?? '',
@@ -52,17 +54,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'quantity': (item['qty'] ?? item['quantity'] ?? 1).toDouble(),
           'options': item['options'] ?? {},
           'option_text': item['option_text'] ?? '',
-          'custom_serve_later':
-              item['custom_serve_later'] == 1, // Fixed mapping
-          'custom_item_remarks':
-              item['custom_item_remarks'] ?? '', // Fixed mapping
+          'custom_serve_later': item['custom_serve_later'] == 1,
+          'custom_item_remarks': item['custom_item_remarks'] ?? '',
+          'custom_variant_info':
+              item['custom_variant_info'], // Direct pass-through
         };
       }).toList();
     } else {
       currentOrderItems = [];
     }
 
-    // Initialize remark controllers for existing items
     _itemRemarkControllers = currentOrderItems
         .map((item) =>
             TextEditingController(text: item['custom_item_remarks'] ?? ''))
@@ -128,6 +129,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // Search functionality
   String searchQuery = '';
   TextEditingController searchController = TextEditingController();
+
+  void _autoSaveAllRemarks() {
+    for (int i = 0; i < _itemRemarkControllers.length && i < currentOrderItems.length; i++) {
+      if (_itemRemarkControllers[i].text != currentOrderItems[i]['custom_item_remarks']) {
+        currentOrderItems[i]['custom_item_remarks'] = _itemRemarkControllers[i].text;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -366,9 +375,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       _buildOrderSummaryRow('Sub Total',
                                           'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                                      _buildOrderSummaryRow(
-                                          'Service Charge (10%)',
-                                          'RM ${_calculateServiceCharge().toStringAsFixed(2)}'),
                                       _buildOrderSummaryRow('GST (6%)',
                                           'RM ${_calculateGST().toStringAsFixed(2)}'),
                                       const SizedBox(height: 10),
@@ -376,8 +382,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         children: [
                                           SizedBox(
                                             width: double.infinity,
-                                            child: // In your build method, update the submit button:
-                                                ElevatedButton(
+                                            child: ElevatedButton(
                                               onPressed: _isLoading
                                                   ? null
                                                   : _submitOrder,
@@ -668,8 +673,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'quantity': 1,
           'options': selectedOptions,
           'option_text': optionTexts.join(', '),
-          'custom_serve_later': false, // Default to serve now
+          'custom_serve_later': false,
           'custom_item_remarks': '',
+          'structured_variant_info': item[
+              'structured_variant_info'], // Store the original variant structure
         };
         currentOrderItems.add(newOrderItem);
       }
@@ -767,6 +774,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _submitOrder() async {
+    _autoSaveAllRemarks();
     final authState = ref.read(authProvider);
     bool hasExistingOrder =
         widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
@@ -851,16 +859,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // 2. Prepare items with proper structure
           final items = currentOrderItems.map((item) {
+            List<Map<String, dynamic>> variantInfo = [];
+
+            // Handle both parsed options and original custom_variant_info
+            if (item['options'] != null && item['options'].isNotEmpty) {
+              variantInfo.add({'options': item['options']});
+            } else if (item['custom_variant_info'] != null &&
+                item['custom_variant_info'] is String) {
+              try {
+                variantInfo = List<Map<String, dynamic>>.from(
+                    jsonDecode(item['custom_variant_info']));
+              } catch (e) {
+                print('Error parsing custom_variant_info for submission: $e');
+              }
+            }
+
             return {
               'item_code': item['item_code'] ?? '',
               'qty': item['quantity'],
               'price_list_rate': item['price'],
               'custom_item_remarks': item['custom_item_remarks'] ?? '',
               'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-              if (item['options'] != null)
-                'custom_variant_info': [
-                  {'options': item['options']}
-                ],
+              if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
             };
           }).toList();
 
@@ -884,6 +904,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               'tableNumber': widget.tableNumber,
               'tableFullName': tableFullName, // Pass both for reference
             });
+
+            Fluttertoast.showToast(
+              msg: "Order Submitted",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
           }
         } catch (e) {
           print('Submit order error: $e');
@@ -898,190 +925,194 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _goToCheckout() async {
-    final hasExistingOrder =
-        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+  final hasExistingOrder =
+      widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            title: Text(
-              hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            content: Text(
-              hasExistingOrder
-                  ? 'Proceed to checkout for the existing order?'
-                  : 'Submit order and proceed to checkout?',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(
-                  'CANCEL',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFE732A0),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                ),
-                child: Text(
-                  'CONFIRM',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
+  final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
-        ) ??
-        false;
-
-    if (!confirmed) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final authState = ref.read(authProvider);
-      await authState.whenOrNull(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) async {
-          String tableFullName = 'Table ${widget.tableNumber}';
-
-          // If existing order, skip submit
-          if (hasExistingOrder) {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CheckoutScreen(
-                  order: {
-                    'tableNumber': widget.tableNumber,
-                    'items': List<Map<String, dynamic>>.from(
-                        widget.existingOrder!['items']),
-                    'entryTime':
-                        widget.existingOrder!['entryTime'] ?? DateTime.now(),
-                    'invoiceNumber': widget.existingOrder!['orderId'],
-                  },
+          title: Text(
+            hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            hasExistingOrder
+                ? 'Update order and proceed to checkout?'
+                : 'Submit order and proceed to checkout?',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'CANCEL',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
                 ),
               ),
-            );
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: Text(
+                'CONFIRM',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
-            if (result == true && mounted) {
-              MainLayout.of(context)?.selectOrdersTab();
-              Navigator.pop(context, {
-                'action': 'paid',
-                'tableNumber': widget.tableNumber,
-              });
-            }
+  if (!confirmed) return;
 
-            return; // ✅ exit early
-          }
+  setState(() => _isLoading = true);
 
-          // 🔁 Otherwise, submit order as normal
-          final floorsResponse = await PosService().getFloorsAndTables(branch);
-          if (floorsResponse['success'] == true) {
-            for (var floor in floorsResponse['message']) {
-              for (var table in floor['tables']) {
-                if (table['title'] == 'Table ${widget.tableNumber}') {
-                  tableFullName = table['name'];
-                  break;
-                }
+  try {
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening) async {
+        
+        // Auto-save all remarks before proceeding
+        _autoSaveAllRemarks();
+        
+        // Get the full table name from floors and tables API
+        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+
+        if (floorsResponse['success'] == true) {
+          for (var floor in floorsResponse['message']) {
+            for (var table in floor['tables']) {
+              if (table['title'] == 'Table ${widget.tableNumber}') {
+                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                break;
               }
             }
           }
+        }
 
-          final items = currentOrderItems.map((item) {
-            return {
-              'item_code': item['item_code'] ?? '',
-              'qty': item['quantity'],
-              'price_list_rate': item['price'],
-              'custom_item_remarks': item['custom_item_remarks'] ?? '',
-              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-              if (item['options'] != null)
-                'custom_variant_info': [
-                  {'options': item['options']}
-                ],
-            };
-          }).toList();
+        // Prepare items with proper structure
+        final items = currentOrderItems.map((item) {
+          List<Map<String, dynamic>> variantInfo = [];
 
-          final submitResponse = await PosService().submitOrder(
+          // Handle both parsed options and original custom_variant_info
+          if (item['options'] != null && item['options'].isNotEmpty) {
+            variantInfo.add({'options': item['options']});
+          } else if (item['custom_variant_info'] != null &&
+              item['custom_variant_info'] is String) {
+            try {
+              variantInfo = List<Map<String, dynamic>>.from(
+                  jsonDecode(item['custom_variant_info']));
+            } catch (e) {
+              print('Error parsing custom_variant_info for checkout: $e');
+            }
+          }
+
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
+          };
+        }).toList();
+
+        String? orderName;
+        
+        // Submit/Update the order first
+        if (hasExistingOrder) {
+          // Update existing order
+          final response = await PosService().submitOrder(
             posProfile: posProfile,
             customer: 'Guest',
-            items: currentOrderItems.map((item) {
-              return {
-                'item_code': item['item_code'] ?? '',
-                'qty': item['quantity'],
-                'price_list_rate': item['price'],
-                'custom_item_remarks': item['custom_item_remarks'] ?? '',
-                'custom_serve_later': item['custom_serve_later'] == true
-                    ? 1
-                    : 0, // Include serve later status
-                if (item['options'] != null)
-                  'custom_variant_info': [
-                    {'options': item['options']}
-                  ],
-              };
-            }).toList(),
+            items: items,
+            table: tableFullName,
+            orderChannel: 'Dine In',
+            name: widget.existingOrder!['orderId'], // Pass existing order ID to update
+          );
+          
+          if (response['success'] == true) {
+            orderName = response['message']['name'];
+          } else {
+            throw Exception('Failed to update order');
+          }
+        } else {
+          // Create new order
+          final response = await PosService().submitOrder(
+            posProfile: posProfile,
+            customer: 'Guest',
+            items: items,
             table: tableFullName,
             orderChannel: 'Dine In',
           );
-
-          if (submitResponse['success'] == true) {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CheckoutScreen(
-                  order: {
-                    'tableNumber': widget.tableNumber,
-                    'items': List<Map<String, dynamic>>.from(currentOrderItems),
-                    'entryTime': DateTime.now(),
-                    'invoiceNumber': submitResponse['message']['name'],
-                  },
-                ),
-              ),
-            );
-
-            if (result == true && mounted) {
-              MainLayout.of(context)?.selectOrdersTab();
-              Navigator.pop(context, {
-                'action': 'paid',
-                'tableNumber': widget.tableNumber,
-              });
-            }
+          
+          if (response['success'] == true) {
+            orderName = response['message']['name'];
+          } else {
+            throw Exception('Failed to submit order');
           }
-        },
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+        }
+
+        // Now proceed to checkout with updated order
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CheckoutScreen(
+              order: {
+                'tableNumber': widget.tableNumber,
+                'items': List<Map<String, dynamic>>.from(currentOrderItems), // ✅ Use current items
+                'entryTime': hasExistingOrder 
+                    ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
+                    : DateTime.now(),
+                'invoiceNumber': orderName ?? (hasExistingOrder ? widget.existingOrder!['orderId'] : ''),
+                
+              },
+            ),
+          ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+
+        if (result == true && mounted) {
+          MainLayout.of(context)?.selectOrdersTab();
+          Navigator.pop(context, {
+            'action': 'paid',
+            'tableNumber': widget.tableNumber,
+          });
+        }
+      },
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(
@@ -1178,6 +1209,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _itemRemarkControllers[index].text = item['custom_item_remarks'] ?? '';
     }
 
+    // Parse variant info if it exists
+    String variantText = '';
+
+    if (item['custom_variant_info'] != null) {
+      try {
+        dynamic variantInfo = item['custom_variant_info'];
+        if (variantInfo is String) {
+          variantInfo = jsonDecode(variantInfo);
+        }
+
+        if (variantInfo is List && variantInfo.isNotEmpty) {
+          var firstVariant = variantInfo[0];
+          if (firstVariant['options'] != null) {
+            var options = Map<String, dynamic>.from(firstVariant['options']);
+            variantText =
+                options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+          }
+        }
+      } catch (e) {
+        debugPrint('Error parsing custom_variant_info: $e');
+      }
+    }
+
+    // Fallback to option_text if variantText is empty
+    if (variantText.isEmpty && item['options'] != null) {
+      var options = Map<String, dynamic>.from(item['options']);
+      variantText =
+          options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
@@ -1219,11 +1280,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         fontSize: 14,
                       ),
                     ),
-                    if (item['option_text'] != null &&
-                        item['option_text'].isNotEmpty)
+                    if (variantText.isNotEmpty)
                       Text(
-                        item['option_text'],
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        _formatOptionText(variantText),
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
                       ),
                     Text(
                       'RM ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
@@ -1274,9 +1338,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
-
-          // Replace this section in your _buildOrderItem method:
-
           Padding(
             padding: const EdgeInsets.only(top: 8.0, left: 215, bottom: 4.0),
             child: Row(
@@ -1293,12 +1354,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(width: 10),
                     Switch(
-                      value: item['custom_serve_later'] ??
-                          false, // Fixed: directly use the boolean value
+                      value: item['custom_serve_later'] ?? false,
                       onChanged: (value) {
                         setState(() {
                           currentOrderItems[index]['custom_serve_later'] =
-                              value; // Fixed: directly set the value
+                              value;
                         });
                       },
                       activeColor: Color(0xFFE732A0),
@@ -1309,7 +1369,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(top: 8.0, left: 70, bottom: 8.0),
+            padding: const EdgeInsets.only(top: 8.0, left: 0, bottom: 8.0),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -1426,10 +1486,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return subtotal;
   }
 
-  double _calculateServiceCharge() {
-    return _calculateSubtotal() * 0.10; // 10% of subtotal
-  }
-
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
@@ -1446,8 +1502,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
   }
 
+  String _formatOptionText(String optionText) {
+    if (optionText.isEmpty) return '';
+
+    // Split by comma and format each option on a new line with proper spacing
+    return optionText
+        .split(',')
+        .map((option) {
+          // Trim and ensure consistent spacing around colon
+          String trimmed = option.trim();
+          if (trimmed.contains(':')) {
+            List<String> parts = trimmed.split(':');
+            if (parts.length == 2) {
+              return '• ${parts[0].trim()}: ${parts[1].trim()}';
+            }
+          }
+          return '• $trimmed';
+        })
+        .where((option) => option.isNotEmpty && option != '•')
+        .join('\n');
+  }
+
   double _calculateTotal() {
-    return _calculateSubtotal() + _calculateServiceCharge() + _calculateGST();
+    return _calculateSubtotal() + _calculateGST();
   }
 
   double _calculateTotalRevenue() {
