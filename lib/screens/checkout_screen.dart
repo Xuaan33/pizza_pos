@@ -502,6 +502,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       children: [
         Row(
           children: [
+            if (widget.order['invoiceNumber'] != null)
+              GestureDetector(
+                onTap: _deleteOrder,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Delete Order',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
             Spacer(),
             GestureDetector(
               onTap: () => Navigator.pop(context, true),
@@ -917,6 +936,95 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           },
         ) ??
         false; // Return false if dialog is dismissed
+  }
+
+  Future<void> _deleteOrder() async {
+    final orderName = widget.order['invoiceNumber']?.toString();
+    if (orderName == null || orderName.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: const Text(
+              'Delete Order',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            content: const Text(
+              'Are you sure you want to delete this order? This action cannot be undone.',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'CANCEL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: Text(
+                  'DELETE',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) return;
+
+    setState(() => _isProcessingPayment = true);
+
+    try {
+      final response = await PosService().deleteOrder(orderName);
+
+      if (response['success'] == true) {
+        if (mounted) {
+          Navigator.of(context).pop(true);
+          MainLayout.of(context)?.selectOrdersTab();
+          Fluttertoast.showToast(
+            msg: "Order Deleted Successfully",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete order: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+      }
+    }
   }
 
   double _calculateSubtotal() {

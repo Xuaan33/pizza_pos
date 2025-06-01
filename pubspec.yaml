@@ -42,6 +42,9 @@ dependencies:
   flutter_riverpod: ^2.4.9
   riverpod_annotation: ^2.2.0
   freezed_annotation: ^2.4.1
+  printing: ^5.9.1
+  pdf: ^3.10.0
+  path_provider: ^2.1.1
 
 
 

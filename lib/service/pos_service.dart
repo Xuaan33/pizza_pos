@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
@@ -184,6 +185,69 @@ class PosService {
       },
     );
   }
+
+  Future<Map<String, dynamic>> deleteOrder(String orderName) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final uri =
+          Uri.parse('$_baseUrl/shiok_pos.api.delete_order?name=$orderName');
+      final headers = {
+        'Authorization': token,
+      };
+
+      print('API Request: DELETE $uri');
+
+      final response = await http
+          .delete(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      print('API Response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ??
+            'Request failed with status ${response.statusCode}');
+      }
+    } catch (e) {
+      print('API Error: $e');
+      rethrow;
+    }
+  }
+
+  // In pos_service.dart, add this method to the PosService class
+Future<Uint8List> printReceipt(String orderName) async {
+  try {
+    final token = await AuthService.getAuthToken();
+    if (token == null) throw Exception('Not authenticated');
+
+    final uri = Uri.parse('$_baseUrl/shiok_pos.api.print_receipt?name=$orderName');
+    final headers = {
+      'Authorization': token,
+    };
+
+    print('API Request: GET $uri');
+
+    final response = await http.get(uri, headers: headers)
+        .timeout(const Duration(seconds: 10));
+
+    print('API Response: ${response.statusCode} - ${response.body}');
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ??
+          'Request failed with status ${response.statusCode}');
+    }
+  } catch (e) {
+    print('API Error: $e');
+    rethrow;
+  }
+}
 }
 
 class OrderMapper {

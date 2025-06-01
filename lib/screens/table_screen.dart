@@ -25,7 +25,8 @@ class TableScreen extends ConsumerStatefulWidget {
   ConsumerState<TableScreen> createState() => _TableScreenState();
 }
 
-class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingObserver {
+class _TableScreenState extends ConsumerState<TableScreen>
+    with WidgetsBindingObserver {
   String _selectedFloor = '';
   List<String> _floors = [];
   Map<String, List<Map<String, dynamic>>> _floorTables = {};
@@ -35,7 +36,7 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
   double _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
 
-   @override
+  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
@@ -43,7 +44,7 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
     _loadTodayInfo();
   }
 
- @override
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _isDisposed = true;
@@ -71,7 +72,6 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
     await _loadFloorsAndTables();
     await _loadTodayInfo();
   }
-
 
   Future<void> _loadFloorsAndTables() async {
     try {
@@ -117,33 +117,34 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
   }
 
   Future<void> _loadTodayInfo() async {
-  try {
-    final response = await PosService().getTodayInfo();
-    
-    if (response['success'] == true) {
-      setState(() {
-        // Ensure we handle both int and double values
-        _totalRevenue = (response['data']['total_revenue'] is int
-            ? (response['data']['total_revenue'] as int).toDouble()
-            : (response['data']['total_revenue'] ?? 0).toDouble());
-            
-        _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is int
-            ? (response['data']['total_unpaid_orders'] as int).toDouble()
-            : (response['data']['total_unpaid_orders'] ?? 0).toDouble());
-            
-        _totalTablesFree = (response['data']['total_table_free'] is double
-            ? (response['data']['total_table_free'] as double).toInt()
-            : (response['data']['total_table_free'] ?? 0));
-      });
-    }
-  } catch (e) {
-    if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load today info: $e')),
-      );
+    try {
+      final response = await PosService().getTodayInfo();
+
+      if (response['success'] == true) {
+        setState(() {
+          // Ensure we handle both int and double values
+          _totalRevenue = (response['data']['total_revenue'] is int
+              ? (response['data']['total_revenue'] as int).toDouble()
+              : (response['data']['total_revenue'] ?? 0).toDouble());
+
+          _totalUnpaidOrders = (response['data']['total_unpaid_orders'] is int
+              ? (response['data']['total_unpaid_orders'] as int).toDouble()
+              : (response['data']['total_unpaid_orders'] ?? 0).toDouble());
+
+          _totalTablesFree = (response['data']['total_table_free'] is double
+              ? (response['data']['total_table_free'] as double).toInt()
+              : (response['data']['total_table_free'] ?? 0));
+        });
+      }
+    } catch (e) {
+      if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load today info: $e')),
+        );
+      }
     }
   }
-}
+
   void _handleTableTap(Map<String, dynamic> table) {
     // Find the existing unpaid order for this table
     var existingOrder = widget.activeOrders.firstWhere(
@@ -159,7 +160,6 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
         builder: (context) => HomeScreen(
           tableNumber: int.parse(table['title'].split(' ').last),
           existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
-
         ),
       ),
     ).then((result) {
@@ -390,86 +390,90 @@ class _TableScreenState extends ConsumerState<TableScreen> with WidgetsBindingOb
     );
   }
 
-Widget _buildFloorSelector() {
-  return Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.1),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
-    padding: const EdgeInsets.all(4),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: _floors.map((floor) {
-        bool isSelected = _selectedFloor == floor;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedFloor = floor;
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFE732A0) : Colors.transparent,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Text(
-                'Floor ${floor.split(' ').last}',
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
+  Widget _buildFloorSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _floors.map((floor) {
+          bool isSelected = _selectedFloor == floor;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedFloor = floor;
+                });
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color:
+                      isSelected ? const Color(0xFFE732A0) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(
+                  'Floor ${floor.split(' ').last}',
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
                 ),
               ),
             ),
-          ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _handleOrderResult(int tableNumber, dynamic result) async {
+    if (result == null) return;
+
+    try {
+      if (result['action'] == 'submitted' || result['action'] == 'updated') {
+        widget.onOrderSubmitted({
+          'tableNumber': tableNumber,
+          'items': result['items'] ?? [],
+          'invoice': result['invoice'] ?? {},
+          'action': result['action'],
+          'entryTime': result['entryTime'] ?? DateTime.now(),
+        });
+      } else if (result['action'] == 'paid') {
+        widget.onOrderPaid(tableNumber);
+      } else if (result['action'] == 'deleted') {
+        widget.onOrderPaid(
+            tableNumber);
+      }
+
+      await _loadFloorsAndTables();
+      await _loadTodayInfo();
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error handling order result: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error processing order: $e')),
         );
-      }).toList(),
-    ),
-  );
-}
-
-void _handleOrderResult(int tableNumber, dynamic result) async {
-  if (result == null) return;
-
-  try {
-    if (result['action'] == 'submitted' || result['action'] == 'updated' ) {
-      widget.onOrderSubmitted({
-        'tableNumber': tableNumber,
-        'items': result['items'] ?? [],
-        'invoice': result['invoice'] ?? {},
-        'action': result['action'],
-        'entryTime': result['entryTime'] ?? DateTime.now(),
-      });
-    } 
-    else if (result['action'] == 'paid') {
-      widget.onOrderPaid(tableNumber);
-    }
-
-    await _loadFloorsAndTables();
-    await _loadTodayInfo();
-    
-    if (mounted) {
-      setState(() {});
-    }
-  } catch (e) {
-    print('Error handling order result: $e');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error processing order: $e')),
-      );
+      }
     }
   }
-}
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     return (order['items'] as List).fold(0.0, (sum, item) {

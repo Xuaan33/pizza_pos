@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 
@@ -232,8 +233,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         _calculateOrderTax(order);
     final rounding = (order['base_rounding_adjustment'] as num?)?.toDouble() ??
         _calculateRounding(subtotal + tax);
-    final total = (order['total'] as num?)?.toDouble() ??
-        (subtotal + tax + rounding);
+    final total =
+        (order['total'] as num?)?.toDouble() ?? (subtotal + tax + rounding);
     final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
@@ -509,9 +510,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             ),
             SizedBox(height: 8),
           ],
-          OutlinedButton(
-            onPressed: () {},
-            style: OutlinedButton.styleFrom(
+          ElevatedButton(
+            onPressed: () async {
+              final orderName = order['orderId']?.toString();
+              if (orderName != null) {
+                await ReceiptPrinter.showPrintDialog(context, orderName);
+              }
+            },
+            style: ElevatedButton.styleFrom(
               minimumSize: Size(double.infinity, 48),
               side: BorderSide(color: Colors.black),
               backgroundColor: Colors.black,
@@ -655,11 +661,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
     // Fallback to calculating from tax breakdown
     if (order['taxBreakdown'] != null) {
-      return _calculateOrderSubtotal(order) * ((order['taxBreakdown']['rate'] as num).toDouble()) /100;
+      return _calculateOrderSubtotal(order) *
+          ((order['taxBreakdown']['rate'] as num).toDouble()) /
+          100;
     }
 
     // Default to 6% GST if no tax info available
-    return  _calculateOrderSubtotal(order) * 0.06;
+    return _calculateOrderSubtotal(order) * 0.06;
   }
 
   double _calculateRounding(double amount) {

@@ -131,9 +131,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   TextEditingController searchController = TextEditingController();
 
   void _autoSaveAllRemarks() {
-    for (int i = 0; i < _itemRemarkControllers.length && i < currentOrderItems.length; i++) {
-      if (_itemRemarkControllers[i].text != currentOrderItems[i]['custom_item_remarks']) {
-        currentOrderItems[i]['custom_item_remarks'] = _itemRemarkControllers[i].text;
+    for (int i = 0;
+        i < _itemRemarkControllers.length && i < currentOrderItems.length;
+        i++) {
+      if (_itemRemarkControllers[i].text !=
+          currentOrderItems[i]['custom_item_remarks']) {
+        currentOrderItems[i]['custom_item_remarks'] =
+            _itemRemarkControllers[i].text;
       }
     }
   }
@@ -341,16 +345,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               children: [
                                 Padding(
                                   padding: const EdgeInsets.all(16.0),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                  child: Column(
                                     children: [
-                                      Text(
-                                        'Current Order',
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Current Order',
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          if (widget.existingOrder != null &&
+                                              widget.existingOrder!.isNotEmpty)
+                                            IconButton(
+                                              icon: Icon(Icons.delete,
+                                                  color: Colors.red),
+                                              onPressed: _deleteOrder,
+                                            ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -595,14 +610,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       _addToOrderWithOptions(item, selectedOptions);
                       Navigator.pop(context);
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Please select all required options',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
+                      Fluttertoast.showToast(
+                        msg: "Please select all required options",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
                       );
                     }
                   },
@@ -925,194 +937,197 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _goToCheckout() async {
-  final hasExistingOrder =
-      widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
+    final hasExistingOrder =
+        widget.existingOrder != null && widget.existingOrder!.isNotEmpty;
 
-  final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          title: Text(
-            hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
             ),
-          ),
-          content: Text(
-            hasExistingOrder
-                ? 'Update order and proceed to checkout?'
-                : 'Submit order and proceed to checkout?',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(
-                'CANCEL',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
+            title: Text(
+              hasExistingOrder ? 'Proceed to Checkout' : 'Confirm Order',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
               ),
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFFE732A0),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: Text(
-                'CONFIRM',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+            content: Text(
+              hasExistingOrder
+                  ? 'Update order and proceed to checkout?'
+                  : 'Submit order and proceed to checkout?',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
-        ),
-      ) ??
-      false;
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'CANCEL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFE732A0),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: Text(
+                  'CONFIRM',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
 
-  if (!confirmed) return;
+    if (!confirmed) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  try {
-    final authState = ref.read(authProvider);
-    await authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) async {
-        
-        // Auto-save all remarks before proceeding
-        _autoSaveAllRemarks();
-        
-        // Get the full table name from floors and tables API
-        final floorsResponse = await PosService().getFloorsAndTables(branch);
-        String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+    try {
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening) async {
+          // Auto-save all remarks before proceeding
+          _autoSaveAllRemarks();
 
-        if (floorsResponse['success'] == true) {
-          for (var floor in floorsResponse['message']) {
-            for (var table in floor['tables']) {
-              if (table['title'] == 'Table ${widget.tableNumber}') {
-                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
-                break;
+          // Get the full table name from floors and tables API
+          final floorsResponse = await PosService().getFloorsAndTables(branch);
+          String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+
+          if (floorsResponse['success'] == true) {
+            for (var floor in floorsResponse['message']) {
+              for (var table in floor['tables']) {
+                if (table['title'] == 'Table ${widget.tableNumber}') {
+                  tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                  break;
+                }
               }
             }
           }
-        }
 
-        // Prepare items with proper structure
-        final items = currentOrderItems.map((item) {
-          List<Map<String, dynamic>> variantInfo = [];
+          // Prepare items with proper structure
+          final items = currentOrderItems.map((item) {
+            List<Map<String, dynamic>> variantInfo = [];
 
-          // Handle both parsed options and original custom_variant_info
-          if (item['options'] != null && item['options'].isNotEmpty) {
-            variantInfo.add({'options': item['options']});
-          } else if (item['custom_variant_info'] != null &&
-              item['custom_variant_info'] is String) {
-            try {
-              variantInfo = List<Map<String, dynamic>>.from(
-                  jsonDecode(item['custom_variant_info']));
-            } catch (e) {
-              print('Error parsing custom_variant_info for checkout: $e');
+            // Handle both parsed options and original custom_variant_info
+            if (item['options'] != null && item['options'].isNotEmpty) {
+              variantInfo.add({'options': item['options']});
+            } else if (item['custom_variant_info'] != null &&
+                item['custom_variant_info'] is String) {
+              try {
+                variantInfo = List<Map<String, dynamic>>.from(
+                    jsonDecode(item['custom_variant_info']));
+              } catch (e) {
+                print('Error parsing custom_variant_info for checkout: $e');
+              }
+            }
+
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
+            };
+          }).toList();
+
+          String? orderName;
+
+          // Submit/Update the order first
+          if (hasExistingOrder) {
+            // Update existing order
+            final response = await PosService().submitOrder(
+              posProfile: posProfile,
+              customer: 'Guest',
+              items: items,
+              table: tableFullName,
+              orderChannel: 'Dine In',
+              name: widget.existingOrder![
+                  'orderId'], // Pass existing order ID to update
+            );
+
+            if (response['success'] == true) {
+              orderName = response['message']['name'];
+            } else {
+              throw Exception('Failed to update order');
+            }
+          } else {
+            // Create new order
+            final response = await PosService().submitOrder(
+              posProfile: posProfile,
+              customer: 'Guest',
+              items: items,
+              table: tableFullName,
+              orderChannel: 'Dine In',
+            );
+
+            if (response['success'] == true) {
+              orderName = response['message']['name'];
+            } else {
+              throw Exception('Failed to submit order');
             }
           }
 
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'],
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
-          };
-        }).toList();
-
-        String? orderName;
-        
-        // Submit/Update the order first
-        if (hasExistingOrder) {
-          // Update existing order
-          final response = await PosService().submitOrder(
-            posProfile: posProfile,
-            customer: 'Guest',
-            items: items,
-            table: tableFullName,
-            orderChannel: 'Dine In',
-            name: widget.existingOrder!['orderId'], // Pass existing order ID to update
-          );
-          
-          if (response['success'] == true) {
-            orderName = response['message']['name'];
-          } else {
-            throw Exception('Failed to update order');
-          }
-        } else {
-          // Create new order
-          final response = await PosService().submitOrder(
-            posProfile: posProfile,
-            customer: 'Guest',
-            items: items,
-            table: tableFullName,
-            orderChannel: 'Dine In',
-          );
-          
-          if (response['success'] == true) {
-            orderName = response['message']['name'];
-          } else {
-            throw Exception('Failed to submit order');
-          }
-        }
-
-        // Now proceed to checkout with updated order
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CheckoutScreen(
-              order: {
-                'tableNumber': widget.tableNumber,
-                'items': List<Map<String, dynamic>>.from(currentOrderItems), // ✅ Use current items
-                'entryTime': hasExistingOrder 
-                    ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
-                    : DateTime.now(),
-                'invoiceNumber': orderName ?? (hasExistingOrder ? widget.existingOrder!['orderId'] : ''),
-                
-              },
+          // Now proceed to checkout with updated order
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CheckoutScreen(
+                order: {
+                  'tableNumber': widget.tableNumber,
+                  'items': List<Map<String, dynamic>>.from(
+                      currentOrderItems), // ✅ Use current items
+                  'entryTime': hasExistingOrder
+                      ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
+                      : DateTime.now(),
+                  'invoiceNumber': orderName ??
+                      (hasExistingOrder
+                          ? widget.existingOrder!['orderId']
+                          : ''),
+                },
+              ),
             ),
-          ),
-        );
+          );
 
-        if (result == true && mounted) {
-          MainLayout.of(context)?.selectOrdersTab();
-          Navigator.pop(context, {
-            'action': 'paid',
-            'tableNumber': widget.tableNumber,
-          });
-        }
-      },
-    );
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+          if (result == true && mounted) {
+            MainLayout.of(context)?.selectOrdersTab();
+            Navigator.pop(context, {
+              'action': 'paid',
+              'tableNumber': widget.tableNumber,
+            });
+          }
+        },
       );
-    }
-  } finally {
-    if (mounted) {
-      setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
-}
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     return GestureDetector(
@@ -1459,6 +1474,101 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteOrder() async {
+    if (widget.existingOrder == null || widget.existingOrder!.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: const Text(
+              'Delete Order',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            content: const Text(
+              'Are you sure you want to delete this order? This action cannot be undone.',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'CANCEL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: Text(
+                  'DELETE',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final orderName = widget.existingOrder!['orderId']?.toString();
+      if (orderName == null || orderName.isEmpty) {
+        throw Exception('Order ID not found');
+      }
+
+      final response = await PosService().deleteOrder(orderName);
+
+      if (response['success'] == true) {
+        if (mounted) {
+          Navigator.pop(context, {
+            'action': 'deleted',
+            'tableNumber': widget.tableNumber,
+          });
+          Fluttertoast.showToast(
+            msg: "Order Deleted Successfully",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete order: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _increaseQuantity(int index) {
