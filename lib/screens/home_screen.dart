@@ -1206,7 +1206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             options = Map<String, dynamic>.from(parsed[0]);
             optionText =
                 options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-                variantText = optionText;
+            variantText = optionText;
           }
         }
       } catch (e) {
@@ -1328,15 +1328,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Switch(
-                      value: item['custom_serve_later'] ?? false,
-                      onChanged: (value) {
-                        setState(() {
-                          currentOrderItems[index]['custom_serve_later'] =
-                              value;
-                        });
-                      },
-                      activeColor: Color(0xFFE732A0),
+                    Transform.scale(
+                      scale: 0.75,
+                      child: Switch(
+                        value: item['custom_serve_later'] ?? false,
+                        onChanged: (value) {
+                          setState(() {
+                            currentOrderItems[index]['custom_serve_later'] =
+                                value; // Fixed: directly set the value
+                          });
+                        },
+                        activeColor: Color(0xFFE732A0),
+                      ),
                     ),
                   ],
                 ),
