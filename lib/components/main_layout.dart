@@ -110,6 +110,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'custom_serve_later': item['custom_serve_later'],
                           'custom_item_remarks':
                               item['custom_item_remarks']?.toString() ?? '',
+                          'custom_variant_info':
+                              item['custom_variant_info']?.toString() ??
+                                  'sohai',
                         };
                       }).toList();
 
@@ -162,8 +165,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             ? parseDate(invoice['modified']?.toString())
                             : null,
                         'isPaid': invoice['status']?.toString() == 'Paid',
-                        'paymentMethod':
-                            invoice['mode_of_payment']?.toString() ?? 'Cash',
+                        'paymentMethod': invoice['payments'][0]['mode_of_payment']
+                                ?.toString() ??
+                            'Cash',
                         'customerName':
                             invoice['customer_name']?.toString() ?? 'Guest',
                         'custom_item_remarks':
@@ -173,8 +177,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                         'paidAmount':
                             (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
                         'changeAmount':
-                            (invoice['change_amount'] as num?)?.toDouble() ?? 0.0,
-                        'base_rounding_adjustment': (invoice['base_rounding_adjustment'] as num?)?.toDouble() ?? 0.0
+                            (invoice['change_amount'] as num?)?.toDouble() ??
+                                0.0,
+                        'base_rounding_adjustment':
+                            (invoice['base_rounding_adjustment'] as num?)
+                                    ?.toDouble() ??
+                                0.0
                       };
                     } catch (e) {
                       print('Error processing invoice ${invoice['name']}: $e');
@@ -223,18 +231,21 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       Map<String, dynamic> options = {};
       String optionText = '';
 
+      // Parse the variant info if it exists
       if (customVariantInfo != null) {
         try {
+          // Handle both string (JSON) and direct list formats
           dynamic parsed = customVariantInfo is String
               ? jsonDecode(customVariantInfo)
               : customVariantInfo;
 
-          if (parsed is List &&
-              parsed.isNotEmpty &&
-              parsed[0]['options'] != null) {
-            options = Map<String, dynamic>.from(parsed[0]['options']);
-            optionText =
-                options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+          if (parsed is List && parsed.isNotEmpty) {
+            // New format - list of direct option maps
+            if (parsed[0] is Map) {
+              options = Map<String, dynamic>.from(parsed[0]);
+              optionText =
+                  options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+            }
           }
         } catch (e) {
           debugPrint('Variant parsing error: $e');
@@ -271,7 +282,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           ? DateTime.tryParse(invoice['modified']?.toString() ?? '')
           : null,
       'isPaid': invoice['status']?.toString() == 'Paid',
-      'paymentMethod': invoice['mode_of_payment']?.toString() ?? 'Cash',
+      'paymentMethod':
+          invoice['payments'][0]['mode_of_payment']?.toString() ?? 'Cash',
       'customerName': invoice['customer_name']?.toString() ?? 'Guest',
       'custom_item_remarks':
           invoice['custom_item_remarks']?.toString() ?? 'No remarks',

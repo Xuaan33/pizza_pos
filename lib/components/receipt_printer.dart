@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -28,19 +29,24 @@ class ReceiptPrinter {
     }
   }
 
-  static Future<void> showPrintDialog(BuildContext context, String orderName) async {
+  static Future<void> showPrintDialog(
+      BuildContext context, String orderName) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => const AlertDialog(
+          backgroundColor: Colors.white,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               CircularProgressIndicator(),
               SizedBox(height: 16),
-              Text('Preparing receipt for printing...'),
+              Text(
+                'Preparing receipt for printing...',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ],
           ),
         ),
@@ -49,9 +55,13 @@ class ReceiptPrinter {
       await printReceiptFromApi(orderName);
 
       Navigator.of(context).pop();
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(content: Text('Receipt sent to printer successfully')),
-      );
+
+      Fluttertoast.showToast(
+              msg: "Receipt printed successfully",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
     } catch (e) {
       Navigator.of(context).pop();
       scaffoldMessenger.showSnackBar(

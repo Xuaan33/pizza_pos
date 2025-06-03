@@ -219,35 +219,37 @@ class PosService {
   }
 
   // In pos_service.dart, add this method to the PosService class
-Future<Uint8List> printReceipt(String orderName) async {
-  try {
-    final token = await AuthService.getAuthToken();
-    if (token == null) throw Exception('Not authenticated');
+  Future<Uint8List> printReceipt(String orderName) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
 
-    final uri = Uri.parse('$_baseUrl/shiok_pos.api.print_receipt?name=$orderName');
-    final headers = {
-      'Authorization': token,
-    };
+      final uri =
+          Uri.parse('$_baseUrl/shiok_pos.api.print_receipt?name=$orderName');
+      final headers = {
+        'Authorization': token,
+      };
 
-    print('API Request: GET $uri');
+      print('API Request: GET $uri');
 
-    final response = await http.get(uri, headers: headers)
-        .timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
 
-    print('API Response: ${response.statusCode} - ${response.body}');
+      print('API Response: ${response.statusCode} - ${response.body}');
 
-    if (response.statusCode == 200) {
-      return response.bodyBytes;
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['message'] ??
-          'Request failed with status ${response.statusCode}');
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ??
+            'Request failed with status ${response.statusCode}');
+      }
+    } catch (e) {
+      print('API Error: $e');
+      rethrow;
     }
-  } catch (e) {
-    print('API Error: $e');
-    rethrow;
   }
-}
 }
 
 class OrderMapper {
@@ -270,8 +272,8 @@ class OrderMapper {
                   ? jsonDecode(customVariantInfo)
                   : customVariantInfo;
 
-              if (parsed is List && parsed.isNotEmpty) {
-                options = Map<String, dynamic>.from(parsed[0]['options'] ?? {});
+              if (parsed is List && parsed.isNotEmpty && parsed[0] is Map) {
+                options = Map<String, dynamic>.from(parsed[0]);
                 optionText = options.entries
                     .map((e) => '${e.key}: ${e.value}')
                     .join(', ');

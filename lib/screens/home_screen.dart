@@ -645,29 +645,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Map<String, dynamic> item,
     Map<String, String?> selectedOptions,
   ) {
-    double additionalCost = 0;
-    List<String> optionTexts = [];
+    // Convert selected options to the required format
+    List<Map<String, dynamic>> variantInfo = [];
 
-    selectedOptions.forEach((group, option) {
-      if (option != null) {
-        var variant = (item['structured_variant_info'] as List).firstWhere(
-          (v) => v['variant_group'] == group,
-          orElse: () => null,
-        );
-
-        if (variant != null) {
-          var optionData = (variant['options'] as List).firstWhere(
-            (o) => o['option'] == option,
-            orElse: () => null,
-          );
-
-          if (optionData != null) {
-            additionalCost += optionData['additional_cost'] ?? 0;
-            optionTexts.add('$group: $option');
-          }
-        }
-      }
-    });
+    if (selectedOptions.isNotEmpty) {
+      // Create a single map with all selected options
+      variantInfo
+          .add(selectedOptions.map((key, value) => MapEntry(key, value ?? '')));
+    }
 
     setState(() {
       int existingIndex = currentOrderItems.indexWhere((orderItem) =>
@@ -680,15 +665,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         Map<String, dynamic> newOrderItem = {
           'item_code': item['item_code'],
           'name': item['item_name'],
-          'price': (item['price_list_rate'] ?? 0) + additionalCost,
+          'price': (item['price_list_rate'] ?? 0),
           'image': item['image'] ?? 'assets/pizza.png',
           'quantity': 1,
           'options': selectedOptions,
-          'option_text': optionTexts.join(', '),
+          'option_text': selectedOptions.entries
+              .map((e) => '${e.key}: ${e.value}')
+              .join(', '),
           'custom_serve_later': false,
           'custom_item_remarks': '',
-          'structured_variant_info': item[
-              'structured_variant_info'], // Store the original variant structure
+          'structured_variant_info': item['structured_variant_info'],
+          'custom_variant_info': variantInfo, // Store in the new format
         };
         currentOrderItems.add(newOrderItem);
       }
@@ -871,20 +858,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // 2. Prepare items with proper structure
           final items = currentOrderItems.map((item) {
-            List<Map<String, dynamic>> variantInfo = [];
-
-            // Handle both parsed options and original custom_variant_info
-            if (item['options'] != null && item['options'].isNotEmpty) {
-              variantInfo.add({'options': item['options']});
-            } else if (item['custom_variant_info'] != null &&
-                item['custom_variant_info'] is String) {
-              try {
-                variantInfo = List<Map<String, dynamic>>.from(
-                    jsonDecode(item['custom_variant_info']));
-              } catch (e) {
-                print('Error parsing custom_variant_info for submission: $e');
-              }
-            }
+            dynamic variantInfo = item['custom_variant_info'];
 
             return {
               'item_code': item['item_code'] ?? '',
@@ -1024,20 +998,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // Prepare items with proper structure
           final items = currentOrderItems.map((item) {
-            List<Map<String, dynamic>> variantInfo = [];
-
-            // Handle both parsed options and original custom_variant_info
-            if (item['options'] != null && item['options'].isNotEmpty) {
-              variantInfo.add({'options': item['options']});
-            } else if (item['custom_variant_info'] != null &&
-                item['custom_variant_info'] is String) {
-              try {
-                variantInfo = List<Map<String, dynamic>>.from(
-                    jsonDecode(item['custom_variant_info']));
-              } catch (e) {
-                print('Error parsing custom_variant_info for checkout: $e');
-              }
-            }
+            dynamic variantInfo = item['custom_variant_info'];
 
             return {
               'item_code': item['item_code'] ?? '',
@@ -1226,32 +1187,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Parse variant info if it exists
     String variantText = '';
+    // Parse options if variant info exists
+    Map<String, dynamic> options = {};
+    String optionText = '';
+    dynamic customVariantInfo = item['custom_variant_info'];
 
-    if (item['custom_variant_info'] != null) {
+    // Parse the variant info if it exists
+    if (customVariantInfo != null) {
       try {
-        dynamic variantInfo = item['custom_variant_info'];
-        if (variantInfo is String) {
-          variantInfo = jsonDecode(variantInfo);
-        }
+        // Handle both string (JSON) and direct list formats
+        dynamic parsed = customVariantInfo is String
+            ? jsonDecode(customVariantInfo)
+            : customVariantInfo;
 
-        if (variantInfo is List && variantInfo.isNotEmpty) {
-          var firstVariant = variantInfo[0];
-          if (firstVariant['options'] != null) {
-            var options = Map<String, dynamic>.from(firstVariant['options']);
-            variantText =
+        if (parsed is List && parsed.isNotEmpty) {
+          // New format - list of direct option maps
+          if (parsed[0] is Map) {
+            options = Map<String, dynamic>.from(parsed[0]);
+            optionText =
                 options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+                variantText = optionText;
           }
         }
       } catch (e) {
-        debugPrint('Error parsing custom_variant_info: $e');
+        debugPrint('Variant parsing error: $e');
       }
-    }
-
-    // Fallback to option_text if variantText is empty
-    if (variantText.isEmpty && item['options'] != null) {
-      var options = Map<String, dynamic>.from(item['options']);
-      variantText =
-          options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
     }
 
     return Padding(
