@@ -7,15 +7,26 @@ import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
+import 'package:shiok_pos_android_app/screens/orders_screen.dart';
+import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> order;
+  final Set<int> tablesWithSubmittedOrders;
+  final Function(Map<String, dynamic>) onOrderSubmitted;
+  final Function(int) onOrderPaid;
+  final List<Map<String, dynamic>> activeOrders;
+
 
   const CheckoutScreen({
     Key? key,
     required this.order,
+    required this.tablesWithSubmittedOrders,
+    required this.onOrderSubmitted,
+    required this.onOrderPaid,
+    required this.activeOrders,
   }) : super(key: key);
 
   @override
@@ -151,77 +162,80 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
             posProfile, branch, paymentMethods, taxes, hasOpening) {
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: SafeArea(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left side - Payment Methods
-                        Expanded(
-                          flex: 2,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
+          return WillPopScope(
+            onWillPop: _confirmExit,
+            child: Scaffold(
+              backgroundColor: Colors.white,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left side - Payment Methods
+                          Expanded(
+                            flex: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildTableInfo(),
+                                  const SizedBox(height: 16),
+                                  _buildPaymentMethodGrid(),
+                                  const SizedBox(height: 16),
+                                  // Action Buttons Grid
+                                  _buildActionButtonsGrid(),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // Vertical divider
+                          Container(
+                            width: 1,
+                            color: Colors.grey.shade300,
+                          ),
+
+                          // Right side - Order details
+                          Expanded(
+                            flex: 3,
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildTableInfo(),
-                                const SizedBox(height: 16),
-                                _buildPaymentMethodGrid(),
-                                const SizedBox(height: 16),
-                                // Action Buttons Grid
-                                _buildActionButtonsGrid(),
+                                // Scrollable section
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildOrderHeader(),
+                                        const SizedBox(height: 16),
+                                        _buildOrderItemsList(),
+                                        const SizedBox(height: 24),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                // Fixed bottom Order Summary
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16.0),
+                                  color: Colors.white,
+                                  child: _buildOrderSummary(),
+                                ),
                               ],
                             ),
                           ),
-                        ),
-
-                        // Vertical divider
-                        Container(
-                          width: 1,
-                          color: Colors.grey.shade300,
-                        ),
-
-                        // Right side - Order details
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            children: [
-                              // Scrollable section
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _buildOrderHeader(),
-                                      const SizedBox(height: 16),
-                                      _buildOrderItemsList(),
-                                      const SizedBox(height: 24),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              // Fixed bottom Order Summary
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(16.0),
-                                color: Colors.white,
-                                child: _buildOrderSummary(),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -503,6 +517,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       children: [
         Row(
           children: [
+            IconButton(
+              icon: Icon(Icons.arrow_back),
+              onPressed: () => _confirmExit(),
+            ),
             if (widget.order['invoiceNumber'] != null)
               GestureDetector(
                 onTap: _deleteOrder,
@@ -524,7 +542,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             Spacer(),
             GestureDetector(
-              onTap: () => Navigator.pop(context, true),
+              onTap: () => _navigateToHomeScreen(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -657,6 +675,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
       ],
     );
+  }
+
+  void _navigateToHomeScreen() {
+    
+      // After TableScreen is shown, navigate to HomeScreen with the order data
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(
+            tableNumber: widget.order['tableNumber'],
+            existingOrder: {
+              ...widget.order,
+              'items': widget.order['items'],
+              'orderId': widget.order['invoiceNumber'],
+              'invoiceNumber': widget.order['invoiceNumber'],
+            },
+          ),
+        ),
+      );
+    
   }
 
   Widget _buildOrderSummary() {
@@ -833,7 +871,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         MainLayout.of(context)?.handleOrderPaid(completeOrder);
 
         if (mounted) {
-          Navigator.of(context).pop(true);
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
           Fluttertoast.showToast(
             msg: "Checkout Successfully",
             gravity: ToastGravity.BOTTOM,
@@ -856,6 +894,47 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() => _isProcessingPayment = false);
       }
     }
+  }
+
+  Future<bool> _confirmExit() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Discard Payment?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+            'Are you sure you want to exit without completing payment?',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE732A0),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(context).pop(true); // return true to indicate "Exit"
+            },
+            child: const Text('Exit',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldExit == true) {
+      // Navigate to the root page if user confirms exit
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      return false; // prevent Flutter from popping the screen (since we already did)
+    }
+
+    return false; // Don't pop the screen if user cancelled
   }
 
   Future<bool> _showCashPaymentDialog() async {

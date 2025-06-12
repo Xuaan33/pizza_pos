@@ -20,8 +20,8 @@ class MainLayout extends ConsumerStatefulWidget {
 
 class MainLayoutState extends ConsumerState<MainLayout> {
   int _selectedTabIndex = 0;
-  List<Map<String, dynamic>> _activeOrders = [];
-  Set<int> _tablesWithSubmittedOrders = {};
+  List<Map<String, dynamic>> activeOrders = [];
+  Set<int> tablesWithSubmittedOrders = {};
   bool _isOrdersLoading = false;
   bool _isLoggingOut = false;
   int _orderCounter = 1;
@@ -91,7 +91,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             print('Found ${invoices.length} invoices');
 
             setState(() {
-              _activeOrders = invoices
+              activeOrders = invoices
                   .map((invoice) {
                     try {
                       print('Processing invoice: ${invoice['name']}');
@@ -194,7 +194,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   .toList();
             });
 
-            print('Successfully mapped ${_activeOrders.length} orders');
+            print('Successfully mapped ${activeOrders.length} orders');
           }
         },
       );
@@ -310,17 +310,17 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   List<Widget> _getScreensWithOrders() {
     return [
       TableScreen(
-        tablesWithSubmittedOrders: _tablesWithSubmittedOrders,
+        tablesWithSubmittedOrders: tablesWithSubmittedOrders,
         onOrderSubmitted: (order) {
-          _addNewOrder(order);
+          addNewOrder(order);
           _refreshOrders();
         },
-        onOrderPaid: _markOrderAsPaid,
-        activeOrders: _activeOrders,
+        onOrderPaid: markOrderAsPaid,
+        activeOrders: activeOrders,
       ),
       DeliveryScreen(),
       OrdersScreen(
-        orders: _activeOrders,
+        orders: activeOrders,
         isLoading: _isOrdersLoading,
         onOrderPaid: (order) {
           handleOrderPaid(order);
@@ -343,7 +343,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Future<List<Map<String, dynamic>>> _fetchOrders() async {
     // Simulate network delay
     await Future.delayed(Duration(milliseconds: 500));
-    return _activeOrders.where((o) => !o['isPaid']).toList();
+    return activeOrders.where((o) => !o['isPaid']).toList();
   }
 
   Widget _buildNavigationSidebar() {
@@ -451,13 +451,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         })}');
 
     setState(() {
-      final index = _activeOrders.indexWhere((o) =>
+      final index = activeOrders.indexWhere((o) =>
           o['orderId'] == paidOrder['orderId'] ||
           o['invoiceNumber'] == paidOrder['invoiceNumber']);
 
       if (index != -1) {
-        _activeOrders[index] = {
-          ..._activeOrders[index] as Map<String, dynamic>,
+        activeOrders[index] = {
+          ...activeOrders[index] as Map<String, dynamic>,
           ...paidOrder,
           'isPaid': true,
           'status': 'Paid',
@@ -472,9 +472,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               paidOrder['paidAmount'] != null)
             'paidAmount': paidOrder['paidAmount'],
         };
-        _tablesWithSubmittedOrders.remove(paidOrder['tableNumber']);
+        tablesWithSubmittedOrders.remove(paidOrder['tableNumber']);
       } else {
-        _activeOrders.add({
+        activeOrders.add({
           ...paidOrder,
           'isPaid': true,
           'status': 'Paid',
@@ -500,10 +500,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   void _handleEditOrder(Map<String, dynamic> order) {
     setState(() {
-      final index = _activeOrders
+      final index = activeOrders
           .indexWhere((o) => o['tableNumber'] == order['tableNumber']);
       if (index != -1) {
-        _activeOrders[index] = order;
+        activeOrders[index] = order;
       }
     });
     setState(() {
@@ -590,10 +590,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-  void _addNewOrder(Map<String, dynamic> order) {
+  void addNewOrder(Map<String, dynamic> order) {
     try {
       setState(() {
-        _activeOrders.removeWhere((o) =>
+        activeOrders.removeWhere((o) =>
             o['tableNumber'] == order['tableNumber'] &&
             !(o['isPaid'] ?? false));
 
@@ -614,8 +614,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           'isPaid': false,
         };
 
-        _activeOrders.add(newOrder);
-        _tablesWithSubmittedOrders.add(order['tableNumber']);
+        activeOrders.add(newOrder);
+        tablesWithSubmittedOrders.add(order['tableNumber']);
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -626,12 +626,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   void updateOrder(Map<String, dynamic> updatedOrder) {
     setState(() {
-      final index = _activeOrders.indexWhere((o) =>
+      final index = activeOrders.indexWhere((o) =>
           o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
 
       if (index != -1) {
-        _activeOrders[index] = {
-          ..._activeOrders[index],
+        activeOrders[index] = {
+          ...activeOrders[index],
           'items': List<Map<String, dynamic>>.from(updatedOrder['items'] ?? []),
           'subtotal': updatedOrder['invoice']?['net_total']?.toDouble() ?? 0.0,
           'tax':
@@ -644,18 +644,18 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     });
   }
 
-  void _markOrderAsPaid(int tableNumber) {
+  void markOrderAsPaid(int tableNumber) {
     setState(() {
       // Mark as paid
-      final index = _activeOrders
+      final index = activeOrders
           .indexWhere((order) => order['tableNumber'] == tableNumber);
       if (index != -1) {
-        _activeOrders[index]['isPaid'] = true;
-        _activeOrders[index]['status'] = 'Paid';
+        activeOrders[index]['isPaid'] = true;
+        activeOrders[index]['status'] = 'Paid';
       }
 
       // Update table status
-      _tablesWithSubmittedOrders.remove(tableNumber);
+      tablesWithSubmittedOrders.remove(tableNumber);
     });
   }
 

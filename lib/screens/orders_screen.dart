@@ -626,24 +626,31 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   void _goToCheckout(Map<String, dynamic> order) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CheckoutScreen(
-          order: {
-            ...order,
-            'items': List<Map<String, dynamic>>.from(
-                order['items'] ?? []), // Explicit type with null safety
-          },
-        ),
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CheckoutScreen(
+        order: {
+          ...order,
+          'items': List<Map<String, dynamic>>.from(order['items'] ?? []),
+        },
+        tablesWithSubmittedOrders: {}, // Pass an empty set if not available
+        onOrderSubmitted: (newOrder) {
+          // Handle order submission if needed
+          widget.onOrderPaid(newOrder);
+        },
+        onOrderPaid: (tableNumber) {
+          // Handle order paid if needed
+        },
+        activeOrders: widget.orders, // Pass the current orders list
       ),
-    ).then((orderCompleted) {
-      if (orderCompleted == true) {
-        widget.onOrderPaid(order);
-      }
-    });
-  }
-
+    ),
+  ).then((orderCompleted) {
+    if (orderCompleted == true) {
+      widget.onOrderPaid(order);
+    }
+  });
+}
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     final items = (order['items'] as List?) ?? [];
     return items.fold(0.0, (sum, item) {

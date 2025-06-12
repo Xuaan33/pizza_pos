@@ -32,6 +32,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoadingItems = true;
   List<TextEditingController> _itemRemarkControllers = [];
   bool _isLoading = false;
+  Map<String, dynamic>? _existingOrder;
 
   @override
   void initState() {
@@ -766,7 +767,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (result ?? false) {
       if (!mounted) return false;
-      Navigator.pop(context);
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       return true;
     }
     return false;
@@ -975,108 +976,127 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     try {
       final authState = ref.read(authProvider);
-      await authState.whenOrNull(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) async {
-          // Auto-save all remarks before proceeding
-          _autoSaveAllRemarks();
+      await authState.whenOrNull(authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening) async {
+        // Auto-save all remarks before proceeding
+        _autoSaveAllRemarks();
 
-          // Get the full table name from floors and tables API
-          final floorsResponse = await PosService().getFloorsAndTables(branch);
-          String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+        // Get the full table name from floors and tables API
+        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        String tableFullName = 'Table ${widget.tableNumber}'; // fallback
 
-          if (floorsResponse['success'] == true) {
-            for (var floor in floorsResponse['message']) {
-              for (var table in floor['tables']) {
-                if (table['title'] == 'Table ${widget.tableNumber}') {
-                  tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
-                  break;
-                }
+        if (floorsResponse['success'] == true) {
+          for (var floor in floorsResponse['message']) {
+            for (var table in floor['tables']) {
+              if (table['title'] == 'Table ${widget.tableNumber}') {
+                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                break;
               }
             }
           }
+        }
 
-          // Prepare items with proper structure
-          final items = currentOrderItems.map((item) {
-            dynamic variantInfo = item['custom_variant_info'];
+        // Prepare items with proper structure
+        final items = currentOrderItems.map((item) {
+          dynamic variantInfo = item['custom_variant_info'];
 
-            return {
-              'item_code': item['item_code'] ?? '',
-              'qty': item['quantity'],
-              'price_list_rate': item['price'],
-              'custom_item_remarks': item['custom_item_remarks'] ?? '',
-              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-              if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
-            };
-          }).toList();
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
+          };
+        }).toList();
 
-          String? orderName;
+        String? orderName;
 
-          // Submit/Update the order first
-          if (hasExistingOrder) {
-            // Update existing order
-            final response = await PosService().submitOrder(
-              posProfile: posProfile,
-              customer: 'Guest',
-              items: items,
-              table: tableFullName,
-              orderChannel: 'Dine In',
-              name: widget.existingOrder![
-                  'orderId'], // Pass existing order ID to update
-            );
+        // Submit/Update the order first
+        if (hasExistingOrder) {
+          // Update existing order
+          final response = await PosService().submitOrder(
+            posProfile: posProfile,
+            customer: 'Guest',
+            items: items,
+            table: tableFullName,
+            orderChannel: 'Dine In',
+            name: widget
+                .existingOrder!['orderId'], // Pass existing order ID to update
+          );
 
-            if (response['success'] == true) {
-              orderName = response['message']['name'];
-            } else {
-              throw Exception('Failed to update order');
-            }
+          if (response['success'] == true) {
+            orderName = response['message']['name'];
           } else {
-            // Create new order
-            final response = await PosService().submitOrder(
-              posProfile: posProfile,
-              customer: 'Guest',
-              items: items,
-              table: tableFullName,
-              orderChannel: 'Dine In',
-            );
-
-            if (response['success'] == true) {
-              orderName = response['message']['name'];
-            } else {
-              throw Exception('Failed to submit order');
-            }
+            throw Exception('Failed to update order');
           }
+        } else {
+          // Create new order
+          final response = await PosService().submitOrder(
+            posProfile: posProfile,
+            customer: 'Guest',
+            items: items,
+            table: tableFullName,
+            orderChannel: 'Dine In',
+          );
 
-          // Now proceed to checkout with updated order
-          final result = await Navigator.push(
+          if (response['success'] == true) {
+            orderName = response['message']['name'];
+          } else {
+            throw Exception('Failed to submit order');
+          }
+        }
+
+        // Now proceed to checkout with updated order
+        final result = await Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CheckoutScreen(
+              order: {
+                'tableNumber': widget.tableNumber,
+                'items': List<Map<String, dynamic>>.from(currentOrderItems),
+                'entryTime': hasExistingOrder
+                    ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
+                    : DateTime.now(),
+                'invoiceNumber': orderName ??
+                    (hasExistingOrder ? widget.existingOrder!['orderId'] : ''),
+                'orderId': orderName ?? widget.existingOrder?['orderId'],
+              },
+              tablesWithSubmittedOrders:
+                  MainLayout.of(context)?.tablesWithSubmittedOrders ?? {},
+              onOrderSubmitted: (order) =>
+                  MainLayout.of(context)?.addNewOrder(order),
+              onOrderPaid: (tableNumber) =>
+                  MainLayout.of(context)?.markOrderAsPaid(tableNumber),
+              activeOrders: MainLayout.of(context)?.activeOrders ?? [],
+            ),
+          ),
+          (route) => route
+              .isFirst, // This will keep only the first route (usually the main layout)
+        );
+
+        if (result != null && result['action'] == 'edit') {
+          // Navigate back to HomeScreen with the existing order data
+          Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => CheckoutScreen(
-                order: {
-                  'tableNumber': widget.tableNumber,
-                  'items': List<Map<String, dynamic>>.from(
-                      currentOrderItems), // ✅ Use current items
-                  'entryTime': hasExistingOrder
-                      ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
-                      : DateTime.now(),
-                  'invoiceNumber': orderName ??
-                      (hasExistingOrder
-                          ? widget.existingOrder!['orderId']
-                          : ''),
-                },
+              builder: (context) => HomeScreen(
+                tableNumber: result['tableNumber'],
+                existingOrder: result['order'],
               ),
             ),
           );
-
-          if (result == true && mounted) {
-            MainLayout.of(context)?.selectOrdersTab();
-            Navigator.pop(context, {
-              'action': 'paid',
-              'tableNumber': widget.tableNumber,
-            });
-          }
-        },
-      );
+        }
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

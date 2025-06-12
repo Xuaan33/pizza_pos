@@ -269,7 +269,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
     return currentFloorTables.length - occupiedTables;
   }
 
-  // Update the _getTotalRevenue method in table_screen.dart
   double _getTotalRevenue() {
     return widget.activeOrders.where((order) => !order['isPaid']).fold(0.0,
         (sum, order) {
@@ -457,7 +456,17 @@ class _TableScreenState extends ConsumerState<TableScreen>
       } else if (result['action'] == 'deleted') {
         widget.onOrderPaid(
             tableNumber);
-      }
+      }else if (result['action'] == 'edit') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(
+            tableNumber: tableNumber,
+            existingOrder: result['order'],
+          ),
+        ),
+      );
+    }
 
       await _loadFloorsAndTables();
       await _loadTodayInfo();

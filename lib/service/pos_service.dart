@@ -218,7 +218,6 @@ class PosService {
     }
   }
 
-  // In pos_service.dart, add this method to the PosService class
   Future<Uint8List> printReceipt(String orderName) async {
     try {
       final token = await AuthService.getAuthToken();
