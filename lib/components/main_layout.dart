@@ -424,8 +424,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               child: Image.asset(
                 imagePath,
                 color: isSelected ? Colors.pink : const Color(0xFF555555),
-                width: 40,
-                height: 40,
+                width: index == 2 ? 50 : 40, // adjust image size for index 2
+              height: index == 2 ? 50 : 40,
               ),
             ),
             const SizedBox(height: 10),
