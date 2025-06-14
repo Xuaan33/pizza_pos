@@ -46,8 +46,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (widget.existingOrder != null &&
         widget.existingOrder!['items'] != null) {
       currentOrderItems = (widget.existingOrder!['items'] as List).map((item) {
-        // Force include all fields exactly as they exist in the item
-        return {
+        // Convert old format to new format if needed
+        Map<String, dynamic> newItem = {
           'item_code': item['item_code'] ?? '',
           'name': item['item_name'] ?? item['name'] ?? '',
           'price': (item['price_list_rate'] ?? item['price'] ?? 0).toDouble(),
@@ -57,9 +57,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'option_text': item['option_text'] ?? '',
           'custom_serve_later': item['custom_serve_later'] == 1,
           'custom_item_remarks': item['custom_item_remarks'] ?? '',
-          'custom_variant_info':
-              item['custom_variant_info'], // Direct pass-through
         };
+
+        // Convert old variant format to new format if needed
+        if (item['custom_variant_info'] != null) {
+          try {
+            dynamic variantInfo = item['custom_variant_info'] is String
+                ? jsonDecode(item['custom_variant_info'])
+                : item['custom_variant_info'];
+
+            if (variantInfo is List) {
+              newItem['custom_variant_info'] = variantInfo;
+            } else if (variantInfo is Map) {
+              // Convert old map format to new list format
+              newItem['custom_variant_info'] = [
+                {
+                  'variant_group': 'Options',
+                  'options': variantInfo.entries
+                      .map((e) => {
+                            'option': e.value,
+                            'additional_cost': 0 // Default cost for old format
+                          })
+                      .toList()
+                }
+              ];
+            }
+          } catch (e) {
+            debugPrint('Error parsing variant info: $e');
+          }
+        }
+
+        return newItem;
       }).toList();
     } else {
       currentOrderItems = [];
@@ -646,13 +674,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Map<String, dynamic> item,
     Map<String, String?> selectedOptions,
   ) {
-    // Convert selected options to the required format
     List<Map<String, dynamic>> variantInfo = [];
+    double totalAdditionalCost = 0.0;
 
-    if (selectedOptions.isNotEmpty) {
-      // Create a single map with all selected options
-      variantInfo
-          .add(selectedOptions.map((key, value) => MapEntry(key, value ?? '')));
+    if (selectedOptions.isNotEmpty && item['structured_variant_info'] != null) {
+      // Find matching options and their additional costs
+      for (var variantGroup in item['structured_variant_info']) {
+        final selectedOption = selectedOptions[variantGroup['variant_group']];
+        if (selectedOption != null) {
+          // Find the selected option in the variant group
+          for (var option in variantGroup['options']) {
+            if (option['option'] == selectedOption) {
+              double optionCost = (option['additional_cost'] as num).toDouble();
+              totalAdditionalCost += optionCost;
+
+              variantInfo.add({
+                'variant_group': variantGroup['variant_group'],
+                'option': selectedOption,
+                'additional_cost': optionCost,
+              });
+              break;
+            }
+          }
+        }
+      }
     }
 
     setState(() {
@@ -676,7 +721,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'custom_serve_later': false,
           'custom_item_remarks': '',
           'structured_variant_info': item['structured_variant_info'],
-          'custom_variant_info': variantInfo, // Store in the new format
+          'custom_variant_info': variantInfo,
+          'additional_cost': totalAdditionalCost,
         };
         currentOrderItems.add(newOrderItem);
       }
@@ -1197,6 +1243,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildOrderItem(Map<String, dynamic> item, int index) {
+    double basePrice = item['price'];
+    double additionalCost = _calculateAdditionalCost(item);
+    double totalPrice = basePrice + additionalCost;
+
     // Ensure we have a controller for this item
     if (index >= _itemRemarkControllers.length) {
       _itemRemarkControllers
@@ -1231,6 +1281,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       } catch (e) {
         debugPrint('Variant parsing error: $e');
+      }
+    }
+
+    List<Widget> variantWidgets = [];
+    if (item['custom_variant_info'] != null &&
+        item['custom_variant_info'] is List) {
+      for (var variant in item['custom_variant_info']) {
+        if (variant is Map) {
+          variantWidgets.add(
+            Text(
+              '• ${variant['variant_group']}: ${variant['option']}${variant['additional_cost'] > 0 ? ' +RM ${variant['additional_cost'].toStringAsFixed(2)}' : ''}',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          );
+        }
       }
     }
 
@@ -1276,13 +1345,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                     if (variantText.isNotEmpty)
-                      Text(
-                        _formatOptionText(variantText),
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 12,
-                          height: 1.3,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (variantWidgets.isNotEmpty)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: variantWidgets,
+                            ),
+                          if (additionalCost > 0)
+                            Text(
+                              '+RM ${additionalCost.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: Color(0xFFE732A0),
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
                       ),
                     Text(
                       'RM ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
@@ -1295,73 +1374,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
-              // Quantity controls
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove, size: 16),
-                      onPressed: () => _decreaseQuantity(index),
-                      padding: EdgeInsets.zero,
-                      constraints: BoxConstraints(minWidth: 30, minHeight: 30),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        '${(item['quantity']).toStringAsFixed(0)}',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add, size: 16),
-                      onPressed: () => _increaseQuantity(index),
-                      padding: EdgeInsets.zero,
-                      constraints: BoxConstraints(minWidth: 30, minHeight: 30),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    size: 20, color: Colors.red),
-                onPressed: () => _removeItem(index),
-              ),
             ],
           ),
+          // Quantity controls and delete button moved here
           Padding(
-            padding: const EdgeInsets.only(top: 8.0, left: 215, bottom: 4.0),
+            padding: const EdgeInsets.only(top: 8.0, left: 0, right: 0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'Serve Later',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                // Quantity controls
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove, size: 16),
+                        onPressed: () => _decreaseQuantity(index),
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            BoxConstraints(minWidth: 30, minHeight: 30),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Transform.scale(
-                      scale: 0.75,
-                      child: Switch(
-                        value: item['custom_serve_later'] ?? false,
-                        onChanged: (value) {
-                          setState(() {
-                            currentOrderItems[index]['custom_serve_later'] =
-                                value; // Fixed: directly set the value
-                          });
-                        },
-                        activeColor: Color(0xFFE732A0),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '${(item['quantity']).toStringAsFixed(0)}',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
-                    ),
-                  ],
+                      IconButton(
+                        icon: const Icon(Icons.add, size: 16),
+                        onPressed: () => _increaseQuantity(index),
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            BoxConstraints(minWidth: 30, minHeight: 30),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline,
+                      size: 20, color: Colors.red),
+                  onPressed: () => _removeItem(index),
+                ),
+              ],
+            ),
+          ),
+          // Serve Later section
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 0, bottom: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Serve Later',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Transform.scale(
+                  scale: 0.75,
+                  child: Switch(
+                    value: item['custom_serve_later'] ?? false,
+                    onChanged: (value) {
+                      setState(() {
+                        currentOrderItems[index]['custom_serve_later'] =
+                            value; // Fixed: directly set the value
+                      });
+                    },
+                    activeColor: Color(0xFFE732A0),
+                  ),
                 ),
               ],
             ),
@@ -1574,7 +1661,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _calculateSubtotal() {
     double subtotal = 0;
     for (var item in currentOrderItems) {
-      subtotal += (item['price'] * item['quantity']);
+      double basePrice = item['price'];
+      double additionalCost = _calculateAdditionalCost(item);
+      subtotal += (basePrice + additionalCost) * item['quantity'];
     }
     return subtotal;
   }
@@ -1595,27 +1684,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
   }
 
-  String _formatOptionText(String optionText) {
-    if (optionText.isEmpty) return '';
-
-    // Split by comma and format each option on a new line with proper spacing
-    return optionText
-        .split(',')
-        .map((option) {
-          // Trim and ensure consistent spacing around colon
-          String trimmed = option.trim();
-          if (trimmed.contains(':')) {
-            List<String> parts = trimmed.split(':');
-            if (parts.length == 2) {
-              return '• ${parts[0].trim()}: ${parts[1].trim()}';
-            }
-          }
-          return '• $trimmed';
-        })
-        .where((option) => option.isNotEmpty && option != '•')
-        .join('\n');
-  }
-
   double _calculateTotal() {
     return _calculateSubtotal() + _calculateGST();
   }
@@ -1624,5 +1692,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // For demo purposes, just showing the current order total
     // In a real app, this would track all completed orders
     return _calculateTotal();
+  }
+
+  double _calculateAdditionalCost(Map<String, dynamic> item) {
+    if (item['additional_cost'] != null) {
+      return (item['additional_cost'] as num).toDouble();
+    }
+    return 0.0;
   }
 }
