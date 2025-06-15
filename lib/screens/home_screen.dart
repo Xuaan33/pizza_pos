@@ -906,11 +906,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // 2. Prepare items with proper structure
           final items = currentOrderItems.map((item) {
             dynamic variantInfo = item['custom_variant_info'];
+            double additionalCost = _calculateAdditionalCost(item);
+            double itemPrice = (item['price'] ?? 0) + additionalCost;
 
             return {
               'item_code': item['item_code'] ?? '',
               'qty': item['quantity'],
-              'price_list_rate': item['price'],
+              'price_list_rate': itemPrice, // Submit BASE + ADDITIONAL COST
               'custom_item_remarks': item['custom_item_remarks'] ?? '',
               'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
               if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
