@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'checkout_screen.dart';
@@ -399,13 +400,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ],
                                   ),
                                 ),
-                                Expanded(
-                                  child: ListView.builder(
-                                    itemCount: currentOrderItems.length,
-                                    itemBuilder: (context, index) {
-                                      return _buildOrderItem(
-                                          currentOrderItems[index], index);
-                                    },
+                                ScrollConfiguration(
+                                  behavior: NoStretchScrollBehavior(),
+                                  child: Expanded(
+                                    child: ListView.builder(
+                                      physics:
+                                          ClampingScrollPhysics(), // still good to include
+                                      itemCount: currentOrderItems.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildOrderItem(
+                                            currentOrderItems[index], index);
+                                      },
+                                    ),
                                   ),
                                 ),
                                 Padding(

@@ -19,7 +19,6 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   final Function(int) onOrderPaid;
   final List<Map<String, dynamic>> activeOrders;
 
-
   const CheckoutScreen({
     Key? key,
     required this.order,
@@ -38,7 +37,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
   double _totalRevenue = 0.0;
-  int _totalUnpaidOrders = 0;
+  double _totalUnpaidOrders = 0.0;
   int _totalTablesFree = 0;
   double _amountGiven = 0.0;
   bool _isProcessingPayment = false;
@@ -271,8 +270,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 _buildStatPill(
                     'Revenue', 'RM${_totalRevenue.toStringAsFixed(2)}'),
                 const SizedBox(width: 8),
-                _buildStatPill('Unpaid Orders',
-                    '${_totalUnpaidOrders.toStringAsFixed(2)}'),
+                _buildStatPill(
+                    'Unpaid Orders', _totalUnpaidOrders.toStringAsFixed(2)),
                 const SizedBox(width: 8),
                 _buildStatPill('Tables Free', '$_totalTablesFree'),
               ],
@@ -512,6 +511,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+// Replace your _buildOrderHeader() method with this:
   Widget _buildOrderHeader() {
     return Column(
       children: [
@@ -564,37 +564,47 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         const SizedBox(height: 16),
         Table(
           columnWidths: const {
-            0: FixedColumnWidth(0), // Image column
-            1: FlexColumnWidth(), // Item name (flexible)
-            2: FixedColumnWidth(60), // Quantity
-            3: FixedColumnWidth(90), // Price
-            4: FixedColumnWidth(100), // Amount
+            0: FixedColumnWidth(62), // Image column
+            1: FlexColumnWidth(3), // Item name (flexible, takes more space)
+            2: FlexColumnWidth(1.5), // Quantity (proportional)
+            3: FlexColumnWidth(2), // Price (proportional)
+            4: FlexColumnWidth(2), // Amount (proportional)
           },
           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
           children: [
             TableRow(
               children: [
                 const SizedBox(), // Empty for image column
-                const Text(
-                  'Item Name',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: Text(
+                    'Item Name',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                Center(
-                  child: Text('Quantity',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: Text(
+                    'Quantity',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text('Price (RM)',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: Text(
+                    'Price (RM)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right,
+                  ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text('Amount (RM)',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: Text(
+                    'Amount (RM)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right,
+                  ),
                 ),
               ],
             ),
@@ -604,14 +614,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+// Replace your _buildOrderItemsList() method with this:
   Widget _buildOrderItemsList() {
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column
-        1: FlexColumnWidth(), // Item name (flexible)
-        2: FixedColumnWidth(80), // Quantity
-        3: FixedColumnWidth(90), // Price
-        4: FixedColumnWidth(100), // Amount
+        1: FlexColumnWidth(3), // Item name (flexible, takes more space)
+        2: FlexColumnWidth(1.5), // Quantity (proportional)
+        3: FlexColumnWidth(2), // Price (proportional)
+        4: FlexColumnWidth(2), // Amount (proportional)
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
@@ -642,33 +653,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'x${item['quantity'].toStringAsFixed(0)}',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Text(
+                  'x${item['quantity'].toStringAsFixed(0)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    item['price'].toStringAsFixed(2),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Text(
+                  item['price'].toStringAsFixed(2),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.right,
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    (item['price'] * item['quantity']).toStringAsFixed(2),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Text(
+                  (item['price'] * item['quantity']).toStringAsFixed(2),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
                 ),
               ),
             ],
@@ -678,23 +684,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _navigateToHomeScreen() {
-    
-      // After TableScreen is shown, navigate to HomeScreen with the order data
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(
-            tableNumber: widget.order['tableNumber'],
-            existingOrder: {
-              ...widget.order,
-              'items': widget.order['items'],
-              'orderId': widget.order['invoiceNumber'],
-              'invoiceNumber': widget.order['invoiceNumber'],
-            },
-          ),
+    // After TableScreen is shown, navigate to HomeScreen with the order data
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomeScreen(
+          tableNumber: widget.order['tableNumber'],
+          existingOrder: {
+            ...widget.order,
+            'items': widget.order['items'],
+            'orderId': widget.order['invoiceNumber'],
+            'invoiceNumber': widget.order['invoiceNumber'],
+          },
         ),
-      );
-    
+      ),
+    );
   }
 
   Widget _buildOrderSummary() {
