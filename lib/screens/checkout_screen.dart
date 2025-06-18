@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
@@ -46,6 +47,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void dispose() {
     _isDisposed = true; // Mark as disposed
+    CustomerDisplayController.showDefaultDisplay();
+
     super.dispose();
   }
 
@@ -161,6 +164,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
             posProfile, branch, paymentMethods, taxes, hasOpening) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            CustomerDisplayController.showCustomerScreen();
+            CustomerDisplayController.updateOrderDisplay(
+              items: orderItems
+                  .map((item) => {
+                        'name': item['name'],
+                        'price': item['price'],
+                        'quantity': item['quantity'],
+                      })
+                  .toList(),
+              subtotal: _calculateSubtotal(),
+              tax: _calculateGST(),
+              total: _calculateTotal(),
+            );
+          });
           return WillPopScope(
             onWillPop: _confirmExit,
             child: Scaffold(
@@ -875,6 +893,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         MainLayout.of(context)?.handleOrderPaid(completeOrder);
 
         if (mounted) {
+          CustomerDisplayController.showDefaultDisplay();
           Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
           Fluttertoast.showToast(
             msg: "Checkout Successfully",
@@ -924,6 +943,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             onPressed: () {
               Navigator.of(context).pop(true); // return true to indicate "Exit"
+              CustomerDisplayController.showDefaultDisplay();
             },
             child: const Text('Exit',
                 style: TextStyle(fontWeight: FontWeight.bold)),
@@ -934,8 +954,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     if (shouldExit == true) {
       // Navigate to the root page if user confirms exit
+      CustomerDisplayController.showDefaultDisplay();
       Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-      return false; // prevent Flutter from popping the screen (since we already did)
+      return false;
     }
 
     return false; // Don't pop the screen if user cancelled
@@ -1096,6 +1117,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
+          CustomerDisplayController.showDefaultDisplay();
         }
       }
     } catch (e) {

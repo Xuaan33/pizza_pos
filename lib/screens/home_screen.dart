@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -183,6 +184,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
             posProfile, branch, paymentMethods, taxes, hasOpening) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            CustomerDisplayController.showCustomerScreen();
+            // In home_screen.dart
+            CustomerDisplayController.updateOrderDisplay(
+              items: currentOrderItems.map((item) {
+                // Ensure quantity is converted to int for display
+                final quantity = (item['quantity'] is double)
+                    ? (item['quantity'] as double).toInt()
+                    : item['quantity'] as int;
+
+                // Ensure price is properly formatted
+                final price = (item['price'] is int)
+                    ? (item['price'] as int).toDouble()
+                    : item['price'] as double;
+
+                return {
+                  'name': item['name'] ?? 'Unknown',
+                  'price': price,
+                  'quantity': quantity,
+                };
+              }).toList(),
+              subtotal: _calculateSubtotal(),
+              tax: _calculateGST(),
+              total: _calculateTotal(),
+            );
+          });
           return FutureBuilder(
               future: SharedPreferences.getInstance(),
               builder: (context, snapshot) {
@@ -761,6 +788,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<bool> _onBackPressed() async {
     if (currentOrderItems.isEmpty) {
+      CustomerDisplayController.showDefaultDisplay();
       Navigator.pop(context);
       return true;
     }
@@ -820,6 +848,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (result ?? false) {
       if (!mounted) return false;
       Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      CustomerDisplayController.showDefaultDisplay();
       return true;
     }
     return false;
@@ -865,7 +894,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () => {
+                  Navigator.pop(context, true),
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Color(0xFFE732A0),
                   foregroundColor: Colors.white,
@@ -945,6 +976,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               'tableNumber': widget.tableNumber,
               'tableFullName': tableFullName, // Pass both for reference
             });
+
+            CustomerDisplayController.showDefaultDisplay();
 
             Fluttertoast.showToast(
               msg: "Order Submitted",

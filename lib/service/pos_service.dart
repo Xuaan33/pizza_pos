@@ -238,7 +238,7 @@ class PosService {
       print('API Response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
-        return response.bodyBytes;
+        return response.bodyBytes; // Return raw image bytes
       } else {
         final error = jsonDecode(response.body);
         throw Exception(error['message'] ??

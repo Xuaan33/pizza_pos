@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
@@ -40,6 +41,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    CustomerDisplayController.showDefaultDisplay();
     _loadFloorsAndTables();
     _loadTodayInfo();
   }
@@ -454,19 +456,18 @@ class _TableScreenState extends ConsumerState<TableScreen>
       } else if (result['action'] == 'paid') {
         widget.onOrderPaid(tableNumber);
       } else if (result['action'] == 'deleted') {
-        widget.onOrderPaid(
-            tableNumber);
-      }else if (result['action'] == 'edit') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(
-            tableNumber: tableNumber,
-            existingOrder: result['order'],
+        widget.onOrderPaid(tableNumber);
+      } else if (result['action'] == 'edit') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              tableNumber: tableNumber,
+              existingOrder: result['order'],
+            ),
           ),
-        ),
-      );
-    }
+        );
+      }
 
       await _loadFloorsAndTables();
       await _loadTodayInfo();

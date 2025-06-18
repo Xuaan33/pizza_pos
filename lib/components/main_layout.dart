@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
 import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
@@ -25,6 +26,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool _isOrdersLoading = false;
   bool _isLoggingOut = false;
   int _orderCounter = 1;
+  bool _customerScreenShown = false;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -55,6 +57,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       },
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
           posProfile, branch, paymentMethods, taxes, hasOpening) {
+        if (!_customerScreenShown) {
+          _customerScreenShown = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_selectedTabIndex == 0 || _selectedTabIndex == 2) {
+              CustomerDisplayController.showCustomerScreen();
+            }
+          });
+        }
         return Scaffold(
           body: Row(
             children: [
@@ -165,7 +175,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             ? parseDate(invoice['modified']?.toString())
                             : null,
                         'isPaid': invoice['status']?.toString() == 'Paid',
-                        'paymentMethod': invoice['payments'][0]['mode_of_payment']
+                        'paymentMethod': invoice['payments'][0]
+                                    ['mode_of_payment']
                                 ?.toString() ??
                             'Cash',
                         'customerName':
@@ -425,7 +436,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 imagePath,
                 color: isSelected ? Colors.pink : const Color(0xFF555555),
                 width: index == 2 ? 50 : 40, // adjust image size for index 2
-              height: index == 2 ? 50 : 40,
+                height: index == 2 ? 50 : 40,
               ),
             ),
             const SizedBox(height: 10),
