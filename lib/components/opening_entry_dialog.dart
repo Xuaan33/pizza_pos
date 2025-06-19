@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
@@ -70,50 +71,53 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 16),
-                Text(
-                  'POS Profile: $posProfile',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ...List.generate(paymentMethods.length, (index) {
-                  final method = paymentMethods[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          method['name'],
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _amountControllers[index],
-                          focusNode: _focusNodes[index],
-                          decoration: const InputDecoration(
-                            labelText: 'Opening Amount',
-                            border: OutlineInputBorder(),
-                            prefixText: 'RM ',
-                          ),
-                          keyboardType:
-                              TextInputType.numberWithOptions(decimal: true),
-                        ),
-                      ],
+          content: ScrollConfiguration(
+            behavior: NoStretchScrollBehavior(),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 16),
+                  Text(
+                    'POS Profile: $posProfile',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                  );
-                }),
-              ],
+                  ),
+                  const SizedBox(height: 24),
+                  ...List.generate(paymentMethods.length, (index) {
+                    final method = paymentMethods[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            method['name'],
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _amountControllers[index],
+                            focusNode: _focusNodes[index],
+                            decoration: const InputDecoration(
+                              labelText: 'Opening Amount',
+                              border: OutlineInputBorder(),
+                              prefixText: 'RM ',
+                            ),
+                            keyboardType:
+                                TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
             ),
           ),
           actions: [

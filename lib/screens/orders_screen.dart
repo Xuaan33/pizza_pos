@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
@@ -139,11 +140,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 ? Center(child: CircularProgressIndicator())
                 : orders.isEmpty
                     ? Center(child: Text('No orders found'))
-                    : ListView.builder(
-                        itemCount: orders.length,
-                        itemBuilder: (context, index) {
-                          return _buildOrderListItem(orders[index]);
-                        },
+                    : ScrollConfiguration(
+                        behavior: NoStretchScrollBehavior(),
+                        child: ListView.builder(
+                          itemCount: orders.length,
+                          itemBuilder: (context, index) {
+                            return _buildOrderListItem(orders[index]);
+                          },
+                        ),
                       ),
           ),
         ],
@@ -238,297 +242,304 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Compact Order Info Tile
-          Card(
-            color: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade300),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // First row - Order ID and Total
-                  Row(
-                    children: [
-                      Text(
-                        'Order Details',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(width: 16),
-                      Text(
-                        order['orderType']?.toString() ?? 'Dine in',
-                        style: TextStyle(
-                            color: Colors.black, fontWeight: FontWeight.w600),
-                      ),
-                      Spacer(),
-                      Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDraft ? Colors.blue[100] : Colors.green[100],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          isDraft ? 'DRAFT' : 'PAID',
-                          style: TextStyle(
-                            color:
-                                isDraft ? Colors.blue[800] : Colors.green[800],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 8),
-
-                  // Second row - Order Type and Table
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      if (order['tableNumber'] != null) ...[
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Compact Order Info Tile
+            Card(
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // First row - Order ID and Total
+                    Row(
+                      children: [
                         Text(
-                          'Table ${order['tableNumber']}',
+                          'Order Details',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(width: 16),
+                        Text(
+                          order['orderType']?.toString() ?? 'Dine in',
                           style: TextStyle(
                               color: Colors.black, fontWeight: FontWeight.w600),
                         ),
-                      ],
-                      Text(
-                        _formatDate(_parseDateTime(order['entryTime'])),
-                        style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        order['orderId']?.toString() ?? 'ORDER-00',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'RM ${total.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFE732A0),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SizedBox(height: 16),
-
-          Card(
-            color: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade300),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Customer',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      // Optional: you can add a tag like VIP or Member status here
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  // Customer Name
-                  Text(
-                    order['customerName']?.toString() ?? 'Guest',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  // Remarks if available
-                  if (order['custom_item_remarks'] != null &&
-                      order['custom_item_remarks'].toString().isNotEmpty &&
-                      order['custom_item_remarks'].toString() != 'No remarks')
-                    Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Remarks: ${order['custom_item_remarks']}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          SizedBox(height: 16),
-
-          // Items Section
-          Card(
-            color: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade300),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Items',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  // Items list
-                  ...items
-                      .map(
-                        (item) => Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      item['name']?.toString() ?? 'Item',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'x${(item['quantity'] ?? 1).toStringAsFixed(0)}',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                'RM ${((item['price'] ?? 0) * (item['quantity'] ?? 1)).toStringAsFixed(2)}',
-                                style: TextStyle(
-                                    color: Color(0xFFE732A0),
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ],
+                        Spacer(),
+                        Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color:
+                                isDraft ? Colors.blue[100] : Colors.green[100],
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            isDraft ? 'DRAFT' : 'PAID',
+                            style: TextStyle(
+                              color: isDraft
+                                  ? Colors.blue[800]
+                                  : Colors.green[800],
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      )
-                      .toList(),
-                ],
+                      ],
+                    ),
+
+                    SizedBox(height: 8),
+
+                    // Second row - Order Type and Table
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (order['tableNumber'] != null) ...[
+                          Text(
+                            'Table ${order['tableNumber']}',
+                            style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                        Text(
+                          _formatDate(_parseDateTime(order['entryTime'])),
+                          style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          order['orderId']?.toString() ?? 'ORDER-00',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'RM ${total.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFE732A0),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          SizedBox(height: 16),
+            SizedBox(height: 16),
 
-          // Summary Section
-          Card(
-            color: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
+            Card(
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade300)),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildSummaryRow('Subtotal', subtotal),
-                  if (taxBreakdown != null)
-                    _buildSummaryRow(
-                      '${taxBreakdown['description'] ?? 'Tax'} @ ${taxBreakdown['rate']?.toStringAsFixed(1) ?? '6.0'}%',
-                      tax,
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Customer',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        // Optional: you can add a tag like VIP or Member status here
+                      ],
                     ),
-                  _buildSummaryRow('Rounding Adjustment', rounding),
-                  _buildSummaryRow('Total', total, isTotal: true),
-                  if (isPaid) ...[
-                    Divider(),
-                    _buildSummaryRow('Payment Method',
-                        order['paymentMethod']?.toString() ?? 'Cash'),
-                    if (order['paymentMethod'] == 'Cash') ...[
-                      _buildSummaryRow('Paid Amount',
-                          'RM ${order['paidAmount']?.toStringAsFixed(2) ?? order['paidAmount']?.toStringAsFixed(2) ?? '0.00'}'),
-                      _buildSummaryRow('Change Amount',
-                          'RM ${order['changeAmount']?.toStringAsFixed(2) ?? order['changeAmount']?.toStringAsFixed(2) ?? '0.00'}'),
-                    ],
-                    if (order['paidTime'] != null)
-                      _buildSummaryRow(
-                        'Paid Time',
-                        _formatDate(_parseDateTime(order['paidTime'])),
+                    SizedBox(height: 8),
+                    // Customer Name
+                    Text(
+                      order['customerName']?.toString() ?? 'Guest',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    // Remarks if available
+                    if (order['custom_item_remarks'] != null &&
+                        order['custom_item_remarks'].toString().isNotEmpty &&
+                        order['custom_item_remarks'].toString() != 'No remarks')
+                      Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Remarks: ${order['custom_item_remarks']}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                   ],
-                ],
+                ),
               ),
             ),
-          ),
 
-          SizedBox(height: 24),
+            SizedBox(height: 16),
 
-          // Action Buttons
-          if (isDraft) ...[
+            // Items Section
+            Card(
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Items',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 8),
+                    // Items list
+                    ...items
+                        .map(
+                          (item) => Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        item['name']?.toString() ?? 'Item',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'x${(item['quantity'] ?? 1).toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  'RM ${((item['price'] ?? 0) * (item['quantity'] ?? 1)).toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                      color: Color(0xFFE732A0),
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 16),
+
+            // Summary Section
+            Card(
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade300)),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildSummaryRow('Subtotal', subtotal),
+                    if (taxBreakdown != null)
+                      _buildSummaryRow(
+                        '${taxBreakdown['description'] ?? 'Tax'} @ ${taxBreakdown['rate']?.toStringAsFixed(1) ?? '6.0'}%',
+                        tax,
+                      ),
+                    _buildSummaryRow('Rounding Adjustment', rounding),
+                    _buildSummaryRow('Total', total, isTotal: true),
+                    if (isPaid) ...[
+                      Divider(),
+                      _buildSummaryRow('Payment Method',
+                          order['paymentMethod']?.toString() ?? 'Cash'),
+                      if (order['paymentMethod'] == 'Cash') ...[
+                        _buildSummaryRow('Paid Amount',
+                            'RM ${order['paidAmount']?.toStringAsFixed(2) ?? order['paidAmount']?.toStringAsFixed(2) ?? '0.00'}'),
+                        _buildSummaryRow('Change Amount',
+                            'RM ${order['changeAmount']?.toStringAsFixed(2) ?? order['changeAmount']?.toStringAsFixed(2) ?? '0.00'}'),
+                      ],
+                      if (order['paidTime'] != null)
+                        _buildSummaryRow(
+                          'Paid Time',
+                          _formatDate(_parseDateTime(order['paidTime'])),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: 24),
+
+            // Action Buttons
+            if (isDraft) ...[
+              ElevatedButton(
+                onPressed: () => {_goToCheckout(order), _selectedOrder = null},
+                style: ElevatedButton.styleFrom(
+                  minimumSize: Size(double.infinity, 48),
+                  backgroundColor: Color(0xFFE732A0),
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(
+                  'Checkout Order',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              SizedBox(height: 8),
+            ],
             ElevatedButton(
-              onPressed: () => {_goToCheckout(order), _selectedOrder = null},
+              onPressed: () async {
+                final orderName = order['orderId']?.toString();
+                if (orderName != null) {
+                  await ReceiptPrinter.showPrintDialog(context, orderName);
+                }
+              },
               style: ElevatedButton.styleFrom(
                 minimumSize: Size(double.infinity, 48),
-                backgroundColor: Color(0xFFE732A0),
+                side: BorderSide(color: Colors.black),
+                backgroundColor: Colors.black,
                 foregroundColor: Colors.white,
               ),
               child: Text(
-                'Checkout Order',
+                'Print Receipt',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
-            SizedBox(height: 8),
           ],
-          ElevatedButton(
-            onPressed: () async {
-              final orderName = order['orderId']?.toString();
-              if (orderName != null) {
-                await ReceiptPrinter.showPrintDialog(context, orderName);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              minimumSize: Size(double.infinity, 48),
-              side: BorderSide(color: Colors.black),
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-            ),
-            child: Text(
-              'Print Receipt',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -626,31 +637,32 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   void _goToCheckout(Map<String, dynamic> order) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => CheckoutScreen(
-        order: {
-          ...order,
-          'items': List<Map<String, dynamic>>.from(order['items'] ?? []),
-        },
-        tablesWithSubmittedOrders: {}, // Pass an empty set if not available
-        onOrderSubmitted: (newOrder) {
-          // Handle order submission if needed
-          widget.onOrderPaid(newOrder);
-        },
-        onOrderPaid: (tableNumber) {
-          // Handle order paid if needed
-        },
-        activeOrders: widget.orders, // Pass the current orders list
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutScreen(
+          order: {
+            ...order,
+            'items': List<Map<String, dynamic>>.from(order['items'] ?? []),
+          },
+          tablesWithSubmittedOrders: {}, // Pass an empty set if not available
+          onOrderSubmitted: (newOrder) {
+            // Handle order submission if needed
+            widget.onOrderPaid(newOrder);
+          },
+          onOrderPaid: (tableNumber) {
+            // Handle order paid if needed
+          },
+          activeOrders: widget.orders, // Pass the current orders list
+        ),
       ),
-    ),
-  ).then((orderCompleted) {
-    if (orderCompleted == true) {
-      widget.onOrderPaid(order);
-    }
-  });
-}
+    ).then((orderCompleted) {
+      if (orderCompleted == true) {
+        widget.onOrderPaid(order);
+      }
+    });
+  }
+
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     final items = (order['items'] as List?) ?? [];
     return items.fold(0.0, (sum, item) {

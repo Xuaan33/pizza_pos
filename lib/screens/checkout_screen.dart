@@ -6,6 +6,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -223,17 +224,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               children: [
                                 // Scrollable section
                                 Expanded(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        _buildOrderHeader(),
-                                        const SizedBox(height: 16),
-                                        _buildOrderItemsList(),
-                                        const SizedBox(height: 24),
-                                      ],
+                                  child: ScrollConfiguration(
+                                    behavior: NoStretchScrollBehavior(),
+                                    child: SingleChildScrollView(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          _buildOrderHeader(),
+                                          const SizedBox(height: 16),
+                                          _buildOrderItemsList(),
+                                          const SizedBox(height: 24),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -281,7 +285,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             child: Row(
               children: [
                 Text(
-                  'Welcome back, $username',
+                  'Table ${widget.order['tableNumber']}',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -976,27 +980,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'Cash Payment',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              content: SingleChildScrollView(
-                child: ListBody(
-                  children: <Widget>[
-                    Text(
-                      'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: amountController,
-                      decoration: const InputDecoration(
-                        labelText: 'Amount Received',
-                        labelStyle: TextStyle(fontWeight: FontWeight.bold),
-                        prefixText: 'RM ',
-                        hintStyle: TextStyle(fontWeight: FontWeight.bold),
-                        border: OutlineInputBorder(),
+              content: ScrollConfiguration(
+                behavior: NoStretchScrollBehavior(),
+                child: SingleChildScrollView(
+                  child: ListBody(
+                    children: <Widget>[
+                      Text(
+                        'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      keyboardType:
-                          TextInputType.numberWithOptions(decimal: true),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: amountController,
+                        decoration: const InputDecoration(
+                          labelText: 'Amount Received',
+                          labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                          prefixText: 'RM ',
+                          hintStyle: TextStyle(fontWeight: FontWeight.bold),
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType:
+                            TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: <Widget>[

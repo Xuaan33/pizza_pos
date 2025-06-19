@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
 import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
@@ -50,7 +51,28 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       unauthenticated: () {
         if (!_isLoggingOut) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                      title: const Text('Session Timeout'),
+                      content: const Text(
+                          'Your session has expired. Please login again.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop(); // Close the dialog
+                            // Navigate to LoginScreen and remove all previous routes
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => LoginPage()),
+                              (Route<dynamic> route) => false,
+                            );
+                          },
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ));
           });
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -86,136 +108,213 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     setState(() => _isOrdersLoading = true);
     try {
       final authState = ref.read(authProvider);
-      authState.whenOrNull(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) async {
-          final response = await PosService().getOrders(
-            posProfile: posProfile,
-          );
 
-          print('Full API response: ${jsonEncode(response)}');
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+        ) async {
+          try {
+            final response =
+                await PosService().getOrders(posProfile: posProfile);
 
-          if (response['message']?['success'] == true) {
-            final List<dynamic> invoices =
-                (response['message']?['message'] as List?) ?? [];
-            print('Found ${invoices.length} invoices');
+            print('Full API response: ${jsonEncode(response)}');
 
-            setState(() {
-              activeOrders = invoices
-                  .map((invoice) {
-                    try {
-                      print('Processing invoice: ${invoice['name']}');
+            if (response['message']?['success'] == true) {
+              final List<dynamic> invoices =
+                  (response['message']?['message'] as List?) ?? [];
+              print('Found ${invoices.length} invoices');
 
-                      // Safely extract items
-                      final items =
-                          (invoice['items'] as List? ?? []).map((item) {
-                        return {
-                          'name':
-                              item['item_name']?.toString() ?? 'Unknown Item',
-                          'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                          'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-                          'item_code': item['item_code']?.toString() ?? '',
-                          'options': item['options'] ?? {},
-                          'option_text': item['option_text'] ?? '',
-                          'custom_serve_later': item['custom_serve_later'],
-                          'custom_item_remarks':
-                              item['custom_item_remarks']?.toString() ?? '',
-                          'custom_variant_info':
-                              item['custom_variant_info']?.toString() ??
-                                  'sohai',
-                        };
-                      }).toList();
+              setState(() {
+                activeOrders = invoices
+                    .map((invoice) {
+                      try {
+                        print('Processing invoice: ${invoice['name']}');
 
-                      // Safely extract tax breakdown
-                      Map<String, dynamic>? taxBreakdown;
-                      final taxes = invoice['taxes'] as List?;
-                      if (taxes != null && taxes.isNotEmpty) {
-                        taxBreakdown = {
-                          'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                          'amount':
-                              (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                          'description':
-                              taxes[0]['account_head']?.toString() ?? 'Tax',
-                        };
-                      }
+                        final items =
+                            (invoice['items'] as List? ?? []).map((item) {
+                          return {
+                            'name':
+                                item['item_name']?.toString() ?? 'Unknown Item',
+                            'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+                            'quantity':
+                                (item['qty'] as num?)?.toDouble() ?? 1.0,
+                            'item_code': item['item_code']?.toString() ?? '',
+                            'options': item['options'] ?? {},
+                            'option_text': item['option_text'] ?? '',
+                            'custom_serve_later': item['custom_serve_later'],
+                            'custom_item_remarks':
+                                item['custom_item_remarks']?.toString() ?? '',
+                            'custom_variant_info':
+                                item['custom_variant_info']?.toString() ?? '',
+                          };
+                        }).toList();
 
-                      // Safely parse dates
-                      DateTime? parseDate(String? dateString) {
-                        try {
-                          return dateString != null
-                              ? DateTime.parse(dateString)
-                              : null;
-                        } catch (e) {
-                          return null;
+                        Map<String, dynamic>? taxBreakdown;
+                        final taxes = invoice['taxes'] as List?;
+                        if (taxes != null && taxes.isNotEmpty) {
+                          taxBreakdown = {
+                            'rate':
+                                (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
+                            'amount':
+                                (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
+                            'description':
+                                taxes[0]['account_head']?.toString() ?? 'Tax',
+                          };
                         }
+
+                        DateTime? parseDate(String? dateString) {
+                          try {
+                            return dateString != null
+                                ? DateTime.parse(dateString)
+                                : null;
+                          } catch (_) {
+                            return null;
+                          }
+                        }
+
+                        return {
+                          'orderId': invoice['name']?.toString() ?? 'Unknown',
+                          'invoiceNumber':
+                              invoice['name']?.toString() ?? 'Unknown',
+                          'status': invoice['status']?.toString() ?? 'Draft',
+                          'orderType':
+                              invoice['custom_order_channel']?.toString() ?? '',
+                          'tableNumber': _extractTableNumber(
+                              invoice['custom_table'] ?? ''),
+                          'items': items,
+                          'subtotal':
+                              (invoice['rounded_total'] as num?)?.toDouble() ??
+                                  0.0,
+                          'tax': taxBreakdown?['amount'] ?? 0.0,
+                          'total':
+                              (invoice['rounded_total'] as num?)?.toDouble() ??
+                                  0.0,
+                          'entryTime':
+                              parseDate(invoice['creation']?.toString()) ??
+                                  DateTime.now(),
+                          'paidTime': invoice['status']?.toString() == 'Paid'
+                              ? parseDate(invoice['modified']?.toString())
+                              : null,
+                          'isPaid': invoice['status']?.toString() == 'Paid',
+                          'paymentMethod':
+                              (invoice['payments'] as List?)?.isNotEmpty == true
+                                  ? invoice['payments'][0]['mode_of_payment']
+                                          ?.toString() ??
+                                      'Cash'
+                                  : 'Cash',
+                          'customerName':
+                              invoice['customer_name']?.toString() ?? 'Guest',
+                          'custom_item_remarks':
+                              invoice['custom_item_remarks']?.toString() ??
+                                  'No remarks',
+                          'taxBreakdown': taxBreakdown,
+                          'paidAmount':
+                              (invoice['paid_amount'] as num?)?.toDouble() ??
+                                  0.0,
+                          'changeAmount':
+                              (invoice['change_amount'] as num?)?.toDouble() ??
+                                  0.0,
+                          'base_rounding_adjustment':
+                              (invoice['base_rounding_adjustment'] as num?)
+                                      ?.toDouble() ??
+                                  0.0,
+                        };
+                      } catch (e) {
+                        print(
+                            'Error processing invoice ${invoice['name']}: $e');
+                        return null;
                       }
+                    })
+                    .where((order) => order != null)
+                    .cast<Map<String, dynamic>>()
+                    .toList();
+              });
 
-                      return {
-                        'orderId': invoice['name']?.toString() ?? 'Unknown',
-                        'invoiceNumber':
-                            invoice['name']?.toString() ?? 'Unknown',
-                        'status': invoice['status']?.toString() ?? 'Draft',
-                        'orderType':
-                            invoice['custom_order_channel']?.toString() ??
-                                'Cibai',
-                        'tableNumber': _extractTableNumber(
-                            invoice['custom_table'] ?? 'sohai'),
-                        'items': items,
-                        'subtotal':
-                            (invoice['rounded_total'] as num?)?.toDouble() ??
-                                0.0,
-                        'tax': taxBreakdown?['amount'] ?? 0.0,
-                        'total':
-                            (invoice['rounded_total'] as num?)?.toDouble() ??
-                                0.0,
-                        'entryTime':
-                            parseDate(invoice['creation']?.toString()) ??
-                                DateTime.now(),
-                        'paidTime': invoice['status']?.toString() == 'Paid'
-                            ? parseDate(invoice['modified']?.toString())
-                            : null,
-                        'isPaid': invoice['status']?.toString() == 'Paid',
-                        'paymentMethod': invoice['payments'][0]
-                                    ['mode_of_payment']
-                                ?.toString() ??
-                            'Cash',
-                        'customerName':
-                            invoice['customer_name']?.toString() ?? 'Guest',
-                        'custom_item_remarks':
-                            invoice['custom_item_remarks']?.toString() ??
-                                'No remarks',
-                        'taxBreakdown': taxBreakdown,
-                        'paidAmount':
-                            (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
-                        'changeAmount':
-                            (invoice['change_amount'] as num?)?.toDouble() ??
-                                0.0,
-                        'base_rounding_adjustment':
-                            (invoice['base_rounding_adjustment'] as num?)
-                                    ?.toDouble() ??
-                                0.0
-                      };
-                    } catch (e) {
-                      print('Error processing invoice ${invoice['name']}: $e');
-                      return null;
-                    }
-                  })
-                  .where((order) => order != null)
-                  .cast<Map<String, dynamic>>()
-                  .toList();
-            });
-
-            print('Successfully mapped ${activeOrders.length} orders');
+              print('Successfully mapped ${activeOrders.length} orders');
+            }
+          } on SessionTimeoutException {
+            await ref.read(authProvider.notifier).logout();
           }
         },
       );
+    } on SessionTimeoutException catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Session Timeout'),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginPage()),
+                    (route) => false,
+                  );
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
       print('Error refreshing orders: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load orders: ${e.toString()}')),
-      );
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text(
+              'Session Timeout',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.white,
+            content: Text(
+              "Your session has expired. Please log in again to continue.",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginPage()),
+                    (route) => false,
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+                child: const Text(
+                  'OK',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
-      setState(() => _isOrdersLoading = false);
+      if (mounted) {
+        setState(() => _isOrdersLoading = false);
+      }
     }
   }
 

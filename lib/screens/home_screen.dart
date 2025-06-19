@@ -49,10 +49,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         widget.existingOrder!['items'] != null) {
       currentOrderItems = (widget.existingOrder!['items'] as List).map((item) {
         // Convert old format to new format if needed
+        double additionalCost = _calculateAdditionalCost(item);
+        double itemPrice = (item['price'] ?? 0) + additionalCost;
         Map<String, dynamic> newItem = {
           'item_code': item['item_code'] ?? '',
           'name': item['item_name'] ?? item['name'] ?? '',
-          'price': (item['price_list_rate'] ?? item['price'] ?? 0).toDouble(),
+          'price': (itemPrice ?? item['price_list_rate'] ?? 0).toDouble(),
           'image': item['image'] ?? 'assets/pizza.png',
           'quantity': (item['qty'] ?? item['quantity'] ?? 1).toDouble(),
           'options': item['options'] ?? {},
@@ -252,7 +254,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 height: 40),
                                             const SizedBox(width: 10),
                                             Text(
-                                              'Welcome back, $username - Table ${widget.tableNumber}',
+                                              'Table ${widget.tableNumber}',
                                               style: const TextStyle(
                                                 fontSize: 24,
                                                 fontWeight: FontWeight.bold,
@@ -287,55 +289,59 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         horizontal: 16.0),
                                     child: _isLoadingItemGroups
                                         ? CircularProgressIndicator()
-                                        : SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            child: Row(
-                                              children: List.generate(
-                                                  itemGroups.length, (index) {
-                                                return Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                          right: 8.0),
-                                                  child: ElevatedButton(
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        _selectedItemGroupIndex =
-                                                            index;
-                                                        _selectedItemGroup =
-                                                            itemGroups[index]
-                                                                ['value'];
-                                                        searchController
-                                                            .clear();
-                                                        searchQuery = '';
-                                                      });
-                                                    },
-                                                    style: ElevatedButton
-                                                        .styleFrom(
-                                                      backgroundColor:
-                                                          _selectedItemGroupIndex ==
-                                                                  index
-                                                              ? Colors.yellow
-                                                              : Colors.white,
-                                                      foregroundColor:
-                                                          Colors.black,
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(20),
+                                        : ScrollConfiguration(
+                                            behavior: NoStretchScrollBehavior(),
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: Row(
+                                                children: List.generate(
+                                                    itemGroups.length, (index) {
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            right: 8.0),
+                                                    child: ElevatedButton(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _selectedItemGroupIndex =
+                                                              index;
+                                                          _selectedItemGroup =
+                                                              itemGroups[index]
+                                                                  ['value'];
+                                                          searchController
+                                                              .clear();
+                                                          searchQuery = '';
+                                                        });
+                                                      },
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            _selectedItemGroupIndex ==
+                                                                    index
+                                                                ? Colors.yellow
+                                                                : Colors.white,
+                                                        foregroundColor:
+                                                            Colors.black,
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(20),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 12,
+                                                        ),
                                                       ),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                        horizontal: 16,
-                                                        vertical: 12,
-                                                      ),
+                                                      child: Text(
+                                                          itemGroups[index]
+                                                              ['name']),
                                                     ),
-                                                    child: Text(
-                                                        itemGroups[index]
-                                                            ['name']),
-                                                  ),
-                                                );
-                                              }),
+                                                  );
+                                                }),
+                                              ),
                                             ),
                                           ),
                                   ),
@@ -367,20 +373,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     child: _isLoadingItems
                                         ? Center(
                                             child: CircularProgressIndicator())
-                                        : GridView.builder(
-                                            padding: const EdgeInsets.all(16.0),
-                                            gridDelegate:
-                                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: 5,
-                                              crossAxisSpacing: 16,
-                                              mainAxisSpacing: 16,
-                                              childAspectRatio: 0.8,
+                                        : ScrollConfiguration(
+                                            behavior: NoStretchScrollBehavior(),
+                                            child: GridView.builder(
+                                              padding:
+                                                  const EdgeInsets.all(16.0),
+                                              gridDelegate:
+                                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 5,
+                                                crossAxisSpacing: 16,
+                                                mainAxisSpacing: 16,
+                                                childAspectRatio: 0.8,
+                                              ),
+                                              itemCount: displayedItems.length,
+                                              itemBuilder: (context, index) {
+                                                return _buildMenuItem(
+                                                    displayedItems[index],
+                                                    index);
+                                              },
                                             ),
-                                            itemCount: displayedItems.length,
-                                            itemBuilder: (context, index) {
-                                              return _buildMenuItem(
-                                                  displayedItems[index], index);
-                                            },
                                           ),
                                   ),
                                 ],
@@ -557,90 +568,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   fontSize: 18,
                 ),
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (item['image'] != null)
-                      Text(
-                        'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Color(0xFFE732A0),
-                        ),
-                      ),
-                    SizedBox(height: 16),
-                    ...variants.map((variant) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            variant['variant_group'],
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+              content: ScrollConfiguration(
+                behavior: NoStretchScrollBehavior(),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (item['image'] != null)
+                        Text(
+                          'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Color(0xFFE732A0),
                           ),
-                          if (variant['required'] == 1)
+                        ),
+                      SizedBox(height: 16),
+                      ...variants.map((variant) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              '(Required)',
+                              variant['variant_group'],
                               style: TextStyle(
-                                color: Colors.red,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 16,
                               ),
                             ),
-                          SizedBox(height: 8),
-                          ...(variant['options'] as List).map((option) {
-                            return Container(
-                              margin: EdgeInsets.only(bottom: 4),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: selectedOptions[
-                                              variant['variant_group']] ==
-                                          option['option']
-                                      ? Color(0xFFE732A0)
-                                      : Colors.grey.shade300,
+                            if (variant['required'] == 1)
+                              Text(
+                                '(Required)',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
                                 ),
-                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: RadioListTile<String>(
-                                title: Text(
-                                  option['option'],
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
+                            SizedBox(height: 8),
+                            ...(variant['options'] as List).map((option) {
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 4),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: selectedOptions[
+                                                variant['variant_group']] ==
+                                            option['option']
+                                        ? Color(0xFFE732A0)
+                                        : Colors.grey.shade300,
                                   ),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                subtitle: option['additional_cost'] > 0
-                                    ? Text(
-                                        '+RM${option['additional_cost'].toStringAsFixed(2)}',
-                                        style: TextStyle(
-                                          color: Color(0xFFE732A0),
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                    : null,
-                                value: option['option'],
-                                groupValue:
-                                    selectedOptions[variant['variant_group']],
-                                activeColor: Color(0xFFE732A0),
-                                onChanged: (value) {
-                                  setState(() {
-                                    selectedOptions[variant['variant_group']] =
-                                        value;
-                                  });
-                                },
-                                dense: true,
-                              ),
-                            );
-                          }).toList(),
-                          SizedBox(height: 16),
-                        ],
-                      );
-                    }).toList(),
-                  ],
+                                child: RadioListTile<String>(
+                                  title: Text(
+                                    option['option'],
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: option['additional_cost'] > 0
+                                      ? Text(
+                                          '+RM${option['additional_cost'].toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            color: Color(0xFFE732A0),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        )
+                                      : null,
+                                  value: option['option'],
+                                  groupValue:
+                                      selectedOptions[variant['variant_group']],
+                                  activeColor: Color(0xFFE732A0),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedOptions[
+                                          variant['variant_group']] = value;
+                                    });
+                                  },
+                                  dense: true,
+                                ),
+                              );
+                            }).toList(),
+                            SizedBox(height: 16),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -1095,11 +1109,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Prepare items with proper structure
         final items = currentOrderItems.map((item) {
           dynamic variantInfo = item['custom_variant_info'];
+          double additionalCost = _calculateAdditionalCost(item);
+          double itemPrice = (item['price'] ?? 0) + additionalCost;
 
           return {
             'item_code': item['item_code'] ?? '',
             'qty': item['quantity'],
-            'price_list_rate': item['price'],
+            'price_list_rate': itemPrice,
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
             if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
@@ -1657,10 +1673,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       if (response['success'] == true) {
         if (mounted) {
-          Navigator.pop(context, {
-            'action': 'deleted',
-            'tableNumber': widget.tableNumber,
-          });
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/',
+            (route) => false,
+            arguments: {
+              'action': 'deleted',
+              'tableNumber': widget.tableNumber,
+            },
+          );
+
           Fluttertoast.showToast(
             msg: "Order Deleted Successfully",
             gravity: ToastGravity.BOTTOM,

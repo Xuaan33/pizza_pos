@@ -338,9 +338,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
       orElse: () => {},
     );
 
-    final unpaidAmount = unpaidOrder.isNotEmpty
-        ? _calculateOrderTotal(unpaidOrder)
-        : table['unpaid_order']?.toDouble();
+    final unpaidAmount = table['unpaid_order']?.toDouble();
 
     final capacity = table['capacity'] ?? 4;
 

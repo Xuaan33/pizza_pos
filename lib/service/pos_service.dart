@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'auth_service.dart';
 
 class PosService {
@@ -126,6 +128,8 @@ class PosService {
       } else {
         throw Exception('Failed to load orders: ${response.statusCode}');
       }
+    } on SessionTimeoutException {
+      rethrow; // Let this propagate up
     } catch (e) {
       print('Error in getOrders: $e');
       throw Exception('Network error: $e');
@@ -338,4 +342,12 @@ class OrderMapper {
       throw Exception('Failed to map payment data');
     }
   }
+}
+
+class SessionTimeoutException implements Exception {
+  final String message;
+  SessionTimeoutException(this.message);
+
+  @override
+  String toString() => message;
 }
