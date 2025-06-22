@@ -946,7 +946,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () {
-              Navigator.of(context).pop(true); // return true to indicate "Exit"
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
               CustomerDisplayController.showDefaultDisplay();
             },
             child: const Text('Exit',
@@ -1116,8 +1116,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (response['success'] == true) {
         if (mounted) {
-          Navigator.of(context).pop(true);
-          MainLayout.of(context)?.selectOrdersTab();
+         Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/',
+            (route) => false,
+            arguments: {
+              'action': 'deleted',
+              'tableNumber': widget.order['tableNumber'],
+            },
+          );
           Fluttertoast.showToast(
             msg: "Order Deleted Successfully",
             gravity: ToastGravity.BOTTOM,
