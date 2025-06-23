@@ -35,6 +35,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<TextEditingController> _itemRemarkControllers = [];
   bool _isLoading = false;
   Map<String, dynamic>? _existingOrder;
+  String baseImageUrl = 'http://shiokpos.byondwave.com';
 
   @override
   void initState() {
@@ -55,7 +56,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'item_code': item['item_code'] ?? '',
           'name': item['item_name'] ?? item['name'] ?? '',
           'price': (itemPrice ?? item['price_list_rate'] ?? 0).toDouble(),
-          'image': item['image'] ?? 'assets/pizza.png',
+          'image': '$baseImageUrl${item['image']}' ?? 'assets/pizza.png',
           'quantity': (item['qty'] ?? item['quantity'] ?? 1).toDouble(),
           'options': item['options'] ?? {},
           'option_text': item['option_text'] ?? '',
@@ -138,6 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final posService = PosService();
       final response = await posService.getAvailableItems();
+      print(response['message']);
 
       if (response['success'] == true) {
         setState(() {
@@ -1233,8 +1235,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const BorderRadius.vertical(top: Radius.circular(15)),
                     child: item['image'] != null
                         ? Image.network(
-                            item['image'],
-                            fit: BoxFit.cover,
+                            '$baseImageUrl${item['image']}',
+                            fit: BoxFit.fill,
+                            height: 70,
                             width: double.infinity,
                             errorBuilder: (context, error, stackTrace) =>
                                 Image.asset(
@@ -1258,7 +1261,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
@@ -1302,7 +1305,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildOrderItem(Map<String, dynamic> item, int index) {
     double basePrice = item['price'];
     double additionalCost = _calculateAdditionalCost(item);
-    double totalPrice = basePrice + additionalCost;
+    double totalPricePerItem = basePrice + additionalCost;
+    double itemSubtotal = totalPricePerItem * item['quantity'];
 
     // Ensure we have a controller for this item
     if (index >= _itemRemarkControllers.length) {
@@ -1310,35 +1314,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .add(TextEditingController(text: item['custom_item_remarks'] ?? ''));
     } else {
       _itemRemarkControllers[index].text = item['custom_item_remarks'] ?? '';
-    }
-
-    // Parse variant info if it exists
-    String variantText = '';
-    // Parse options if variant info exists
-    Map<String, dynamic> options = {};
-    String optionText = '';
-    dynamic customVariantInfo = item['custom_variant_info'];
-
-    // Parse the variant info if it exists
-    if (customVariantInfo != null) {
-      try {
-        // Handle both string (JSON) and direct list formats
-        dynamic parsed = customVariantInfo is String
-            ? jsonDecode(customVariantInfo)
-            : customVariantInfo;
-
-        if (parsed is List && parsed.isNotEmpty) {
-          // New format - list of direct option maps
-          if (parsed[0] is Map) {
-            options = Map<String, dynamic>.from(parsed[0]);
-            optionText =
-                options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-            variantText = optionText;
-          }
-        }
-      } catch (e) {
-        debugPrint('Variant parsing error: $e');
-      }
     }
 
     List<Widget> variantWidgets = [];
@@ -1370,7 +1345,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 borderRadius: BorderRadius.circular(10),
                 child: item['image'] != null
                     ? Image.network(
-                        '${item['image']}',
+                        '$baseImageUrl${item['image']}',
                         width: 60,
                         height: 60,
                         fit: BoxFit.cover,
@@ -1401,27 +1376,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         fontSize: 14,
                       ),
                     ),
-                    if (variantText.isNotEmpty)
+                    if (variantWidgets.isNotEmpty)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (variantWidgets.isNotEmpty)
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: variantWidgets,
-                            ),
-                          if (additionalCost > 0)
-                            Text(
-                              '+RM ${additionalCost.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                color: Color(0xFFE732A0),
-                                fontSize: 12,
-                              ),
-                            ),
-                        ],
+                        children: variantWidgets,
                       ),
+                    SizedBox(
+                      height: 4,
+                    ),
                     Text(
-                      'RM ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                      'RM ${itemSubtotal.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Color(0xFFE732A0),
@@ -1433,83 +1397,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
-          // Quantity controls and delete button moved here
+          // Quantity controls and delete button
           Padding(
             padding: const EdgeInsets.only(top: 8.0, left: 0, right: 0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Quantity controls
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove, size: 16),
-                        onPressed: () => _decreaseQuantity(index),
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            BoxConstraints(minWidth: 30, minHeight: 30),
+                // Serve Later section on the left
+                Row(
+                  children: [
+                    Text(
+                      'Serve Later',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(
-                          '${(item['quantity']).toStringAsFixed(0)}',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                    ),
+                    const SizedBox(width: 10),
+                    Transform.scale(
+                      scale: 0.75,
+                      child: Switch(
+                        value: item['custom_serve_later'] ?? false,
+                        onChanged: (value) {
+                          setState(() {
+                            currentOrderItems[index]['custom_serve_later'] =
+                                value;
+                          });
+                        },
+                        activeColor: Color(0xFFE732A0),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.add, size: 16),
-                        onPressed: () => _increaseQuantity(index),
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            BoxConstraints(minWidth: 30, minHeight: 30),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      size: 20, color: Colors.red),
-                  onPressed: () => _removeItem(index),
+
+                // Quantity control and delete on the right
+                Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove, size: 16),
+                            onPressed: () => _decreaseQuantity(index),
+                            padding: EdgeInsets.zero,
+                            constraints:
+                                BoxConstraints(minWidth: 30, minHeight: 30),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              '${(item['quantity']).toStringAsFixed(0)}',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add, size: 16),
+                            onPressed: () => _increaseQuantity(index),
+                            padding: EdgeInsets.zero,
+                            constraints:
+                                BoxConstraints(minWidth: 30, minHeight: 30),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline,
+                          size: 20, color: Colors.red),
+                      onPressed: () => _removeItem(index),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          // Serve Later section
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0, left: 0, bottom: 4.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  'Serve Later',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Transform.scale(
-                  scale: 0.75,
-                  child: Switch(
-                    value: item['custom_serve_later'] ?? false,
-                    onChanged: (value) {
-                      setState(() {
-                        currentOrderItems[index]['custom_serve_later'] =
-                            value; // Fixed: directly set the value
-                      });
-                    },
-                    activeColor: Color(0xFFE732A0),
-                  ),
-                ),
-              ],
-            ),
-          ),
+
           Padding(
             padding: const EdgeInsets.only(top: 8.0, left: 0, bottom: 8.0),
             child: Container(
