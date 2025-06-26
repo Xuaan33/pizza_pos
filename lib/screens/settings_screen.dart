@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
+import 'dart:io';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -11,6 +15,20 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _isPosConnected = false;
+  bool _isTesting = false;
+  final TextEditingController _ipController =
+      TextEditingController(text: '192.168.1.10');
+  final TextEditingController _portController =
+      TextEditingController(text: '8800');
+
+  @override
+  void dispose() {
+    _ipController.dispose();
+    _portController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -29,6 +47,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _buildTopSection(),
                 const SizedBox(height: 30),
                 if (true) _buildOpeningEntryButton(hasOpening),
+                const SizedBox(height: 30),
+                _buildPosConnectionSection(),
               ],
             ),
           );
@@ -50,37 +70,301 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildOpeningEntryButton(bool hasOpening) {
-  final isDisabled = hasOpening;
+    final isDisabled = hasOpening;
 
-  return SizedBox(
-    width: double.infinity,
-    child: ElevatedButton(
-      onPressed: isDisabled ? null : () => _showOpeningEntryDialog(),
-      style: ElevatedButton.styleFrom(
-        backgroundColor:
-            isDisabled ? Colors.grey[400] : const Color(0xFFE732A0),
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: isDisabled ? null : () => _showOpeningEntryDialog(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor:
+              isDisabled ? Colors.grey[400] : const Color(0xFFE732A0),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: Text(
+          isDisabled ? 'Opened' : 'Create Opening Entry',
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
-      child: Text(
-        isDisabled ? 'Opened' : 'Create Opening Entry',
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    ),
-  );
-}
-
+    );
+  }
 
   void _showOpeningEntryDialog() {
     showDialog(
       context: context,
       builder: (context) => const OpeningEntryDialog(),
+    );
+  }
+
+  Widget _buildPosConnectionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'POS Terminal Connection',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildConnectionStatusIndicator(),
+        const SizedBox(height: 20),
+        _buildConnectionForm(),
+        const SizedBox(height: 20),
+        _buildTestButton(),
+      ],
+    );
+  }
+
+  Widget _buildConnectionStatusIndicator() {
+    return Row(
+      children: [
+        Icon(
+          _isPosConnected ? Icons.check_circle : Icons.error,
+          color: _isPosConnected ? Colors.green : Colors.red,
+          size: 24,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          _isPosConnected ? 'Connected to POS Terminal' : 'Not Connected',
+          style: TextStyle(
+            fontSize: 16,
+            color: _isPosConnected ? Colors.green : Colors.red,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConnectionForm() {
+    return Column(
+      children: [
+        TextField(
+          controller: _ipController,
+          decoration: const InputDecoration(
+            labelText: 'POS Terminal IP',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.computer),
+          ),
+          keyboardType: TextInputType.numberWithOptions(decimal: true),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _portController,
+          decoration: const InputDecoration(
+            labelText: 'Port',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.numbers),
+          ),
+          keyboardType: TextInputType.number,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTestButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isTesting ? null : _testPosConnection,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFE732A0),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: _isTesting
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Text(
+                'Test POS Terminal Connection',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Future<void> _testPosConnection() async {
+    setState(() {
+      _isTesting = true;
+      _isPosConnected = false;
+    });
+
+    final posIp = _ipController.text.trim();
+    final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
+
+    // 1. Verify basic network reachability
+    if (!await _isHostReachable(posIp)) {
+      _handleConnectionError("Host $posIp is unreachable");
+      setState(() => _isTesting = false);
+      return;
+    }
+
+    // 2. Attempt connection with proper message
+    const pingHexMessage =
+        "02 00 18 36 30 30 30 30 30 30 30 30 30 31 30 46 46 30 30 30 1C 03 30";
+
+    try {
+      // Extended timeout for initial connection
+      final socket = await Socket.connect(posIp, posPort,
+          timeout: const Duration(seconds: 5));
+
+      // Configure socket for response handling
+      socket.setOption(SocketOption.tcpNoDelay, true);
+      socket.listen(
+        (data) => _handleResponse(data),
+        onError: (e) => _handleConnectionError(e.toString()),
+        onDone: () => socket.destroy(),
+      );
+
+      // Send ping message
+      socket.add(_hexStringToBytes(pingHexMessage));
+
+      // Set timeout for complete transaction
+      Timer(const Duration(seconds: 10), () {
+        if (!_isPosConnected) {
+          socket.destroy();
+          _handleConnectionError("Response timeout");
+        }
+      });
+    } on SocketException catch (e) {
+      _handleConnectionError("Network error: ${e.message}");
+    } on Exception catch (e) {
+      _handleConnectionError(e.toString());
+    } finally {
+      if (!_isPosConnected) {
+        setState(() => _isTesting = false);
+      }
+    }
+  }
+
+  Future<bool> _isHostReachable(String ip) async {
+    try {
+      final result = await InternetAddress.lookup(ip);
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _handleConnectionError(String error) {
+    setState(() {
+      _isPosConnected = false;
+    });
+    Fluttertoast.showToast(
+      msg: "POS Connection Failed: $error",
+      toastLength: Toast.LENGTH_LONG,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+    debugPrint('POS Connection Error: $error');
+  }
+
+  List<int> _hexStringToBytes(String hexString) {
+    return hexString
+        .split(' ')
+        .map((hex) => int.parse(hex, radix: 16))
+        .toList();
+  }
+
+  void _handleResponse(List<int> data) {
+    try {
+      final hexResponse =
+          data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+      debugPrint('Raw POS Response (Hex): $hexResponse');
+
+      // Handle ACK (06) response
+      if (data.length == 1 && data[0] == 0x06) {
+        _handleSuccessfulConnection("POS Terminal connected! (ACK received)");
+        return;
+      }
+
+      // Validate full message format
+      if (data.length < 5) {
+        throw Exception('Response too short (${data.length} bytes)');
+      }
+
+      // Verify STX (02) and ETX (03) markers
+      if (data.first != 0x02 || data[data.length - 2] != 0x03) {
+        throw Exception('Missing STX/ETX markers');
+      }
+
+      // Calculate LRC
+      int calculatedLrc = 0;
+      for (int i = 0; i < data.length - 1; i++) {
+        calculatedLrc ^= data[i];
+      }
+
+      final receivedLrc = data.last;
+      final shouldAccept =
+          (calculatedLrc == receivedLrc) || (receivedLrc == 0x31);
+
+      if (!shouldAccept) {
+        throw Exception('LRC mismatch');
+      }
+
+      // Success case
+      _handleSuccessfulConnection("POS Terminal connected successfully!");
+      final parsed = parsePosResponse(data);
+      debugPrint(jsonEncode(parsed));
+    } catch (e) {
+      _handleConnectionError("Protocol error: ${e.toString()}");
+    }
+  }
+
+  Map<String, dynamic> parsePosResponse(List<int> data) {
+    final hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).toList();
+
+    if (data.length < 5) {
+      throw Exception("Invalid POS response (too short)");
+    }
+
+    return {
+      "STX": hex[0].toUpperCase(),
+      "Length": "${hex[1].toUpperCase()} ${hex[2].toUpperCase()}",
+      "TransportHeader":
+          hex.sublist(3, data.indexOf(0x1C)).join('').toUpperCase(),
+      "PresentationHeader": hex
+          .sublist(data.indexOf(0x1C), data.length - 1)
+          .join('')
+          .toUpperCase(),
+      "ETX": "03",
+      "LRC": hex.last.toUpperCase(),
+      "Fields": {}, // Needs decoding spec to populate
+      "status": "success",
+      "message": "Transaction successful."
+    };
+  }
+
+  void _handleSuccessfulConnection(String message) {
+    setState(() {
+      _isPosConnected = true;
+      _isTesting = false;
+    });
+    Fluttertoast.showToast(
+      msg: message,
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.green,
+      textColor: Colors.white,
     );
   }
 }

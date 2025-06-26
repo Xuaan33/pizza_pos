@@ -253,6 +253,16 @@ class PosService {
       rethrow;
     }
   }
+
+  Uint8List hexStringToBytes(String hexString) {
+    hexString = hexString.replaceAll(' ', '');
+    final result = Uint8List(hexString.length ~/ 2);
+    for (var i = 0; i < hexString.length; i += 2) {
+      final byte = int.parse(hexString.substring(i, i + 2), radix: 16);
+      result[i ~/ 2] = byte;
+    }
+    return result;
+  }
 }
 
 class OrderMapper {

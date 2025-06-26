@@ -139,7 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final posService = PosService();
       final response = await posService.getAvailableItems();
-      print(response['message']);
+      print(response['message']['items']);
 
       if (response['success'] == true) {
         setState(() {
@@ -1233,22 +1233,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: ClipRRect(
                     borderRadius:
                         const BorderRadius.vertical(top: Radius.circular(15)),
-                    child: item['image'] != null
-                        ? Image.network(
-                            '$baseImageUrl${item['image']}',
-                            fit: BoxFit.fill,
-                            height: 70,
-                            width: double.infinity,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Image.asset(
+                    child: Padding(
+                      padding: const EdgeInsets.all(
+                          8.0), // Adjust the value as needed
+                      child: item['image'] != null
+                          ? Image.network(
+                              '$baseImageUrl${item['image']}',
+                              fit: BoxFit.cover,
+                              height: 70,
+                              width: double.infinity,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Image.network(
+                                item['image'],
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Image.asset(
                               'assets/pizza.png',
                               fit: BoxFit.cover,
+                              height: 70,
+                              width: double.infinity,
                             ),
-                          )
-                        : Image.asset(
-                            'assets/pizza.png',
-                            fit: BoxFit.cover,
-                          ),
+                    ),
                   ),
                 ),
                 Padding(
