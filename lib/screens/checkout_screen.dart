@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
+import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -850,6 +853,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Future<void> _completePayment() async {
     setState(() => _isProcessingPayment = true);
 
+    // Show processing dialog for non-cash payments
+    Completer<void>? dialogCompleter;
+    if (_selectedPaymentMethod != 'Cash' && mounted) {
+      dialogCompleter = Completer<void>();
+      _showPaymentProcessingDialog(context).then((_) {
+        if (!dialogCompleter!.isCompleted) {
+          dialogCompleter.complete();
+        }
+      });
+    }
+
     try {
       final totalAmount = _calculateTotal();
       final List<Map<String, dynamic>> payments = [
@@ -867,60 +881,318 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         throw Exception('Invoice number not available');
       }
 
+      if (_selectedPaymentMethod != 'Cash') {
+        // 1. Generate the purchase hex message
+        final transactionId =
+            'INV${invoiceName.replaceAll(RegExp(r'[^0-9]'), '')}';
+        final paddedTransactionId =
+            transactionId.padRight(20, '0').substring(0, 20);
+        final hexMessage = PosHexGenerator.generatePurchaseHexMessage(
+          paddedTransactionId,
+          totalAmount,
+          '01', // M1 value
+        );
+
+        // 2. Get POS connection details from settings
+        final prefs = await SharedPreferences.getInstance();
+        final posIp = prefs.getString('pos_ip') ?? '192.168.1.10';
+        final posPort = prefs.getInt('pos_port') ?? 8800;
+
+        // 3. Connect to POS terminal with longer timeout
+        final socket = await Socket.connect(posIp, posPort,
+            timeout: const Duration(seconds: 10));
+
+        try {
+          // Set up response handler with timeout
+          final response = await _handlePosTransaction(socket, hexMessage);
+
+          if (response['status'] != 'success') {
+            throw Exception(
+                response['response_text'] ?? 'POS transaction declined');
+          }
+
+          // Add POS response details to payment
+          payments[0]['pos_response'] = response;
+          payments[0]['reference_no'] = response['transaction_id'] ??
+              'POS-${DateTime.now().millisecondsSinceEpoch}';
+        } finally {
+          socket.destroy();
+        }
+      }
+
+      // Rest of your checkout logic...
       final response = await PosService().checkoutOrder(
         invoiceName: invoiceName,
         payments: payments,
       );
 
       if (response['success'] == true) {
-        final paidOrder = OrderMapper.mapPaidOrder(response);
-        final completeOrder = {
-          ...widget.order as Map<String, dynamic>,
-          ...paidOrder,
-          'isPaid': true,
-          'status': 'Paid',
-          'paidTime': DateTime.now().toIso8601String(),
-          'paymentMethod': _selectedPaymentMethod,
-          'net_total': _calculateSubtotal(),
-          'base_rounding_adjustment': _calculateRounding(),
-          'rounded_total': totalAmount,
-          if (_selectedPaymentMethod == 'Cash') ...{
-            'changeAmount': _amountGiven - totalAmount,
-            'paidAmount': _amountGiven,
-          },
-          if (_selectedPaymentMethod != 'Cash') ...{
-            'paidAmount': totalAmount,
-            'changeAmount': 0.0,
-          },
-        };
-
-        MainLayout.of(context)?.handleOrderPaid(completeOrder);
-
+        // Handle successful payment
         if (mounted) {
-          CustomerDisplayController.showDefaultDisplay();
-          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
           Fluttertoast.showToast(
-            msg: "Checkout Successfully",
+            msg: "Payment Successful",
             gravity: ToastGravity.BOTTOM,
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
         }
+
+        // Close the dialog if it exists
+        if (dialogCompleter != null && !dialogCompleter.isCompleted) {
+          Navigator.of(context).pop();
+          dialogCompleter.complete();
+        }
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Payment error: ${e.toString()}')),
+        // Close the dialog if it's still open
+        if (dialogCompleter != null && !dialogCompleter.isCompleted) {
+          Navigator.of(context).pop();
+          dialogCompleter.complete();
+        }
+
+        Fluttertoast.showToast(
+          msg: "Payment Error: ${e.toString()}",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
-      }
-      if (mounted) {
-        Navigator.of(context).pop(false);
       }
     } finally {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
       }
     }
+  }
+
+  Future<Map<String, dynamic>> _handlePosTransaction(
+      Socket socket, String hexMessage) async {
+    final completer = Completer<Map<String, dynamic>>();
+    final responseBuffer = <int>[];
+    bool ackReceived = false;
+    StreamSubscription? subscription;
+
+    subscription = socket.listen(
+      (List<int> data) {
+        debugPrint(
+            '📦 Received data: ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+        // Handle ACK separately
+        if (!ackReceived && data.length == 1 && data[0] == 0x06) {
+          ackReceived = true;
+          debugPrint('✅ Received ACK (0x06), waiting for full response...');
+          return;
+        }
+
+        // Add data to buffer
+        responseBuffer.addAll(data);
+
+        // Check if we have a complete response (STX...ETX)
+        if (ackReceived && responseBuffer.isNotEmpty) {
+          final stxIndex = responseBuffer.indexOf(0x02);
+          final etxIndex = responseBuffer.indexOf(0x03);
+
+          if (stxIndex != -1 && etxIndex != -1 && etxIndex > stxIndex) {
+            debugPrint('📨 Complete response received, parsing...');
+
+            try {
+              // Extract the complete message from STX to ETX
+              final messageData =
+                  responseBuffer.sublist(stxIndex, etxIndex + 1);
+              final response = _parsePosResponse(messageData);
+
+              debugPrint('🎯 Parsed response: $response');
+
+              if (!completer.isCompleted) {
+                subscription?.cancel();
+                completer.complete(response);
+              }
+            } catch (e) {
+              debugPrint('❌ Error parsing response: $e');
+              if (!completer.isCompleted) {
+                subscription?.cancel();
+                completer.completeError(e);
+              }
+            }
+          }
+        }
+      },
+      onError: (error) {
+        debugPrint('❌ Socket error: $error');
+        if (!completer.isCompleted) {
+          subscription?.cancel();
+          completer.completeError(error);
+        }
+      },
+      onDone: () {
+        debugPrint('🔌 Socket connection closed');
+        if (!completer.isCompleted) {
+          subscription?.cancel();
+          completer.completeError(
+              Exception('Socket closed before receiving complete response'));
+        }
+      },
+    );
+
+    // Send the hex message
+    final bytes = _hexStringToBytes(hexMessage);
+    debugPrint(
+        '📤 Sending message: ${bytes.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+    socket.add(bytes);
+
+    return completer.future.timeout(
+      const Duration(seconds: 120),
+      onTimeout: () {
+        subscription?.cancel();
+        throw TimeoutException('POS terminal response timeout');
+      },
+    );
+  }
+
+  Map<String, dynamic> _parsePosResponse(List<int> data) {
+    try {
+      debugPrint(
+          '🔍 Parsing response data: ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+      // Check for complete message (STX...ETX)
+      if (data.length >= 3 &&
+          data.first == 0x02 &&
+          data[data.length - 1] == 0x03) {
+        // Extract the payload (everything between STX and ETX, excluding LRC if present)
+        final payload = data.sublist(1, data.length - 1);
+
+        // Convert to hex string for easier parsing
+        final hexString =
+            payload.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+        debugPrint('📄 Payload hex: $hexString');
+
+        // Try to convert to ASCII for debugging
+        try {
+          final asciiString =
+              String.fromCharCodes(payload.where((b) => b >= 32 && b <= 126));
+          debugPrint('📝 ASCII representation: $asciiString');
+        } catch (e) {
+          debugPrint('⚠️ Could not convert to ASCII: $e');
+        }
+
+        final decoded = _decodeHexResponse(hexString, payload);
+        debugPrint('✅ Decoded response: $decoded');
+
+        return decoded;
+      }
+
+      throw Exception('Invalid POS response format - missing STX/ETX markers');
+    } catch (e) {
+      debugPrint('❌ Parse error: $e');
+      return {
+        'invoice_number': '000000',
+        'response_text': 'Parse error: ${e.toString()}',
+        'status': 'error',
+        'transaction_id': '',
+      };
+    }
+  }
+
+  Map<String, dynamic> _decodeHexResponse(String hexString, List<int> rawData) {
+    try {
+      // This is where you need to implement your specific terminal's response format
+      // Since I don't know your exact terminal protocol, I'll provide a generic example
+
+      // Example: If your terminal returns data in a specific format
+      // You might need to parse specific byte positions or look for field separators
+
+      // For now, let's try to extract some basic information
+      // You should adjust this based on your terminal's documentation
+
+      String invoiceNumber = '000000';
+      String responseText = 'UNKNOWN';
+      String status = 'error';
+      String transactionId = '';
+
+      // Try to parse as ASCII first
+      try {
+        final asciiData =
+            String.fromCharCodes(rawData.where((b) => b >= 32 && b <= 126));
+        debugPrint('🔤 ASCII data for parsing: $asciiData');
+
+        // Look for common patterns in POS responses
+        // This is highly dependent on your terminal's format
+
+        // Example patterns to look for:
+        if (asciiData.contains('APPROVED') || asciiData.contains('00')) {
+          status = 'success';
+          responseText = 'APPROVED';
+        } else if (asciiData.contains('DECLINED')) {
+          status = 'declined';
+          responseText = 'DECLINED';
+        }
+
+        // Try to extract transaction ID or other fields
+        // This is just an example - you'll need to adjust based on your terminal's format
+        final regex = RegExp(r'\d{6,}');
+        final matches = regex.allMatches(asciiData);
+        if (matches.isNotEmpty) {
+          transactionId = matches.first.group(0) ?? '';
+          if (transactionId.length >= 6) {
+            invoiceNumber = transactionId.substring(0, 6);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ ASCII parsing failed: $e');
+      }
+
+      // If ASCII parsing didn't work, try hex parsing
+      if (status == 'error' && hexString.length >= 4) {
+        // Example: Check specific hex positions based on your terminal's protocol
+        // You'll need to adjust these based on your terminal's documentation
+
+        // Some terminals use specific byte positions for response codes
+        // For example, bytes 2-3 might be the response code
+        if (hexString.length >= 4) {
+          final responseCode = hexString.substring(0, 4);
+          switch (responseCode.toLowerCase()) {
+            case '3030': // "00" in ASCII
+              status = 'success';
+              responseText = 'APPROVED';
+              break;
+            case '3031': // "01" in ASCII
+              status = 'declined';
+              responseText = 'DECLINED';
+              break;
+            // Add more response codes as needed
+          }
+        }
+      }
+
+      // Generate transaction ID if not found
+      if (transactionId.isEmpty) {
+        transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+      }
+
+      return {
+        'invoice_number': invoiceNumber,
+        'response_text': responseText,
+        'status': status,
+        'transaction_id': transactionId,
+      };
+    } catch (e) {
+      debugPrint('❌ Decode error: $e');
+      return {
+        'invoice_number': '000000',
+        'response_text': 'Decode error: ${e.toString()}',
+        'status': 'error',
+        'transaction_id': 'ERROR_${DateTime.now().millisecondsSinceEpoch}',
+      };
+    }
+  }
+
+  // Helper function to convert hex string to bytes
+  List<int> _hexStringToBytes(String hexString) {
+    return hexString
+        .split(' ')
+        .map((hex) => int.parse(hex, radix: 16))
+        .toList();
   }
 
   Future<bool> _confirmExit() async {
@@ -1116,7 +1388,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (response['success'] == true) {
         if (mounted) {
-         Navigator.pushNamedAndRemoveUntil(
+          Navigator.pushNamedAndRemoveUntil(
             context,
             '/',
             (route) => false,
@@ -1187,5 +1459,44 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final hour = time.hour > 12 ? time.hour - 12 : time.hour;
     final period = time.hour >= 12 ? 'PM' : 'AM';
     return '${hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')} $period';
+  }
+
+  Future<void> _showPaymentProcessingDialog(BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User must not close dialog manually
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Add your GIF here (make sure to add the GIF to your assets)
+              Image.asset(
+                'assets/gif-do-payment.gif',
+                height: 150,
+                width: 150,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Processing Payment...',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Please wait while we process your payment',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              const CircularProgressIndicator(),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
