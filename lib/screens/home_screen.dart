@@ -467,6 +467,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
                                       _buildOrderSummaryRow('GST (6%)',
                                           'RM ${_calculateGST().toStringAsFixed(2)}'),
+                                      _buildOrderSummaryRow(
+                                          'Rounding', _getRoundingLabel()),
                                       const SizedBox(height: 10),
                                       Column(
                                         children: [
@@ -506,7 +508,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                     const Size.fromHeight(50),
                                               ),
                                               child: Text(
-                                                'Checkout RM ${_calculateTotal().toStringAsFixed(2)}',
+                                                'Checkout RM ${_getRoundedTotal().toStringAsFixed(2)}',
                                                 style: const TextStyle(
                                                   fontSize: 20,
                                                   color: Colors.white,
@@ -1734,5 +1736,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return (item['additional_cost'] as num).toDouble();
     }
     return 0.0;
+  }
+
+  double _getUnroundedTotal() {
+    return _calculateSubtotal() + (_calculateSubtotal() * 0.06); // GST 6%
+  }
+
+  double _getRoundedTotal() {
+    double unroundedTotal = _getUnroundedTotal();
+    double lastDigit = (unroundedTotal * 100) % 10;
+
+    if (lastDigit == 1 || lastDigit == 2) {
+      return (unroundedTotal * 100 - lastDigit) / 100; // Round down
+    } else if (lastDigit == 3 || lastDigit == 4) {
+      return (unroundedTotal * 100 + (5 - lastDigit)) / 100; // Round up to .05
+    } else if (lastDigit == 6 || lastDigit == 7) {
+      return (unroundedTotal * 100 - (lastDigit - 5)) /
+          100; // Round down to .05
+    } else if (lastDigit == 8 || lastDigit == 9) {
+      return (unroundedTotal * 100 + (10 - lastDigit)) / 100; // Round up to .00
+    }
+    return unroundedTotal; // No rounding needed for 0 or 5
+  }
+
+  double _getRoundingDifference() {
+    return _getRoundedTotal() - _getUnroundedTotal();
+  }
+
+  String _getRoundingLabel() {
+    double difference = _getRoundingDifference();
+    if (difference > 0) {
+      return '+ RM ${difference.toStringAsFixed(2)}';
+    } else if (difference < 0) {
+      return '- RM ${difference.abs().toStringAsFixed(2)}';
+    }
+    return '';
   }
 }
