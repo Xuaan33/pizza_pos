@@ -205,7 +205,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'paidTime': invoice['status']?.toString() == 'Paid'
                               ? parseDate(invoice['modified']?.toString())
                               : null,
-                          'isPaid': invoice['status']?.toString() == 'Paid',
+                          'isPaid': invoice['status']?.toString() == 'Paid' || invoice['status']?.toString() == 'Consolidated',
                           'paymentMethod':
                               (invoice['payments'] as List?)?.isNotEmpty == true
                                   ? invoice['payments'][0]['mode_of_payment']
@@ -296,12 +296,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE732A0),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  backgroundColor: const Color(0xFFE732A0),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              ),
                 child: const Text(
                   'OK',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -763,7 +763,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         activeOrders[index]['isPaid'] = true;
         activeOrders[index]['status'] = 'Paid';
       }
-
       // Update table status
       tablesWithSubmittedOrders.remove(tableNumber);
     });

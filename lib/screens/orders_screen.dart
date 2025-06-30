@@ -190,7 +190,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      isDraft ? 'DRAFT' : 'PAID',
+                      '${order['status']?.toString().toUpperCase()}',
                       style: TextStyle(
                         fontSize: 12,
                         color: isDraft ? Colors.blue[800] : Colors.green[800],
@@ -286,7 +286,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            isDraft ? 'DRAFT' : 'PAID',
+                            '${order['status']?.toString().toUpperCase()}',
                             style: TextStyle(
                               color: isDraft
                                   ? Colors.blue[800]

@@ -325,7 +325,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
     );
   }
 
-  // In table_screen.dart, modify _buildTableIcon
   Widget _buildTableIcon(Map<String, dynamic> table) {
     final tableNumber = table['title'];
     final tableNum = int.parse(table['title'].split(' ').last);

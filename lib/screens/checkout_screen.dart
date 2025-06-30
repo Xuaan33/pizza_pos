@@ -70,7 +70,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
           posProfile, branch, paymentMethods, taxes, hasOpening) {
         setState(() {
-          _paymentMethods = paymentMethods;
+          _paymentMethods = paymentMethods.map((method) {
+            return {
+              'name': method['name'],
+              'custom_payment_mode_image': method['custom_payment_mode_image'],
+              'custom_fiuu_m1_value': method['custom_fiuu_m1_value'] ??
+                  '01', // Default to '01' if not provided
+            };
+          }).toList();
           _isLoadingPaymentMethods = false;
         });
       },
@@ -882,7 +889,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
 
       if (_selectedPaymentMethod != 'Cash') {
-        // 1. Generate the purchase hex message
+        // 1. Get the selected payment method's m1 value
+        final selectedMethod = _paymentMethods.firstWhere(
+          (method) => method['name'] == _selectedPaymentMethod,
+          orElse: () =>
+              {'custom_fiuu_m1_value': '01'}, // Fallback to '01' if not found
+        );
+        final m1Value =
+            selectedMethod['custom_fiuu_m1_value']?.toString() ?? '01';
+
+        // 2. Generate the purchase hex message with the correct m1 value
         final transactionId =
             'INV${invoiceName.replaceAll(RegExp(r'[^0-9]'), '')}';
         final paddedTransactionId =
@@ -890,12 +906,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final hexMessage = PosHexGenerator.generatePurchaseHexMessage(
           paddedTransactionId,
           totalAmount,
-          '01', // M1 value
+          m1Value, // Use the m1 value from the payment method
         );
 
-        // 2. Get POS connection details from settings
+        // Rest of your POS terminal communication code...
         final prefs = await SharedPreferences.getInstance();
-        final posIp = prefs.getString('pos_ip') ?? '192.168.1.10';
+        final posIp = prefs.getString('pos_ip') ?? '192.168.1.7';
         final posPort = prefs.getInt('pos_port') ?? 8800;
 
         // 3. Connect to POS terminal with longer timeout
