@@ -303,13 +303,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
-                _buildStatPill(
-                    'Revenue', 'RM${_totalRevenue.toStringAsFixed(2)}'),
-                const SizedBox(width: 8),
-                _buildStatPill(
-                    'Unpaid Orders', _totalUnpaidOrders.toStringAsFixed(2)),
-                const SizedBox(width: 8),
-                _buildStatPill('Tables Free', '$_totalTablesFree'),
+                // _buildStatPill(
+                //     'Revenue', 'RM${_totalRevenue.toStringAsFixed(2)}'),
+                // const SizedBox(width: 8),
+                // _buildStatPill(
+                //     'Unpaid Orders', _totalUnpaidOrders.toStringAsFixed(2)),
+                // const SizedBox(width: 8),
+                // _buildStatPill('Tables Free', '$_totalTablesFree'),
               ],
             ),
           );

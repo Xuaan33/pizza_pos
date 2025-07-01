@@ -314,23 +314,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                           ],
                                         ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black,
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
+                                        // Container(
+                                        //   padding: const EdgeInsets.symmetric(
+                                        //       horizontal: 12, vertical: 6),
+                                        //   decoration: BoxDecoration(
+                                        //     color: Colors.black,
+                                        //     borderRadius:
+                                        //         BorderRadius.circular(20),
+                                        //   ),
+                                        //   child: Text(
+                                        //     'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
+                                        //     style: const TextStyle(
+                                        //       fontSize: 16,
+                                        //       color: Colors.white,
+                                        //       fontWeight: FontWeight.bold,
+                                        //     ),
+                                        //   ),
+                                        // ),
                                       ],
                                     ),
                                   ),

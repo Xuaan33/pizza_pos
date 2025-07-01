@@ -235,27 +235,27 @@ class _TableScreenState extends ConsumerState<TableScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Row(
-                children: [
-                  _buildStatPill(
-                    'Revenue',
-                    'RM ${_totalRevenue.toStringAsFixed(2)}',
-                    Colors.black,
-                  ),
-                  const SizedBox(width: 10),
-                  _buildStatPill(
-                    'Unpaid Orders',
-                    '${(_totalUnpaidOrders).toStringAsFixed(2)}',
-                    Colors.black,
-                  ),
-                  const SizedBox(width: 10),
-                  _buildStatPill(
-                    'Tables Free',
-                    '$_totalTablesFree',
-                    Colors.black,
-                  ),
-                ],
-              ),
+              // Row(
+              //   children: [
+              //     _buildStatPill(
+              //       'Revenue',
+              //       'RM ${_totalRevenue.toStringAsFixed(2)}',
+              //       Colors.black,
+              //     ),
+              //     const SizedBox(width: 10),
+              //     _buildStatPill(
+              //       'Unpaid Orders',
+              //       '${(_totalUnpaidOrders).toStringAsFixed(2)}',
+              //       Colors.black,
+              //     ),
+              //     const SizedBox(width: 10),
+              //     _buildStatPill(
+              //       'Tables Free',
+              //       '$_totalTablesFree',
+              //       Colors.black,
+              //     ),
+              //   ],
+              // ),
             ],
           ),
         );
