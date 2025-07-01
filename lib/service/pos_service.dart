@@ -78,6 +78,25 @@ class PosService {
     );
   }
 
+  Future<Map<String, dynamic>> getStockQuantity({
+    required String posProfile,
+    required String itemCode,
+    String? barcode,
+    String? date,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      'item_code': itemCode,
+      if (barcode != null) 'barcode': barcode,
+      if (date != null) 'date': date,
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.get_stock_qty?$queryString',
+    );
+  }
+
   Future<Map<String, dynamic>> getOrders({
     required String posProfile,
     String? search,

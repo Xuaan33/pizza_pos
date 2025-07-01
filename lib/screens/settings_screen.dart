@@ -6,6 +6,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -17,16 +18,74 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isPosConnected = false;
   bool _isTesting = false;
+  bool _isSaving = false; // Add this for save button loading state
   final TextEditingController _ipController =
       TextEditingController(text: '192.168.1.10');
   final TextEditingController _portController =
       TextEditingController(text: '8800');
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedConfig(); // Load saved config when widget initializes
+  }
+
+  @override
   void dispose() {
     _ipController.dispose();
     _portController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _ipController.text = prefs.getString('pos_ip') ?? '192.168.1.10';
+      _portController.text = prefs.getString('pos_port') ?? '8800';
+    });
+  }
+
+  Future<void> _saveConfig() async {
+    setState(() => _isSaving = true);
+
+    final posIp = _ipController.text.trim();
+    final posPort = _portController.text.trim();
+
+    if (posIp.isEmpty || posPort.isEmpty) {
+      Fluttertoast.showToast(
+        msg: "Please enter both IP and Port",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      setState(() => _isSaving = false);
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pos_ip', posIp);
+      await prefs.setInt('pos_port', int.tryParse(posPort) ?? 8800);
+
+      Fluttertoast.showToast(
+        msg: "Configuration saved successfully",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save configuration: $e",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -163,6 +222,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             prefixIcon: Icon(Icons.numbers),
           ),
           keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isSaving ? null : _saveConfig,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50), // Green color for save
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Save Configuration',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
         ),
       ],
     );

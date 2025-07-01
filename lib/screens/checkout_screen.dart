@@ -294,6 +294,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             child: Row(
               children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back),
+                  onPressed: () => _confirmExit(),
+                ),
                 Text(
                   'Table ${widget.order['tableNumber']}',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -482,20 +486,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           Expanded(
             child: Row(
               children: [
-                Expanded(
-                  child: _buildActionButton(
-                    'Split Bill',
-                    const Color(
-                        0xFF00203E), // Dark blue color like in the image
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildActionButton(
-                    'Transfer Table',
-                    const Color(0xFFFB8A3F), // Orange color like in the image
-                  ),
-                ),
+                // Expanded(
+                //   child: _buildActionButton(
+                //     'Split Bill',
+                //     const Color(
+                //         0xFF00203E),
+                //   ),
+                // ),
+                // const SizedBox(width: 10),
+                // Expanded(
+                //   child: _buildActionButton(
+                //     'Transfer Table',
+                //     const Color(0xFFFB8A3F),
+
+                //   ),
+                // ),
               ],
             ),
           ),
@@ -503,10 +508,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           Expanded(
             child: Row(
               children: [
+                // Expanded(
+                //   child: _buildActionButton(
+                //     'Pay Later',
+                //     const Color(0xFF4E73F8), // Blue color like in the image
+                //   ),
+                // ),
                 Expanded(
                   child: _buildActionButton(
-                    'Pay Later',
-                    const Color(0xFF4E73F8), // Blue color like in the image
+                    'Split Bill',
+                    const Color(0xFF00203E),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -549,10 +560,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       children: [
         Row(
           children: [
-            IconButton(
-              icon: Icon(Icons.arrow_back),
-              onPressed: () => _confirmExit(),
-            ),
             if (widget.order['invoiceNumber'] != null)
               GestureDetector(
                 onTap: _deleteOrder,
@@ -911,7 +918,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
         // Rest of your POS terminal communication code...
         final prefs = await SharedPreferences.getInstance();
-        final posIp = prefs.getString('pos_ip') ?? '192.168.1.7';
+        final posIp = prefs.getString('pos_ip') ?? '192.168.1.10';
         final posPort = prefs.getInt('pos_port') ?? 8800;
 
         // 3. Connect to POS terminal with longer timeout
@@ -1025,6 +1032,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 completer.complete(response);
               }
             } catch (e) {
+              final messageData =
+                  responseBuffer.sublist(stxIndex, etxIndex + 1);
+              final response = _parsePosResponse(messageData);
+
+              debugPrint('🎯 Parsed response: $response');
               debugPrint('❌ Error parsing response: $e');
               if (!completer.isCompleted) {
                 subscription?.cancel();
@@ -1136,23 +1148,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         // This is highly dependent on your terminal's format
 
         // Example patterns to look for:
-        if (asciiData.contains('APPROVED') || asciiData.contains('00')) {
+        if (asciiData.contains('APPROVED')) {
           status = 'success';
           responseText = 'APPROVED';
-        } else if (asciiData.contains('DECLINED')) {
-          status = 'declined';
-          responseText = 'DECLINED';
+        } else if (asciiData.contains('TRANSACTION NOT SUCCESS')) {
+          status = 'error';
+          responseText = 'TRANSACTION NOT SUCCESS';
         }
 
-        // Try to extract transaction ID or other fields
-        // This is just an example - you'll need to adjust based on your terminal's format
-        final regex = RegExp(r'\d{6,}');
-        final matches = regex.allMatches(asciiData);
-        if (matches.isNotEmpty) {
-          transactionId = matches.first.group(0) ?? '';
-          if (transactionId.length >= 6) {
-            invoiceNumber = transactionId.substring(0, 6);
-          }
+        // Try to extract invoice number from the response
+        // This depends on your terminal's specific response format
+        // Example: Look for a 6-digit number that might be the invoice number
+        final invoiceRegex = RegExp(r'\b\d{6}\b');
+        final invoiceMatch = invoiceRegex.firstMatch(asciiData);
+        if (invoiceMatch != null) {
+          invoiceNumber = invoiceMatch.group(0)!;
+        }
+
+        // Try to extract transaction ID - look for a longer numeric sequence
+        final txnRegex = RegExp(r'\b\d{8,}\b');
+        final txnMatch = txnRegex.firstMatch(asciiData);
+        if (txnMatch != null) {
+          transactionId = txnMatch.group(0)!;
+        } else {
+          // Fallback to timestamp if no transaction ID found
+          transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
         }
       } catch (e) {
         debugPrint('⚠️ ASCII parsing failed: $e');

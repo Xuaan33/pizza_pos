@@ -36,6 +36,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _existingOrder;
   String baseImageUrl = 'http://shiokpos.byondwave.com';
+  Map<String, bool> _itemStockStatus = {}; // key: item_code, value: isInStock
+  bool _isLoadingStock = false;
 
   @override
   void initState() {
@@ -147,6 +149,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               List<Map<String, dynamic>>.from(response['message']['items']);
           _isLoadingItems = false;
         });
+        // Check stock after items are loaded
+        _checkStockForItems();
       } else {
         throw Exception('Failed to load available items');
       }
@@ -175,6 +179,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _itemRemarkControllers[i].text;
       }
     }
+  }
+
+  // Add to _HomeScreenState class
+  Future<void> _checkStockForItems() async {
+    if (_isLoadingStock) return;
+
+    setState(() => _isLoadingStock = true);
+
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening) async {
+        try {
+          final newStockStatus = <String, bool>{};
+
+          for (var item in availableItems) {
+            try {
+              final response = await PosService().getStockQuantity(
+                posProfile: posProfile,
+                itemCode: item['item_code'],
+              );
+
+              if (response['success'] == true) {
+                final qty = response['message']['qty'] as num? ?? 0;
+                newStockStatus[item['item_code']] = qty > 0;
+              } else {
+                newStockStatus[item['item_code']] =
+                    true; // Assume in stock if API fails
+              }
+            } catch (e) {
+              debugPrint('Error checking stock for ${item['item_code']}: $e');
+              newStockStatus[item['item_code']] =
+                  true; // Assume in stock on error
+            }
+          }
+
+          setState(() {
+            _itemStockStatus = newStockStatus;
+          });
+        } catch (e) {
+          debugPrint('Error checking stock: $e');
+        } finally {
+          setState(() => _isLoadingStock = false);
+        }
+      },
+    );
   }
 
   @override
@@ -1218,10 +1268,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
+    final isInStock = _itemStockStatus[item['item_code']] ?? true;
+
     return GestureDetector(
-      onTap: () {
-        _showItemOptionsDialog(item);
-      },
+      onTap: isInStock
+          ? () {
+              _showItemOptionsDialog(item);
+            }
+          : null,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
@@ -1244,6 +1298,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               fit: BoxFit.cover,
                               height: 70,
                               width: double.infinity,
+                              color: isInStock
+                                  ? null
+                                  : Colors.grey.withOpacity(0.5),
+                              colorBlendMode: BlendMode.saturation,
                               errorBuilder: (context, error, stackTrace) =>
                                   Image.network(
                                 item['image'],
@@ -1284,26 +1342,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ],
             ),
+            if (!isInStock) _buildOutOfStockOverlay(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSoldOutOverlay() {
+  // Add this new method
+  Widget _buildOutOfStockOverlay() {
     return Positioned.fill(
       child: Container(
         decoration: BoxDecoration(
           color: Colors.black54,
           borderRadius: BorderRadius.circular(15),
         ),
-        child: const Center(
-          child: Text(
-            'SOLD OUT',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'OUT OF STOCK',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
         ),
       ),
