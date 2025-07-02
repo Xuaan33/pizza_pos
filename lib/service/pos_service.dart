@@ -9,7 +9,7 @@ class PosService {
   static const String _baseUrl = 'https://shiokpos.byondwave.com/api/method';
 
   // Helper method for common request handling
-  Future<Map<String, dynamic>> _makeRequest({
+  Future<Map<String, dynamic>> makeRequest({
     required String endpoint,
     Map<String, dynamic>? body,
     String method = 'GET',
@@ -49,31 +49,31 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getFloorsAndTables(String branch) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_floor_and_tables?branch=$branch',
     );
   }
 
   Future<Map<String, dynamic>> getAvailableItems() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_available_items',
     );
   }
 
   Future<Map<String, dynamic>> getItemGroups() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_item_groups',
     );
   }
 
   Future<Map<String, dynamic>> getPaymentMethods(String posProfile) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_mode_of_payment_img?pos_profile=$posProfile',
     );
   }
 
   Future<Map<String, dynamic>> getTodayInfo() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.calculate_today_info',
     );
   }
@@ -92,7 +92,7 @@ class PosService {
     };
 
     final queryString = Uri(queryParameters: params).query;
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_stock_qty?$queryString',
     );
   }
@@ -166,7 +166,7 @@ class PosService {
     String? table,
     String? orderChannel,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.submit_order',
       method: 'POST',
       body: {
@@ -185,7 +185,7 @@ class PosService {
     required String invoiceName,
     required List<Map<String, dynamic>> payments,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.checkout',
       method: 'POST',
       body: {
@@ -199,7 +199,7 @@ class PosService {
     required String posProfile,
     required List<Map<String, dynamic>> balanceDetails,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.create_opening_voucher',
       method: 'POST',
       body: {
