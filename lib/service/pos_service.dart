@@ -9,7 +9,7 @@ class PosService {
   static const String _baseUrl = 'https://shiokpos.byondwave.com/api/method';
 
   // Helper method for common request handling
-  Future<Map<String, dynamic>> _makeRequest({
+  Future<Map<String, dynamic>> makeRequest({
     required String endpoint,
     Map<String, dynamic>? body,
     String method = 'GET',
@@ -49,31 +49,31 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getFloorsAndTables(String branch) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_floor_and_tables?branch=$branch',
     );
   }
 
   Future<Map<String, dynamic>> getAvailableItems() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_available_items',
     );
   }
 
   Future<Map<String, dynamic>> getItemGroups() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_item_groups',
     );
   }
 
   Future<Map<String, dynamic>> getPaymentMethods(String posProfile) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_mode_of_payment_img?pos_profile=$posProfile',
     );
   }
 
   Future<Map<String, dynamic>> getTodayInfo() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.calculate_today_info',
     );
   }
@@ -92,7 +92,7 @@ class PosService {
     };
 
     final queryString = Uri(queryParameters: params).query;
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_stock_qty?$queryString',
     );
   }
@@ -167,7 +167,7 @@ class PosService {
     String? orderChannel,
     String? custom_user_voucher, // Add this parameter
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.submit_order',
       method: 'POST',
       body: {
@@ -200,7 +200,7 @@ class PosService {
       }
     }
 
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.checkout',
       method: 'POST',
       body: {
@@ -228,7 +228,7 @@ class PosService {
     required String posProfile,
     required List<Map<String, dynamic>> balanceDetails,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.create_opening_voucher',
       method: 'POST',
       body: {
@@ -242,7 +242,7 @@ class PosService {
   Future<Map<String, dynamic>> requestClosingVoucher({
     required String posProfile,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.request_closing_voucher',
       method: 'POST',
       body: {
@@ -255,7 +255,7 @@ class PosService {
     required String name,
     required List<Map<String, dynamic>> paymentReconciliation,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.submit_closing_voucher',
       method: 'POST',
       body: {
@@ -330,7 +330,7 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> validateVoucher(String voucherCode) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.validate_user_voucher',
       method: 'POST',
       body: {
@@ -340,7 +340,7 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> cancelOrder(String orderName) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.cancel_order',
       method: 'POST',
       body: {
@@ -361,13 +361,13 @@ class PosService {
 
 // Variant Group Methods
   Future<Map<String, dynamic>> getVariantGroups() async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_variant_groups',
     );
   }
 
   Future<Map<String, dynamic>> getVariantGroup(String variantGroup) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_variant_group?variant_group=$variantGroup',
     );
   }
@@ -378,7 +378,7 @@ class PosService {
     int requiredNo = 1,
     int optionRequiredNo = 1,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.create_variant_group',
       method: 'POST',
       body: {
@@ -396,7 +396,7 @@ class PosService {
     required int requiredNo,
     required int optionRequiredNo,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.update_variant_group',
       method: 'POST',
       body: {
@@ -410,7 +410,7 @@ class PosService {
 
 // Item Methods
   Future<Map<String, dynamic>> getItem(String itemCode) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_item?item_code=$itemCode',
     );
   }
@@ -423,7 +423,7 @@ class PosService {
     String? description,
     String? imageUrl,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.create_item',
       method: 'POST',
       body: {
@@ -446,7 +446,7 @@ class PosService {
     String? description,
     String? imageUrl,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.update_item',
       method: 'POST',
       body: {
@@ -463,7 +463,7 @@ class PosService {
 
 // Item Group Methods (some may already exist)
   Future<Map<String, dynamic>> getItemGroup(String itemGroup) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.get_item_group?item_group=$itemGroup',
     );
   }
@@ -473,7 +473,7 @@ class PosService {
     String? parentItemGroup,
     int isGroup = 0,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.create_item_group',
       method: 'POST',
       body: {
@@ -490,7 +490,7 @@ class PosService {
     String? parentItemGroup,
     int? isGroup,
   }) async {
-    return _makeRequest(
+    return makeRequest(
       endpoint: 'shiok_pos.api.update_item_group',
       method: 'POST',
       body: {

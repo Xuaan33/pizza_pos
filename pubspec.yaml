@@ -46,6 +46,7 @@ dependencies:
   pdf: ^3.10.0
   path_provider: ^2.1.1
   image: ^4.5.4
+  syncfusion_flutter_charts: ^30.1.38
 
 
 
