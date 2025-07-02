@@ -428,7 +428,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         onOrderPaid: markOrderAsPaid,
         activeOrders: activeOrders,
       ),
-      DeliveryScreen(),
+      // DeliveryScreen(),
       OrdersScreen(
         orders: activeOrders,
         isLoading: _isOrdersLoading,
@@ -483,7 +483,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               ),
             ),
           ),
-          _buildNavItem(1, 'assets/img-sidebar-delivery.png', 'Delivery'),
+          // _buildNavItem(1, 'assets/img-sidebar-delivery.png', 'Delivery'),
           _buildNavItem(2, 'assets/img-sidebar-orders.png', 'Orders'),
           _buildNavItem(3, 'assets/img-sidebar-dashboard.png', 'Dashboard'),
           _buildNavItem(4, 'assets/img-sidebar-settings.png', 'Settings'),

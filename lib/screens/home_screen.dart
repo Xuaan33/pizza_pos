@@ -1046,6 +1046,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             });
 
             CustomerDisplayController.showDefaultDisplay();
+            Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/',
+            (route) => false,
+            arguments: {
+              'action': 'deleted',
+              'tableNumber': widget.tableNumber,
+            },
+          );
 
             Fluttertoast.showToast(
               msg: "Order Submitted",
@@ -1835,6 +1844,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return '+ RM ${difference.toStringAsFixed(2)}';
     } else if (difference < 0) {
       return '- RM ${difference.abs().toStringAsFixed(2)}';
+    } else if (difference == 0){
+      return 'RM 0.00';
     }
     return '';
   }
