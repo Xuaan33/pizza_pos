@@ -203,6 +203,8 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
 
       //to be confirmed
       if (response['message']["status"] == "Open") {
+
+        ref.read(authProvider.notifier).markOpeningCreated();
         if (mounted) {
           Navigator.pop(context);
           Fluttertoast.showToast(

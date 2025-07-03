@@ -205,7 +205,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'paidTime': invoice['status']?.toString() == 'Paid'
                               ? parseDate(invoice['modified']?.toString())
                               : null,
-                          'isPaid': invoice['status']?.toString() == 'Paid' || invoice['status']?.toString() == 'Consolidated',
+                          'isPaid': invoice['status']?.toString() == 'Paid' ||
+                              invoice['status']?.toString() == 'Consolidated',
                           'paymentMethod':
                               (invoice['payments'] as List?)?.isNotEmpty == true
                                   ? invoice['payments'][0]['mode_of_payment']
@@ -537,8 +538,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               child: Image.asset(
                 imagePath,
                 color: isSelected ? Colors.pink : const Color(0xFF555555),
-                width: index == 2 ? 50 : 40, // adjust image size for index 2
-                height: index == 2 ? 50 : 40,
+                // width: index == 2 ? 50 : 40, // adjust image size for index 2
+                // height: index == 2 ? 50 : 40,
+                width: index == 1 ? 50 : 40, // adjust image size for index 2
+                height: index == 1 ? 50 : 40,
               ),
             ),
             const SizedBox(height: 10),
@@ -774,6 +777,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   void selectOrdersTab() {
     setState(() {
       _selectedTabIndex = 2; // Orders screen index
+    });
+  }
+
+  // Add this method to MainLayoutState class
+  void setSelectedTabIndex(int index) {
+    setState(() {
+      _selectedTabIndex = index;
     });
   }
 

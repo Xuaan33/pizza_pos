@@ -49,7 +49,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         fullName: fullName ?? username,
         posProfile: posProfile,
         branch: branch,
-        paymentMethods: paymentMethodsJson != null 
+        paymentMethods: paymentMethodsJson != null
             ? List<Map<String, dynamic>>.from(jsonDecode(paymentMethodsJson))
             : [],
         taxes: taxesJson != null
@@ -63,46 +63,85 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> login(String username, String password) async {
-  try {
-    final response = await AuthService().login(username, password);
+    try {
+      final response = await AuthService().login(username, password);
 
-    if (response['success'] == true) {
-      final prefs = await SharedPreferences.getInstance();
+      if (response['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
 
-      await prefs.setString('sid', response['sid']);
-      await prefs.setString('api_key', response['api_key']);
-      await prefs.setString('api_secret', response['api_secret']);
-      await prefs.setString('username', response['username']);
-      await prefs.setString('email', response['email']);
-      await prefs.setString('full_name', response['full_name']);
-      await prefs.setString('pos_profile', response['pos_profile']);
-      await prefs.setString('branch', response['branch']);
-      await prefs.setString('payment_methods', jsonEncode(response['mode_of_payment']));
-      await prefs.setString('taxes', jsonEncode(response['taxes']));
-      await prefs.setBool('has_opening', response['has_opening']);
+        await prefs.setString('sid', response['sid']);
+        await prefs.setString('api_key', response['api_key']);
+        await prefs.setString('api_secret', response['api_secret']);
+        await prefs.setString('username', response['username']);
+        await prefs.setString('email', response['email']);
+        await prefs.setString('full_name', response['full_name']);
+        await prefs.setString('pos_profile', response['pos_profile']);
+        await prefs.setString('branch', response['branch']);
+        await prefs.setString(
+            'payment_methods', jsonEncode(response['mode_of_payment']));
+        await prefs.setString('taxes', jsonEncode(response['taxes']));
+        await prefs.setBool('has_opening', response['has_opening']);
+        await prefs.setString('last_login', DateTime.now().toIso8601String());
 
-      state = AuthState.authenticated(
-        sid: response['sid'],
-        apiKey: response['api_key'],
-        apiSecret: response['api_secret'],
-        username: response['username'],
-        email: response['email'],
-        fullName: response['full_name'],
-        posProfile: response['pos_profile'],
-        branch: response['branch'],
-        paymentMethods: List<Map<String, dynamic>>.from(response['mode_of_payment']),
-        taxes: List<Map<String, dynamic>>.from(response['taxes']),
-        hasOpening: response['has_opening'],
-      );
-    } else {
+        state = AuthState.authenticated(
+          sid: response['sid'],
+          apiKey: response['api_key'],
+          apiSecret: response['api_secret'],
+          username: response['username'],
+          email: response['email'],
+          fullName: response['full_name'],
+          posProfile: response['pos_profile'],
+          branch: response['branch'],
+          paymentMethods:
+              List<Map<String, dynamic>>.from(response['mode_of_payment']),
+          taxes: List<Map<String, dynamic>>.from(response['taxes']),
+          hasOpening: response['has_opening'],
+        );
+      } else {
+        state = const AuthState.unauthenticated();
+        throw Exception(response['message'] ?? 'Login failed');
+      }
+    } catch (e) {
       state = const AuthState.unauthenticated();
-      throw Exception(response['message'] ?? 'Login failed');
+      rethrow;
     }
-  } catch (e) {
-    state = const AuthState.unauthenticated();
-    rethrow;
   }
-}
+
+  Future<void> updateOpeningStatus(bool hasOpening) async {
+    state.maybeWhen(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, _) async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('has_opening', hasOpening);
+
+        // Update state
+        state = AuthState.authenticated(
+          sid: sid,
+          apiKey: apiKey,
+          apiSecret: apiSecret,
+          username: username,
+          email: email,
+          fullName: fullName,
+          posProfile: posProfile,
+          branch: branch,
+          paymentMethods: paymentMethods,
+          taxes: taxes,
+          hasOpening: hasOpening,
+        );
+      },
+      orElse: () {},
+    );
+  }
+
+  // Add method to mark opening as created
+  Future<void> markOpeningCreated() async {
+    await updateOpeningStatus(true);
+  }
+
+  // Add method to mark opening as closed (for next day)
+  Future<void> markOpeningClosed() async {
+    await updateOpeningStatus(false);
+  }
 
   Future<void> logout() async {
     state = const AuthState.unauthenticated();

@@ -95,8 +95,11 @@ class ReceiptPrinter {
       );
     } catch (e) {
       Navigator.of(context).pop();
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Failed to print receipt: $e')),
+      Fluttertoast.showToast(
+        msg: "Failed to print receipt: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }

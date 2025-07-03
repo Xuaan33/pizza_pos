@@ -148,29 +148,97 @@ class _TableScreenState extends ConsumerState<TableScreen>
   }
 
   void _handleTableTap(Map<String, dynamic> table) {
-    // Find the existing unpaid order for this table
-    var existingOrder = widget.activeOrders.firstWhere(
-      (order) =>
-          order['tableNumber'] == int.parse(table['title'].split(' ').last) &&
-          !order['isPaid'],
-      orElse: () => {},
-    );
+    final authState = ref.read(authProvider);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(
-          tableNumber: int.parse(table['title'].split(' ').last),
-          existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
-        ),
-      ),
-    ).then((result) {
-      if (result != null) {
-        _handleOrderResult(int.parse(table['title'].split(' ').last), result);
-      }
-    });
+    authState.when(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening) {
+        if (!hasOpening) {
+          // Show dialog if no opening entry exists
+          _showOpeningRequiredDialog();
+          return;
+        }
+
+        // Proceed with normal table tap handling
+        var existingOrder = widget.activeOrders.firstWhere(
+          (order) =>
+              order['tableNumber'] ==
+                  int.parse(table['title'].split(' ').last) &&
+              !order['isPaid'],
+          orElse: () => {},
+        );
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              tableNumber: int.parse(table['title'].split(' ').last),
+              existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
+            ),
+          ),
+        ).then((result) {
+          if (result != null) {
+            _handleOrderResult(
+                int.parse(table['title'].split(' ').last), result);
+          }
+        });
+      },
+      unauthenticated: () {
+        // Handle unauthenticated state if needed
+      },
+      initial: () {
+        // Handle initial state if needed
+      },
+    );
   }
 
+  void _showOpeningRequiredDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false, // User must tap button to close
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text(
+        'Opening Entry Required',
+        style: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      content: const Text(
+        'Please create an opening entry before taking any orders. '
+        'You can create one in the Settings screen.',
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(dialogContext); // Close the dialog
+            // Use the original context (not dialogContext) to find MainLayout
+            final mainLayout = MainLayout.of(context);
+            if (mainLayout != null) {
+              mainLayout.setSelectedTabIndex(3);
+            } else {
+              print('MainLayout.of(context) returned null');
+            }
+          },
+          style: TextButton.styleFrom(
+            backgroundColor: const Color(0xFFE732A0),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+          child: const Text(
+            'Go to Settings',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {

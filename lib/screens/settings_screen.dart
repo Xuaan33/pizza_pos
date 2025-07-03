@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -105,7 +107,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 _buildTopSection(),
                 const SizedBox(height: 30),
-                if (true) _buildOpeningEntryButton(hasOpening),
+                hasOpening
+                    ? _buildClosingEntryButton()
+                    : _buildOpeningEntryButton(hasOpening),
                 const SizedBox(height: 30),
                 _buildPosConnectionSection(),
               ],
@@ -160,6 +164,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => const OpeningEntryDialog(),
     );
+  }
+
+  Widget _buildClosingEntryButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () => _showClosingEntryDialog(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFE732A0),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: const Text(
+          'Create Closing Entry',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showClosingEntryDialog() async {
+    try {
+      final authState = ref.read(authProvider);
+
+      await authState.whenOrNull(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening) async {
+          final response = await PosService().requestClosingVoucher(
+            posProfile: posProfile,
+          );
+
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => ClosingEntryDialog(closingData: response),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: "Error requesting closing data: ${e.toString()}",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
   }
 
   Widget _buildPosConnectionSection() {

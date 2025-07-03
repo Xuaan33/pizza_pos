@@ -209,6 +209,33 @@ class PosService {
     );
   }
 
+  // Add to PosService class
+  Future<Map<String, dynamic>> requestClosingVoucher({
+    required String posProfile,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.request_closing_voucher',
+      method: 'POST',
+      body: {
+        'pos_profile': posProfile,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> submitClosingVoucher({
+    required String name,
+    required List<Map<String, dynamic>> paymentReconciliation,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.submit_closing_voucher',
+      method: 'POST',
+      body: {
+        'name': name,
+        'payment_reconciliation': paymentReconciliation,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> deleteOrder(String orderName) async {
     try {
       final token = await AuthService.getAuthToken();
