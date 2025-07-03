@@ -631,13 +631,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       if (item['image'] != null)
                         Text(
-                          'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Color(0xFFE732A0),
-                          ),
-                        ),
+                            'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Color(0xFFE732A0),
+                            )),
                       SizedBox(height: 16),
                       ...variants.map((variant) {
                         return Column(
@@ -791,8 +790,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
               variantInfo.add({
                 'variant_group': variantGroup['variant_group'],
-                'option': selectedOption,
-                'additional_cost': optionCost,
+                'options': [
+                  {
+                    'option': selectedOption,
+                    'additional_cost': optionCost,
+                  }
+                ],
               });
               break;
             }
@@ -1047,14 +1050,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             CustomerDisplayController.showDefaultDisplay();
             Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/',
-            (route) => false,
-            arguments: {
-              'action': 'deleted',
-              'tableNumber': widget.tableNumber,
-            },
-          );
+              context,
+              '/',
+              (route) => false,
+              arguments: {
+                'action': 'deleted',
+                'tableNumber': widget.tableNumber,
+              },
+            );
 
             Fluttertoast.showToast(
               msg: "Order Submitted",
@@ -1403,17 +1406,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (item['custom_variant_info'] != null &&
         item['custom_variant_info'] is List) {
       for (var variant in item['custom_variant_info']) {
-        if (variant is Map) {
-          variantWidgets.add(
-            Text(
-              '• ${variant['variant_group']}: ${variant['option']}${variant['additional_cost'] > 0 ? ' +RM ${variant['additional_cost'].toStringAsFixed(2)}' : ''}',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 12,
-                height: 1.3,
+        if (variant is Map && variant['options'] is List) {
+          for (var option in variant['options']) {
+            variantWidgets.add(
+              Text(
+                '• ${variant['variant_group']}: ${option['option']}${option['additional_cost'] > 0 ? ' +RM ${option['additional_cost'].toStringAsFixed(2)}' : ''}',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 12,
+                  height: 1.3,
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
       }
     }
@@ -1844,7 +1849,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return '+ RM ${difference.toStringAsFixed(2)}';
     } else if (difference < 0) {
       return '- RM ${difference.abs().toStringAsFixed(2)}';
-    } else if (difference == 0){
+    } else if (difference == 0) {
       return 'RM 0.00';
     }
     return '';
