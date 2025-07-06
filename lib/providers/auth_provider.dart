@@ -24,6 +24,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final paymentMethodsJson = prefs.getString('payment_methods');
     final taxesJson = prefs.getString('taxes');
     final hasOpening = prefs.getBool('has_opening') ?? false;
+    final tier = prefs.getString('tier');
 
     // Add session expiration (e.g., 7 days)
     if (lastLogin != null) {
@@ -56,6 +57,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
             : [],
         hasOpening: hasOpening,
+        tier: tier ?? '',
       );
     } else {
       state = const AuthState.unauthenticated();
@@ -81,6 +83,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
             'payment_methods', jsonEncode(response['mode_of_payment']));
         await prefs.setString('taxes', jsonEncode(response['taxes']));
         await prefs.setBool('has_opening', response['has_opening']);
+        await prefs.setString('tier',
+            response['tier'] ?? 'tier2'); // Default to tier2 if not provided
         await prefs.setString('last_login', DateTime.now().toIso8601String());
 
         state = AuthState.authenticated(
@@ -96,6 +100,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
               List<Map<String, dynamic>>.from(response['mode_of_payment']),
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
+          tier: response['tier'] ?? 'tier2', // Default to tier2 if not provided
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -110,7 +115,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> updateOpeningStatus(bool hasOpening) async {
     state.maybeWhen(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, _) async {
+          posProfile, branch, paymentMethods, taxes, _, tier) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
 
@@ -127,6 +132,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           paymentMethods: paymentMethods,
           taxes: taxes,
           hasOpening: hasOpening,
+          tier: tier,
         );
       },
       orElse: () {},

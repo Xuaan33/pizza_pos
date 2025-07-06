@@ -152,7 +152,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
     authState.when(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
           _showOpeningRequiredDialog();
@@ -193,52 +193,53 @@ class _TableScreenState extends ConsumerState<TableScreen>
   }
 
   void _showOpeningRequiredDialog() {
-  showDialog(
-    context: context,
-    barrierDismissible: false, // User must tap button to close
-    builder: (dialogContext) => AlertDialog(
-      backgroundColor: Colors.white,
-      title: const Text(
-        'Opening Entry Required',
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      content: const Text(
-        'Please create an opening entry before taking any orders. '
-        'You can create one in the Settings screen.',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(dialogContext); // Close the dialog
-            // Use the original context (not dialogContext) to find MainLayout
-            final mainLayout = MainLayout.of(context);
-            if (mainLayout != null) {
-              mainLayout.setSelectedTabIndex(3);
-            } else {
-              print('MainLayout.of(context) returned null');
-            }
-          },
-          style: TextButton.styleFrom(
-            backgroundColor: const Color(0xFFE732A0),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap button to close
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Opening Entry Required',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
           ),
-          child: const Text(
-            'Go to Settings',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+        ),
+        content: const Text(
+          'Please create an opening entry before taking any orders. '
+          'You can create one in the Settings screen.',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext); // Close the dialog
+              // Use the original context (not dialogContext) to find MainLayout
+              final mainLayout = MainLayout.of(context);
+              if (mainLayout != null) {
+                mainLayout.setSelectedTabIndex(3);
+              } else {
+                print('MainLayout.of(context) returned null');
+              }
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: const Color(0xFFE732A0),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text(
+              'Go to Settings',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -250,7 +251,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) {
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
           return Container(
             color: Colors.grey[100],
             padding: const EdgeInsets.all(20),
@@ -284,13 +285,13 @@ class _TableScreenState extends ConsumerState<TableScreen>
   }
 
   Widget _buildTopSection() {
-    return FutureBuilder(
-      future: SharedPreferences.getInstance(),
-      builder: (context, snapshot) {
-        final username = snapshot.hasData
-            ? snapshot.data!.getString('username') ?? 'Administrator'
-            : 'Administrator';
+    final authState = ref.read(authProvider);
 
+    return authState.when(
+      initial: () => const Center(child: CircularProgressIndicator()),
+      unauthenticated: () => const Center(child: Text('Unauthorized')),
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Row(
@@ -303,31 +304,34 @@ class _TableScreenState extends ConsumerState<TableScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              // Row(
-              //   children: [
-              //     _buildStatPill(
-              //       'Revenue',
-              //       'RM ${_totalRevenue.toStringAsFixed(2)}',
-              //       Colors.black,
-              //     ),
-              //     const SizedBox(width: 10),
-              //     _buildStatPill(
-              //       'Unpaid Orders',
-              //       '${(_totalUnpaidOrders).toStringAsFixed(2)}',
-              //       Colors.black,
-              //     ),
-              //     const SizedBox(width: 10),
-              //     _buildStatPill(
-              //       'Tables Free',
-              //       '$_totalTablesFree',
-              //       Colors.black,
-              //     ),
-              //   ],
-              // ),
+              if (tier.toLowerCase() != 'tier1') ...[
+                Row(
+                  children: [
+                    _buildStatPill(
+                      'Revenue',
+                      'RM ${_totalRevenue.toStringAsFixed(2)}',
+                      Colors.black,
+                    ),
+                    const SizedBox(width: 10),
+                    _buildStatPill(
+                      'Unpaid Orders',
+                      '${(_totalUnpaidOrders).toStringAsFixed(2)}',
+                      Colors.black,
+                    ),
+                    const SizedBox(width: 10),
+                    _buildStatPill(
+                      'Tables Free',
+                      '$_totalTablesFree',
+                      Colors.black,
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         );
       },
+      // ... other cases
     );
   }
 

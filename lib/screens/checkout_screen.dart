@@ -68,7 +68,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final authState = ref.read(authProvider);
     authState.whenOrNull(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
             return {
@@ -130,7 +130,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       branch,
                       paymentMethods,
                       taxes,
-                      hasOpening) {
+                      hasOpening,
+                      tier,) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -174,7 +175,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) {
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
@@ -1479,7 +1480,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
           authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-              posProfile, branch, paymentMethods, taxes, hasOpening) {
+              posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,

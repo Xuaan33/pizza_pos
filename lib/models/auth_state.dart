@@ -17,6 +17,7 @@ class AuthState with _$AuthState {
     required List<Map<String, dynamic>> paymentMethods,
     required List<Map<String, dynamic>> taxes,
     required bool hasOpening,
+    required String tier, // Add tier field
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }

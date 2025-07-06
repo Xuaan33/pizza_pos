@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -78,7 +79,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
         if (!_customerScreenShown) {
           _customerScreenShown = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -122,6 +123,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           paymentMethods,
           taxes,
           hasOpening,
+          tier,
         ) async {
           try {
             final response =
@@ -418,37 +420,105 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
+  // main_layout.dart
   List<Widget> _getScreensWithOrders() {
-    return [
-      TableScreen(
-        tablesWithSubmittedOrders: tablesWithSubmittedOrders,
-        onOrderSubmitted: (order) {
-          addNewOrder(order);
-          _refreshOrders();
-        },
-        onOrderPaid: markOrderAsPaid,
-        activeOrders: activeOrders,
-      ),
-      // DeliveryScreen(),
-      OrdersScreen(
-        orders: activeOrders,
-        isLoading: _isOrdersLoading,
-        onOrderPaid: (order) {
-          handleOrderPaid(order);
-          setState(() => _isOrdersLoading = true);
-          Future.delayed(Duration(seconds: 1), () {
-            setState(() => _isOrdersLoading = false);
+    final authState = ref.read(authProvider);
+
+    return authState.when(
+      initial: () => [
+        const Center(child: CircularProgressIndicator()),
+      ],
+      unauthenticated: () {
+        if (!_isLoggingOut) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                      title: const Text('Session Timeout'),
+                      content: const Text(
+                          'Your session has expired. Please login again.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop(); // Close the dialog
+                            // Navigate to LoginScreen and remove all previous routes
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => LoginPage()),
+                              (Route<dynamic> route) => false,
+                            );
+                          },
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ));
           });
-        },
-        onEditOrder: _handleEditOrder,
-        onRefresh: () async {
-          // Now returns Future<void>
-          await _refreshOrders();
-        },
-      ),
-      DashboardScreen(),
-      SettingsScreen(),
-    ];
+        }
+        return [
+          const Scaffold(body: Center(child: CircularProgressIndicator()))
+        ];
+      },
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        if (tier.toLowerCase() == 'tier1') {
+          return [
+            HomeScreen(
+              tableNumber: 1, // Default table for tier 1
+              existingOrder: null,
+              isTier1: true,
+            ),
+            OrdersScreen(
+              orders: activeOrders,
+              isLoading: _isOrdersLoading,
+              onOrderPaid: (order) {
+                handleOrderPaid(order);
+                setState(() => _isOrdersLoading = true);
+                Future.delayed(Duration(seconds: 1), () {
+                  setState(() => _isOrdersLoading = false);
+                });
+              },
+              onEditOrder: _handleEditOrder,
+              onRefresh: () async {
+                await _refreshOrders();
+              },
+            ),
+            DashboardScreen(),
+            SettingsScreen(),
+          ];
+        } else {
+          return [
+            TableScreen(
+              tablesWithSubmittedOrders: tablesWithSubmittedOrders,
+              onOrderSubmitted: (order) {
+                addNewOrder(order);
+                _refreshOrders();
+              },
+              onOrderPaid: markOrderAsPaid,
+              activeOrders: activeOrders,
+            ),
+            DeliveryScreen(),
+            OrdersScreen(
+              orders: activeOrders,
+              isLoading: _isOrdersLoading,
+              onOrderPaid: (order) {
+                handleOrderPaid(order);
+                setState(() => _isOrdersLoading = true);
+                Future.delayed(Duration(seconds: 1), () {
+                  setState(() => _isOrdersLoading = false);
+                });
+              },
+              onEditOrder: _handleEditOrder,
+              onRefresh: () async {
+                await _refreshOrders();
+              },
+            ),
+            DashboardScreen(),
+            SettingsScreen(),
+          ];
+        }
+      },
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fetchOrders() async {
@@ -457,44 +527,82 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     return activeOrders.where((o) => !o['isPaid']).toList();
   }
 
+  // main_layout.dart
   Widget _buildNavigationSidebar() {
-    return Container(
-      width: 100,
-      color: Colors.white,
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedTabIndex = 0; // Go to TableScreen when tapping logo
-              });
-              if (_selectedTabIndex == 0) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _refreshOrders();
-                });
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              child: Image.asset(
-                'assets/logo-shiokpos.png',
-                width: 60,
-                height: 60,
+    final authState = ref.read(authProvider);
+
+    return authState.when(
+      initial: () => const Center(child: CircularProgressIndicator()),
+
+      unauthenticated: () {
+        if (!_isLoggingOut) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                      title: const Text('Session Timeout'),
+                      content: const Text(
+                          'Your session has expired. Please login again.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop(); // Close the dialog
+                            // Navigate to LoginScreen and remove all previous routes
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => LoginPage()),
+                              (Route<dynamic> route) => false,
+                            );
+                          },
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ));
+          });
+        }
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      },
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        return Container(
+          width: 100,
+          color: Colors.white,
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedTabIndex = 0; // Go to Home/Table screen
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  child: Image.asset(
+                    'assets/logo-shiokpos.png',
+                    width: 60,
+                    height: 60,
+                  ),
+                ),
               ),
-            ),
+              if (tier.toLowerCase() == 'tier2') ...[
+                _buildNavItem(0, 'assets/img-sidebar-table.png', 'Tables'),
+                _buildNavItem(1, 'assets/img-sidebar-delivery.png', 'Delivery'),
+              ],
+              _buildNavItem(tier.toLowerCase() == 'tier1' ? 1 : 2,
+                  'assets/img-sidebar-orders.png', 'Orders'),
+              _buildNavItem(tier.toLowerCase() == 'tier1' ? 2 : 3,
+                  'assets/img-sidebar-dashboard.png', 'Dashboard'),
+              _buildNavItem(tier.toLowerCase() == 'tier1' ? 3 : 4,
+                  'assets/img-sidebar-settings.png', 'Settings'),
+              const Spacer(),
+              _buildNavItem(
+                  -1, 'assets/img-sidebar-logout.png', 'Logout', _logout),
+            ],
           ),
-          // _buildNavItem(1, 'assets/img-sidebar-delivery.png', 'Delivery'),
-          // _buildNavItem(2, 'assets/img-sidebar-orders.png', 'Orders'),
-          // _buildNavItem(3, 'assets/img-sidebar-dashboard.png', 'Dashboard'),
-          // _buildNavItem(4, 'assets/img-sidebar-settings.png', 'Settings'),
-          _buildNavItem(1, 'assets/img-sidebar-orders.png', 'Orders'),
-          _buildNavItem(2, 'assets/img-sidebar-dashboard.png', 'Dashboard'),
-          _buildNavItem(3, 'assets/img-sidebar-settings.png', 'Settings'),
-          const Spacer(),
-          _buildNavItem(-1, 'assets/img-sidebar-logout.png', 'Logout', _logout),
-        ],
-      ),
+        );
+      },
     );
   }
 

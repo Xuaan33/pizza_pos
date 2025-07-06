@@ -14,11 +14,13 @@ import 'checkout_screen.dart';
 class HomeScreen extends ConsumerStatefulWidget {
   final int tableNumber;
   final Map<String, dynamic>? existingOrder;
+  final bool isTier1;
 
   const HomeScreen({
     Key? key,
     required this.tableNumber,
     this.existingOrder,
+    this.isTier1 = false, // Default to false
   }) : super(key: key);
 
   @override
@@ -131,8 +133,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } catch (e) {
       setState(() => _isLoadingItemGroups = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading item groups: $e')),
+      Fluttertoast.showToast(
+        msg: 'Error loading item groups: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }
@@ -156,8 +161,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } catch (e) {
       setState(() => _isLoadingItems = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading available items: $e')),
+      Fluttertoast.showToast(
+        msg: 'Error loading available items: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }
@@ -190,7 +198,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final authState = ref.read(authProvider);
     await authState.whenOrNull(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) async {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
         try {
           final newStockStatus = <String, bool>{};
 
@@ -237,7 +245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) {
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
             // In home_screen.dart
@@ -293,18 +301,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         Row(
                                           children: [
                                             // Back Button
-                                            IconButton(
-                                              icon:
-                                                  const Icon(Icons.arrow_back),
-                                              onPressed: () {
-                                                _onBackPressed();
-                                              },
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Image.asset(
-                                                'assets/logo-shiokpos.png',
-                                                height: 40),
-                                            const SizedBox(width: 10),
+                                            if (tier.toLowerCase() !=
+                                                'tier1') ...[
+                                              IconButton(
+                                                icon: const Icon(
+                                                    Icons.arrow_back),
+                                                onPressed: () {
+                                                  _onBackPressed();
+                                                },
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Image.asset(
+                                                  'assets/logo-shiokpos.png',
+                                                  height: 40),
+                                              const SizedBox(width: 10),
+                                            ],
                                             Text(
                                               'Table ${widget.tableNumber}',
                                               style: const TextStyle(
@@ -314,23 +325,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                           ],
                                         ),
-                                        // Container(
-                                        //   padding: const EdgeInsets.symmetric(
-                                        //       horizontal: 12, vertical: 6),
-                                        //   decoration: BoxDecoration(
-                                        //     color: Colors.black,
-                                        //     borderRadius:
-                                        //         BorderRadius.circular(20),
-                                        //   ),
-                                        //   child: Text(
-                                        //     'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
-                                        //     style: const TextStyle(
-                                        //       fontSize: 16,
-                                        //       color: Colors.white,
-                                        //       fontWeight: FontWeight.bold,
-                                        //     ),
-                                        //   ),
-                                        // ),
+                                        if (tier.toLowerCase() != 'tier1') ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              'Revenue RM ${_calculateTotalRevenue().toStringAsFixed(2)}',
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ]
                                       ],
                                     ),
                                   ),
@@ -522,31 +535,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       const SizedBox(height: 10),
                                       Column(
                                         children: [
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton(
-                                              onPressed: _isLoading
-                                                  ? null
-                                                  : _submitOrder,
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green,
-                                                minimumSize:
-                                                    const Size.fromHeight(50),
+                                          if (tier.toLowerCase() !=
+                                              'tier1') ...[
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: ElevatedButton(
+                                                onPressed: _isLoading
+                                                    ? null
+                                                    : _submitOrder,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.green,
+                                                  minimumSize:
+                                                      const Size.fromHeight(50),
+                                                ),
+                                                child: _isLoading
+                                                    ? const CircularProgressIndicator(
+                                                        color: Colors.white)
+                                                    : const Text(
+                                                        'Submit Order',
+                                                        style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 20,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600),
+                                                      ),
                                               ),
-                                              child: _isLoading
-                                                  ? const CircularProgressIndicator(
-                                                      color: Colors.white)
-                                                  : const Text(
-                                                      'Submit Order',
-                                                      style: TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 20,
-                                                          fontWeight:
-                                                              FontWeight.w600),
-                                                    ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 10),
+                                            const SizedBox(height: 10),
+                                          ],
                                           SizedBox(
                                             width: double.infinity,
                                             child: ElevatedButton(
@@ -992,7 +1009,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     authState.whenOrNull(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) async {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
         setState(() => _isLoading = true);
 
         try {
@@ -1068,8 +1085,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         } catch (e) {
           print('Submit order error: $e');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error submitting order: $e')),
+          Fluttertoast.showToast(
+            msg: 'Error submitting order: $e',
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.red,
+            textColor: Colors.white,
           );
         } finally {
           setState(() => _isLoading = false);
@@ -1153,7 +1173,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           branch,
           paymentMethods,
           taxes,
-          hasOpening) async {
+          hasOpening,
+          tier) async {
         // Auto-save all remarks before proceeding
         _autoSaveAllRemarks();
 
@@ -1268,8 +1289,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+        Fluttertoast.showToast(
+          msg: 'Error: ${e.toString()}',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
       }
     } finally {
@@ -1747,8 +1771,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete order: ${e.toString()}')),
+        Fluttertoast.showToast(
+          msg: 'Failed to delete order: ${e.toString()}',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
       }
     } finally {
@@ -1789,7 +1816,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
           authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-              posProfile, branch, paymentMethods, taxes, hasOpening) {
+              posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,

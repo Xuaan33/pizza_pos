@@ -34,6 +34,7 @@ class AuthService {
         'mode_of_payment': message['mode_of_payment'] ?? [],
         'taxes': message['taxes'] ?? [],
         'has_opening': message['has_opening'] ?? false,
+        'tier': message['tier'],
       };
     } else {
       return {

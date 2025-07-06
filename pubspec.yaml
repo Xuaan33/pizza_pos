@@ -86,6 +86,7 @@ flutter:
     - assets/pizza.png
     - assets/drinks.jpg
     - assets/gif-do-payment.gif
+    - assets/img-sidebar-table.png
 
   fonts:
     - family: Raleway

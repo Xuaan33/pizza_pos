@@ -33,7 +33,7 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
         // Initialize controllers if not done yet
         if (_amountControllers.isEmpty) {
           _amountControllers.addAll(
@@ -203,7 +203,6 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
 
       //to be confirmed
       if (response['message']["status"] == "Open") {
-
         ref.read(authProvider.notifier).markOpeningCreated();
         if (mounted) {
           Navigator.pop(context);

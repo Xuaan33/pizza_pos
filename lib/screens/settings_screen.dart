@@ -98,7 +98,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) {
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
           return Container(
             color: Colors.grey[100],
             padding: const EdgeInsets.all(20),
@@ -107,9 +107,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 _buildTopSection(),
                 const SizedBox(height: 30),
-                hasOpening
-                    ? _buildClosingEntryButton()
-                    : _buildOpeningEntryButton(hasOpening),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildOpeningEntryButton(hasOpening),
+                    ),
+                    const SizedBox(width: 16), // spacing between buttons
+                    Expanded(
+                      child: _buildClosingEntryButton(hasOpening),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 30),
                 _buildPosConnectionSection(),
               ],
@@ -141,7 +149,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onPressed: isDisabled ? null : () => _showOpeningEntryDialog(),
         style: ElevatedButton.styleFrom(
           backgroundColor:
-              isDisabled ? Colors.grey[400] : const Color(0xFFE732A0),
+              isDisabled ? Colors.grey[400] : Colors.green,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
@@ -166,21 +174,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildClosingEntryButton() {
+  Widget _buildClosingEntryButton(bool hasOpening) {
+    final isDisabled = !hasOpening;
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: () => _showClosingEntryDialog(),
+        onPressed: isDisabled ? null : () => _showClosingEntryDialog(),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE732A0),
+          backgroundColor:
+              isDisabled ? Colors.grey[400] : const Color(0xFFE732A0),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
         ),
-        child: const Text(
-          'Create Closing Entry',
+        child: Text(
+          isDisabled ? 'No Opening Entry' : 'Create Closing Entry',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -196,7 +207,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       await authState.whenOrNull(
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening) async {
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,
           );
