@@ -11,7 +11,8 @@ class PosHexGenerator {
       throw ArgumentError('TRANSACTION_ID must be exactly 20 characters');
     }
     if (formattedAmount.length != 12) {
-      throw ArgumentError('AMOUNT must be exactly 12 characters after formatting');
+      throw ArgumentError(
+          'AMOUNT must be exactly 12 characters after formatting');
     }
     if (m1Value.length != 2) {
       throw ArgumentError('M1_VALUE must be exactly 2 characters');
@@ -28,9 +29,44 @@ class PosHexGenerator {
     var tokens = originalMessage.split(' ');
 
     tokens = _normalizePresentationHeader(tokens, expectedLength: 24);
-    tokens = _updateField(tokens, ['1C', '36', '36', '00', '20'], transactionId, 20);
-    tokens = _updateField(tokens, ['1C', '34', '30', '00', '12'], formattedAmount, 12);
+    tokens =
+        _updateField(tokens, ['1C', '36', '36', '00', '20'], transactionId, 20);
+    tokens = _updateField(
+        tokens, ['1C', '34', '30', '00', '12'], formattedAmount, 12);
     tokens = _updateField(tokens, ['1C', '4D', '31', '00', '02'], m1Value, 2);
+    tokens = _updateLrc(tokens);
+
+    return tokens.join(' ');
+  }
+
+  static String generateVoidHexMessage({
+    required String transactionId,
+    required String invoiceNumber,
+  }) {
+    if (transactionId.length != 20) {
+      throw ArgumentError('TRANSACTION_ID must be exactly 20 characters');
+    }
+    if (invoiceNumber.length != 6) {
+      throw ArgumentError('INVOICE_NUMBER must be exactly 6 characters');
+    }
+
+    const originalMessage =
+        "02 00 85 36 30 30 30 30 30 30 30 30 30 31 30 34 30 30 30 30 "
+        "1C 30 30 00 20 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 "
+        "1C 36 36 00 20 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 31 32 33 "
+        "1C 36 35 00 06 30 30 30 30 37 30 "
+        "1C 30 39 00 01 30 "
+        "1C 03 93";
+
+    var tokens = originalMessage.split(' ');
+
+    tokens = _normalizePresentationHeader(tokens, expectedLength: 24);
+    tokens =
+        _updateField(tokens, ['1C', '36', '36', '00', '20'], transactionId, 20);
+    tokens =
+        _updateField(tokens, ['1C', '36', '35', '00', '06'], invoiceNumber, 6);
+    tokens = _updateField(tokens, ['1C', '30', '39', '00', '01'], "1",
+        1); // Set receipt required to '1'
     tokens = _updateLrc(tokens);
 
     return tokens.join(' ');
@@ -41,7 +77,8 @@ class PosHexGenerator {
     return value.toString().padLeft(12, '0');
   }
 
-  static List<String> _normalizePresentationHeader(List<String> tokens, {required int expectedLength}) {
+  static List<String> _normalizePresentationHeader(List<String> tokens,
+      {required int expectedLength}) {
     int? firstSep;
     int? secondSep;
 
@@ -67,63 +104,73 @@ class PosHexGenerator {
       headerTokens = tokens.sublist(firstSep + 1, secondSep) +
           List.filled(expectedLength - currentLength, '30');
     } else {
-      headerTokens = tokens.sublist(firstSep + 1, firstSep + 1 + expectedLength);
+      headerTokens =
+          tokens.sublist(firstSep + 1, firstSep + 1 + expectedLength);
     }
 
-    return tokens.sublist(0, firstSep + 1) + headerTokens + tokens.sublist(secondSep);
+    return tokens.sublist(0, firstSep + 1) +
+        headerTokens +
+        tokens.sublist(secondSep);
   }
 
-  static List<String> _updateField(
-    List<String> tokens, List<String> pattern, String newValueStr, int expectedLength) {
-  
-  // Normalize case for comparison
-  final normalizedPattern = pattern.map((e) => e.toUpperCase()).toList();
-  final normalizedTokens = tokens.map((e) => e.toUpperCase()).toList();
+  static List<String> _updateField(List<String> tokens, List<String> pattern,
+      String newValueStr, int expectedLength) {
+    // Normalize case for comparison
+    final normalizedPattern = pattern.map((e) => e.toUpperCase()).toList();
+    final normalizedTokens = tokens.map((e) => e.toUpperCase()).toList();
 
-  int? idx;
-  for (var i = 0; i < normalizedTokens.length - normalizedPattern.length; i++) {
-    var match = true;
-    for (var j = 0; j < normalizedPattern.length; j++) {
-      if (normalizedTokens[i + j] != normalizedPattern[j]) {
-        match = false;
+    int? idx;
+    for (var i = 0;
+        i < normalizedTokens.length - normalizedPattern.length;
+        i++) {
+      var match = true;
+      for (var j = 0; j < normalizedPattern.length; j++) {
+        if (normalizedTokens[i + j] != normalizedPattern[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        idx = i;
         break;
       }
     }
-    if (match) {
-      idx = i;
-      break;
+
+    if (idx == null) {
+      debugPrint('Tokens: ${tokens.join(' ')}');
+      debugPrint('Searching for: ${pattern.join(' ')}');
+      throw ArgumentError(
+          "Field with pattern '${pattern.join(' ')}' not found in message");
     }
+
+    final dataIndex = idx + pattern.length;
+    final newTokens = _asciiToHexTokens(newValueStr);
+
+    if (newTokens.length != expectedLength) {
+      throw ArgumentError(
+          'New value must produce exactly $expectedLength tokens');
+    }
+
+    final newList = List<String>.from(tokens);
+    newList.replaceRange(dataIndex, dataIndex + expectedLength, newTokens);
+    return newList;
   }
-
-  if (idx == null) {
-    debugPrint('Tokens: ${tokens.join(' ')}');
-    debugPrint('Searching for: ${pattern.join(' ')}');
-    throw ArgumentError("Field with pattern '${pattern.join(' ')}' not found in message");
-  }
-
-  final dataIndex = idx + pattern.length;
-  final newTokens = _asciiToHexTokens(newValueStr);
-
-  if (newTokens.length != expectedLength) {
-    throw ArgumentError('New value must produce exactly $expectedLength tokens');
-  }
-
-  final newList = List<String>.from(tokens);
-  newList.replaceRange(dataIndex, dataIndex + expectedLength, newTokens);
-  return newList;
-}
 
   static List<String> _asciiToHexTokens(String input) {
-    return input.codeUnits.map((c) => c.toRadixString(16).toUpperCase().padLeft(2, '0')).toList();
+    return input.codeUnits
+        .map((c) => c.toRadixString(16).toUpperCase().padLeft(2, '0'))
+        .toList();
   }
 
   static List<String> _updateLrc(List<String> tokens) {
-    final dataTokens = tokens.sublist(1, tokens.length - 1); // exclude STX and old LRC
+    final dataTokens =
+        tokens.sublist(1, tokens.length - 1); // exclude STX and old LRC
     final dataBytes = Uint8List.fromList(
         dataTokens.map((token) => int.parse(token, radix: 16)).toList());
     final lrc = _computeLrc(dataBytes);
     final updated = List<String>.from(tokens);
-    updated[updated.length - 1] = lrc.toRadixString(16).toUpperCase().padLeft(2, '0');
+    updated[updated.length - 1] =
+        lrc.toRadixString(16).toUpperCase().padLeft(2, '0');
     return updated;
   }
 

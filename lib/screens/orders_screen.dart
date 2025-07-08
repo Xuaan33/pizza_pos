@@ -1,10 +1,17 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
+import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> orders;
@@ -538,6 +545,28 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
+
+            // Inside _buildOrderDetailsPanel method, after the existing buttons:
+            if (!isDraft &&
+                order['paymentMethod']
+                        ?.toString()
+                        .toLowerCase()
+                        .contains('card') ==
+                    true) ...[
+              SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => _processRefund(order),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: Size(double.infinity, 48),
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(
+                  'Refund',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -661,6 +690,308 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         widget.onOrderPaid(order);
       }
     });
+  }
+
+  Future<void> _processRefund(Map<String, dynamic> order) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            title: Text(
+              'Confirm Refund',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Text(
+              'Are you sure you want to refund this order?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(
+                  'Refund',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) return;
+
+    try {
+      final posInvoiceNumber = '000502';
+      // final posInvoiceNumber = order['pos_invoice_number']?.toString();
+
+      if (posInvoiceNumber == null || posInvoiceNumber.isEmpty) {
+        throw Exception('POS invoice number not available for refund');
+      }
+
+      // Generate transaction ID from order ID
+      final orderId = order['orderId']?.toString() ?? '';
+      final transactionId = 'INV${orderId.replaceAll(RegExp(r'[^0-9]'), '')}'
+          .padRight(20, '0')
+          .substring(0, 20);
+
+      // Generate the void hex message
+      final hexMessage = PosHexGenerator.generateVoidHexMessage(
+        transactionId: transactionId,
+        invoiceNumber: posInvoiceNumber,
+      );
+
+      // Connect to POS terminal
+      final prefs = await SharedPreferences.getInstance();
+      final posIp = prefs.getString('pos_ip') ?? '192.168.1.10';
+      final posPort = 8800;
+
+      final socket = await Socket.connect(posIp, posPort,
+          timeout: const Duration(seconds: 10));
+
+      try {
+        final response = await _handlePosTransaction(socket, hexMessage);
+
+        if (response['status'] != 'success') {
+          throw Exception(
+              response['response_text'] ?? 'POS transaction declined');
+        }
+
+        // If successful, call the refund API
+        // final refundResponse = await PosService().refundOrder(
+        //   invoiceName: order['orderId']?.toString() ?? '',
+        //   posResponse: response,
+        // );
+
+        // if (refundResponse['success'] == true) {
+        if (mounted) {
+          Fluttertoast.showToast(
+            msg: "Refund Successful",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+          _refreshOrders();
+        }
+        // }
+      } finally {
+        socket.destroy();
+      }
+    } catch (e) {
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: "Refund Error: ${e.toString()}",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _handlePosTransaction(
+      Socket socket, String hexMessage) async {
+    final completer = Completer<Map<String, dynamic>>();
+    final responseBuffer = <int>[];
+    bool ackReceived = false;
+    StreamSubscription? subscription;
+
+    subscription = socket.listen(
+      (List<int> data) {
+        debugPrint(
+            '📦 Received data: ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+        // Handle ACK separately
+        if (!ackReceived && data.length == 1 && data[0] == 0x06) {
+          ackReceived = true;
+          debugPrint('✅ Received ACK (0x06), waiting for full response...');
+          return;
+        }
+
+        // Add data to buffer
+        responseBuffer.addAll(data);
+
+        // Check if we have a complete response (STX...ETX)
+        if (ackReceived && responseBuffer.isNotEmpty) {
+          final stxIndex = responseBuffer.indexOf(0x02);
+          final etxIndex = responseBuffer.indexOf(0x03);
+
+          if (stxIndex != -1 && etxIndex != -1 && etxIndex > stxIndex) {
+            debugPrint('📨 Complete response received, parsing...');
+
+            try {
+              // Extract the complete message from STX to ETX
+              final messageData =
+                  responseBuffer.sublist(stxIndex, etxIndex + 1);
+              final response = _parsePosResponse(messageData);
+
+              debugPrint('🎯 Parsed response: $response');
+
+              if (!completer.isCompleted) {
+                subscription?.cancel();
+                completer.complete(response);
+              }
+            } catch (e) {
+              final messageData =
+                  responseBuffer.sublist(stxIndex, etxIndex + 1);
+              final response = _parsePosResponse(messageData);
+
+              debugPrint('🎯 Parsed response: $response');
+              debugPrint('❌ Error parsing response: $e');
+              if (!completer.isCompleted) {
+                subscription?.cancel();
+                completer.completeError(e);
+              }
+            }
+          }
+        }
+      },
+      onError: (error) {
+        debugPrint('❌ Socket error: $error');
+        if (!completer.isCompleted) {
+          subscription?.cancel();
+          completer.completeError(error);
+        }
+      },
+      onDone: () {
+        debugPrint('🔌 Socket connection closed');
+        if (!completer.isCompleted) {
+          subscription?.cancel();
+          completer.completeError(
+              Exception('Socket closed before receiving complete response'));
+        }
+      },
+    );
+
+    // Send the hex message
+    final bytes = _hexStringToBytes(hexMessage);
+    debugPrint(
+        '📤 Sending message: ${bytes.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+    socket.add(bytes);
+
+    return completer.future.timeout(
+      const Duration(seconds: 120),
+      onTimeout: () {
+        subscription?.cancel();
+        throw TimeoutException('POS terminal response timeout');
+      },
+    );
+  }
+
+  List<int> _hexStringToBytes(String hexString) {
+    return hexString
+        .split(' ')
+        .map((hex) => int.parse(hex, radix: 16))
+        .toList();
+  }
+
+  Map<String, dynamic> _parsePosResponse(List<int> data) {
+    try {
+      debugPrint(
+          '🔍 Parsing response data: ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+      // Check for complete message (STX...ETX)
+      if (data.length >= 3 &&
+          data.first == 0x02 &&
+          data[data.length - 1] == 0x03) {
+        // Extract the payload (everything between STX and ETX, excluding LRC if present)
+        final payload = data.sublist(1, data.length - 1);
+
+        // Convert to hex string for easier parsing
+        final hexString =
+            payload.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+        debugPrint('📄 Payload hex: $hexString');
+
+        // Try to convert to ASCII for debugging
+        try {
+          final asciiString =
+              String.fromCharCodes(payload.where((b) => b >= 32 && b <= 126));
+          debugPrint('📝 ASCII representation: $asciiString');
+        } catch (e) {
+          debugPrint('⚠️ Could not convert to ASCII: $e');
+        }
+
+        final decoded = _decodeHexResponse(hexString, payload);
+        debugPrint('✅ Decoded response: $decoded');
+
+        return decoded;
+      }
+
+      throw Exception('Invalid POS response format - missing STX/ETX markers');
+    } catch (e) {
+      debugPrint('❌ Parse error: $e');
+      return {
+        'invoice_number': '000000',
+        'response_text': 'Parse error: ${e.toString()}',
+        'status': 'error',
+        'transaction_id': '',
+      };
+    }
+  }
+
+  Map<String, dynamic> _decodeHexResponse(String hexString, List<int> rawData) {
+    try {
+      String invoiceNumber = '000000';
+      String posInvoiceNumber = '000000';
+      String responseText = 'UNKNOWN';
+      String status = 'error';
+      String transactionId = '';
+
+      try {
+        final asciiData =
+            String.fromCharCodes(rawData.where((b) => b >= 32 && b <= 126));
+
+        // 1. Extract main invoice number (INV202500293)
+        final invoiceMatch = RegExp(r'INV(\d{9})').firstMatch(asciiData);
+        if (invoiceMatch != null) {
+          invoiceNumber = invoiceMatch.group(1)!;
+          transactionId = 'INV$invoiceNumber';
+        }
+
+        // 2. Extract POS invoice number - CORRECTED PATTERN
+        // Looks for "65000" followed by exactly 6 digits (the POS invoice number)
+        final posInvoiceMatch = RegExp(r'65(\d{6})').firstMatch(asciiData);
+        if (posInvoiceMatch != null) {
+          posInvoiceNumber =
+              posInvoiceMatch.group(1)!; // This will capture "000497"
+        }
+
+        // 3. Check approval status
+        if (asciiData.contains('APPROVED')) {
+          status = 'success';
+          responseText = 'APPROVED';
+        }
+      } catch (e) {
+        debugPrint('⚠️ ASCII parsing failed: $e');
+      }
+
+      return {
+        'invoice_number': invoiceNumber, // "202500293" (correct)
+        'pos_invoice_number': posInvoiceNumber,
+        'response_text': responseText,
+        'status': status,
+        'transaction_id': transactionId,
+      };
+    } catch (e) {
+      debugPrint('❌ Decode error: $e');
+      return {
+        'invoice_number': '000000',
+        'pos_invoice_number': '000000',
+        'response_text': 'Decode error: ${e.toString()}',
+        'status': 'error',
+        'transaction_id': 'ERROR_${DateTime.now().millisecondsSinceEpoch}',
+      };
+    }
   }
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {

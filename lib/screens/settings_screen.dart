@@ -22,7 +22,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isTesting = false;
   bool _isSaving = false; // Add this for save button loading state
   final TextEditingController _ipController =
-      TextEditingController(text: '192.168.1.10');
+      TextEditingController(text: '192.168.');
   final TextEditingController _portController =
       TextEditingController(text: '8800');
 
@@ -42,8 +42,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _loadSavedConfig() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _ipController.text = prefs.getString('pos_ip') ?? '192.168.1.10';
-      _portController.text = prefs.getString('pos_port') ?? '8800';
+      _ipController.text = prefs.getString('pos_ip') ?? '192.168';
+      _portController.text = '8800';
     });
   }
 
@@ -260,7 +260,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(width: 8),
         Text(
-          _isPosConnected ? 'Connected to POS Terminal' : 'Not Connected',
+          _isPosConnected ? 'Testing OK' : 'Not Test',
           style: TextStyle(
             fontSize: 16,
             color: _isPosConnected ? Colors.green : Colors.red,
@@ -282,16 +282,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             prefixIcon: Icon(Icons.computer),
           ),
           keyboardType: TextInputType.numberWithOptions(decimal: true),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _portController,
-          decoration: const InputDecoration(
-            labelText: 'Port',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.numbers),
-          ),
-          keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 16),
         SizedBox(
@@ -404,6 +394,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _handleConnectionError("Response timeout");
         }
       });
+      socket.destroy();
     } on SocketException catch (e) {
       _handleConnectionError("Network error: ${e.message}");
     } on Exception catch (e) {

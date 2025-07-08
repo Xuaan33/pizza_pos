@@ -38,7 +38,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _existingOrder;
   String baseImageUrl = 'http://shiokpos.byondwave.com';
-  Map<String, bool> _itemStockStatus = {}; // key: item_code, value: isInStock
+  Map<String, int> _itemStockQuantities =
+      {}; // key: item_code, value: available stock
   bool _isLoadingStock = false;
 
   @override
@@ -189,7 +190,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // Add to _HomeScreenState class
   Future<void> _checkStockForItems() async {
     if (_isLoadingStock) return;
 
@@ -200,7 +200,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
           posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
         try {
-          final newStockStatus = <String, bool>{};
+          final newStockQuantities = <String, int>{};
 
           for (var item in availableItems) {
             try {
@@ -210,21 +210,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               );
 
               if (response['success'] == true) {
-                final qty = response['message']['qty'] as num? ?? 0;
-                newStockStatus[item['item_code']] = qty > 0;
+                newStockQuantities[item['item_code']] =
+                    (response['message']['qty'] as num?)?.toInt() ?? 0;
               } else {
-                newStockStatus[item['item_code']] =
-                    true; // Assume in stock if API fails
+                newStockQuantities[item['item_code']] =
+                    999; // Assume unlimited if API fails
               }
             } catch (e) {
               debugPrint('Error checking stock for ${item['item_code']}: $e');
-              newStockStatus[item['item_code']] =
-                  true; // Assume in stock on error
+              newStockQuantities[item['item_code']] =
+                  999; // Assume unlimited on error
             }
           }
 
           setState(() {
-            _itemStockStatus = newStockStatus;
+            _itemStockQuantities = newStockQuantities;
           });
         } catch (e) {
           debugPrint('Error checking stock: $e');
@@ -791,44 +791,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Map<String, dynamic> item,
     Map<String, String?> selectedOptions,
   ) {
-    List<Map<String, dynamic>> variantInfo = [];
-    double totalAdditionalCost = 0.0;
+    final itemCode = item['item_code'];
+    final availableStock = _itemStockQuantities[itemCode] ?? 999;
 
-    if (selectedOptions.isNotEmpty && item['structured_variant_info'] != null) {
-      // Find matching options and their additional costs
-      for (var variantGroup in item['structured_variant_info']) {
-        final selectedOption = selectedOptions[variantGroup['variant_group']];
-        if (selectedOption != null) {
-          // Find the selected option in the variant group
-          for (var option in variantGroup['options']) {
-            if (option['option'] == selectedOption) {
-              double optionCost = (option['additional_cost'] as num).toDouble();
-              totalAdditionalCost += optionCost;
+    // Check if we're adding a new item or increasing quantity of existing one
+    int existingIndex = currentOrderItems.indexWhere((orderItem) =>
+        orderItem['item_code'] == item['item_code'] &&
+        _compareOptions(orderItem['options'], selectedOptions));
 
-              variantInfo.add({
-                'variant_group': variantGroup['variant_group'],
-                'options': [
-                  {
-                    'option': selectedOption,
-                    'additional_cost': optionCost,
-                  }
-                ],
-              });
-              break;
+    if (existingIndex != -1) {
+      // For existing item, check if we can increase quantity
+      if (currentOrderItems[existingIndex]['quantity'] >= availableStock) {
+        Fluttertoast.showToast(
+          msg: "Cannot add more than available stock ($availableStock)",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        return;
+      }
+      setState(() {
+        currentOrderItems[existingIndex]['quantity']++;
+      });
+    } else {
+      // For new item, check if stock is available
+      if (availableStock <= 0) {
+        Fluttertoast.showToast(
+          msg: "Item is out of stock",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        return;
+      }
+
+      // Same as your existing code for adding new item...
+      List<Map<String, dynamic>> variantInfo = [];
+      double totalAdditionalCost = 0.0;
+
+      if (selectedOptions.isNotEmpty &&
+          item['structured_variant_info'] != null) {
+        for (var variantGroup in item['structured_variant_info']) {
+          final selectedOption = selectedOptions[variantGroup['variant_group']];
+          if (selectedOption != null) {
+            for (var option in variantGroup['options']) {
+              if (option['option'] == selectedOption) {
+                double optionCost =
+                    (option['additional_cost'] as num).toDouble();
+                totalAdditionalCost += optionCost;
+
+                variantInfo.add({
+                  'variant_group': variantGroup['variant_group'],
+                  'options': [
+                    {
+                      'option': selectedOption,
+                      'additional_cost': optionCost,
+                    }
+                  ],
+                });
+                break;
+              }
             }
           }
         }
       }
-    }
 
-    setState(() {
-      int existingIndex = currentOrderItems.indexWhere((orderItem) =>
-          orderItem['item_code'] == item['item_code'] &&
-          _compareOptions(orderItem['options'], selectedOptions));
-
-      if (existingIndex != -1) {
-        currentOrderItems[existingIndex]['quantity']++;
-      } else {
+      setState(() {
         Map<String, dynamic> newOrderItem = {
           'item_code': item['item_code'],
           'name': item['item_name'],
@@ -846,8 +874,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'additional_cost': totalAdditionalCost,
         };
         currentOrderItems.add(newOrderItem);
-      }
-    });
+      });
+    }
   }
 
   bool _compareOptions(dynamic options1, Map<String, String?> options2) {
@@ -1304,7 +1332,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
-    final isInStock = _itemStockStatus[item['item_code']] ?? true;
+    final availableStock = _itemStockQuantities[item['item_code']] ?? 999;
+    final isInStock = availableStock > 0;
 
     return GestureDetector(
       onTap: isInStock
@@ -1786,6 +1815,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _increaseQuantity(int index) {
+    final item = currentOrderItems[index];
+    final itemCode = item['item_code'];
+    final currentQuantity = item['quantity'];
+    final availableStock = _itemStockQuantities[itemCode] ?? 999;
+
+    if (currentQuantity >= availableStock) {
+      Fluttertoast.showToast(
+        msg: "Cannot add more than available stock ($availableStock)",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
     setState(() {
       currentOrderItems[index]['quantity']++;
     });

@@ -120,18 +120,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       final response = await PosService().getOrders(
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier,) {
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                  ) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -295,10 +297,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             child: Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back),
-                  onPressed: () => _confirmExit(),
-                ),
+                // IconButton(
+                //   icon: Icon(Icons.arrow_back),
+                //   onPressed: () => _confirmExit(),
+                // ),
                 Text(
                   'Table ${widget.order['tableNumber']}',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -920,7 +922,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         // Rest of your POS terminal communication code...
         final prefs = await SharedPreferences.getInstance();
         final posIp = prefs.getString('pos_ip') ?? '192.168.1.10';
-        final posPort = prefs.getInt('pos_port') ?? 8800;
+        final posPort = 8800;
 
         // 3. Connect to POS terminal with longer timeout
         final socket = await Socket.connect(posIp, posPort,
@@ -939,6 +941,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           payments[0]['pos_response'] = response;
           payments[0]['reference_no'] = response['transaction_id'] ??
               'POS-${DateTime.now().millisecondsSinceEpoch}';
+          payments[0]['pos_reference_no'] =
+              response['pos_invoice_number'] ?? ''; // Add POS reference
         } finally {
           socket.destroy();
         }
@@ -1125,90 +1129,44 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Map<String, dynamic> _decodeHexResponse(String hexString, List<int> rawData) {
     try {
-      // This is where you need to implement your specific terminal's response format
-      // Since I don't know your exact terminal protocol, I'll provide a generic example
-
-      // Example: If your terminal returns data in a specific format
-      // You might need to parse specific byte positions or look for field separators
-
-      // For now, let's try to extract some basic information
-      // You should adjust this based on your terminal's documentation
-
       String invoiceNumber = '000000';
+      String posInvoiceNumber = '000000';
       String responseText = 'UNKNOWN';
       String status = 'error';
       String transactionId = '';
 
-      // Try to parse as ASCII first
       try {
         final asciiData =
             String.fromCharCodes(rawData.where((b) => b >= 32 && b <= 126));
-        debugPrint('🔤 ASCII data for parsing: $asciiData');
 
-        // Look for common patterns in POS responses
-        // This is highly dependent on your terminal's format
+        // 1. Extract main invoice number (INV202500293)
+        final invoiceMatch = RegExp(r'INV(\d{9})').firstMatch(asciiData);
+        if (invoiceMatch != null) {
+          invoiceNumber = invoiceMatch.group(1)!;
+          transactionId = 'INV$invoiceNumber';
+        }
 
-        // Example patterns to look for:
+        // 2. Extract POS invoice number - CORRECTED PATTERN
+        // Looks for "65000" followed by exactly 6 digits (the POS invoice number)
+        final posInvoiceMatch = RegExp(r'65(\d{6})').firstMatch(asciiData);
+        if (posInvoiceMatch != null) {
+          posInvoiceNumber =
+              posInvoiceMatch.group(1)!; // This will capture "000497"
+        }
+
+        // 3. Check approval status
         if (asciiData.contains('APPROVED')) {
           status = 'success';
           responseText = 'APPROVED';
-        } else if (asciiData.contains('TRANSACTION NOT SUCCESS')) {
-          status = 'error';
-          responseText = 'TRANSACTION NOT SUCCESS';
-        }
-
-        // Try to extract invoice number from the response
-        // This depends on your terminal's specific response format
-        // Example: Look for a 6-digit number that might be the invoice number
-        final invoiceRegex = RegExp(r'\b\d{6}\b');
-        final invoiceMatch = invoiceRegex.firstMatch(asciiData);
-        if (invoiceMatch != null) {
-          invoiceNumber = invoiceMatch.group(0)!;
-        }
-
-        // Try to extract transaction ID - look for a longer numeric sequence
-        final txnRegex = RegExp(r'\b\d{8,}\b');
-        final txnMatch = txnRegex.firstMatch(asciiData);
-        if (txnMatch != null) {
-          transactionId = txnMatch.group(0)!;
-        } else {
-          // Fallback to timestamp if no transaction ID found
-          transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
         }
       } catch (e) {
         debugPrint('⚠️ ASCII parsing failed: $e');
       }
 
-      // If ASCII parsing didn't work, try hex parsing
-      if (status == 'error' && hexString.length >= 4) {
-        // Example: Check specific hex positions based on your terminal's protocol
-        // You'll need to adjust these based on your terminal's documentation
-
-        // Some terminals use specific byte positions for response codes
-        // For example, bytes 2-3 might be the response code
-        if (hexString.length >= 4) {
-          final responseCode = hexString.substring(0, 4);
-          switch (responseCode.toLowerCase()) {
-            case '3030': // "00" in ASCII
-              status = 'success';
-              responseText = 'APPROVED';
-              break;
-            case '3031': // "01" in ASCII
-              status = 'declined';
-              responseText = 'DECLINED';
-              break;
-            // Add more response codes as needed
-          }
-        }
-      }
-
-      // Generate transaction ID if not found
-      if (transactionId.isEmpty) {
-        transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
-      }
-
       return {
-        'invoice_number': invoiceNumber,
+        'invoice_number': invoiceNumber, // "202500293" (correct)
+        'pos_invoice_number':
+            posInvoiceNumber, // Should be "000497" (was incorrectly "976400")
         'response_text': responseText,
         'status': status,
         'transaction_id': transactionId,
@@ -1217,6 +1175,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint('❌ Decode error: $e');
       return {
         'invoice_number': '000000',
+        'pos_invoice_number': '000000',
         'response_text': 'Decode error: ${e.toString()}',
         'status': 'error',
         'transaction_id': 'ERROR_${DateTime.now().millisecondsSinceEpoch}',
