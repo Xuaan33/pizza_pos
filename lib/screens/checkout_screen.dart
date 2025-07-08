@@ -764,7 +764,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               'Rounding', "RM ${_calculateRounding().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
           _buildSummaryRow(
-              'GST @ 6.0%', "RM ${_calculateGST().toStringAsFixed(2)}"),
+              'GST (6%)', "RM ${_calculateGST().toStringAsFixed(2)}"),
           const Divider(thickness: 1, height: 24),
           _buildSummaryRow(
               'Grand Total', "RM ${totalAmount.toStringAsFixed(2)}",

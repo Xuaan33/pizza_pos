@@ -483,7 +483,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     _buildSummaryRow('Subtotal', subtotal),
                     if (taxBreakdown != null)
                       _buildSummaryRow(
-                        '${taxBreakdown['description'] ?? 'Tax'} @ ${taxBreakdown['rate']?.toStringAsFixed(1) ?? '6.0'}%',
+                        'GST (${taxBreakdown['rate']?.toStringAsFixed(0) ?? '6.0'}%)',
                         tax,
                       ),
                     _buildSummaryRow('Rounding Adjustment', rounding),
