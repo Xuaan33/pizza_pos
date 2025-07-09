@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
@@ -420,7 +421,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-  // main_layout.dart
   List<Widget> _getScreensWithOrders() {
     final authState = ref.read(authProvider);
 
@@ -463,10 +463,23 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
         if (tier.toLowerCase() == 'tier1') {
           return [
-            HomeScreen(
-              tableNumber: 1, // Default table for tier 1
-              existingOrder: null,
-              isTier1: true,
+            FutureBuilder(
+              future: _getDefaultTable(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final defaultTable = snapshot.data;
+                return HomeScreen(
+                  tableNumber: defaultTable != null
+                      ? int.tryParse(defaultTable['title']
+                              .replaceAll(RegExp(r'[^0-9]'), '')) ??
+                          0
+                      : 1,
+                  existingOrder: null,
+                  isTier1: true,
+                );
+              },
             ),
             OrdersScreen(
               orders: activeOrders,
@@ -527,13 +540,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     return activeOrders.where((o) => !o['isPaid']).toList();
   }
 
-  // main_layout.dart
   Widget _buildNavigationSidebar() {
     final authState = ref.read(authProvider);
 
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
-
       unauthenticated: () {
         if (!_isLoggingOut) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -888,12 +899,53 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     });
   }
 
-  // Add this method to MainLayoutState class
   void setSelectedTabIndex(int index) {
     setState(() {
       _selectedTabIndex = index;
     });
   }
+
+  Future<Map<String, dynamic>?> _getDefaultTable() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final branch = prefs.getString('branch');
+    if (branch == null) return null;
+
+    final response = await PosService().getFloorsAndTables(branch);
+    if (response['success'] == true) {
+      final floorsData = response['message'];
+
+      if (floorsData is List) {
+        for (var floor in floorsData) {
+          final floorName = floor['floor'];
+          final tables = floor['tables'];
+
+          // Case 1: Single-table in a Map (e.g., "DEFAULT" floor)
+          if (tables is Map<String, dynamic>) {
+            if (floorName == 'DEFAULT' && tables['is_default'] == 1) {
+              return tables;
+            }
+          }
+
+          // Case 2: Multi-table List
+          else if (tables is List) {
+            for (var table in tables) {
+              if (table['is_default'] == 1) {
+                return table;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return null; // No default table found
+  } catch (e, stackTrace) {
+    print('Error getting default table: $e\n$stackTrace');
+    return null;
+  }
+}
+
 
   double calculateOrderSubtotal(Map<String, dynamic> order) {
     return (order['items'] as List).fold(0.0, (sum, item) {

@@ -193,8 +193,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               total: _calculateTotal(),
             );
           });
+
           return WillPopScope(
-            onWillPop: _confirmExit,
+            onWillPop: () async {
+              await _confirmExit();
+              return false; // Prevent default back behavior
+            },
             child: Scaffold(
               backgroundColor: Colors.white,
               body: SafeArea(
@@ -362,7 +366,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            'MK-Floor 1-Table ${widget.order['tableNumber'] ?? 1}',
+            'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -1192,46 +1196,62 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<bool> _confirmExit() async {
-    final shouldExit = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Discard Payment?',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text(
-            'Are you sure you want to exit without completing payment?',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE732A0),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-              CustomerDisplayController.showDefaultDisplay();
-            },
-            child: const Text('Exit',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+    // For tier 1, show delete order dialog instead of exit dialog
+    final authState = ref.read(authProvider);
+    final isTier1 = authState.maybeWhen(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        return tier.toLowerCase() == 'tier1';
+      },
+      orElse: () => false,
     );
 
-    if (shouldExit == true) {
-      // Navigate to the root page if user confirms exit
-      CustomerDisplayController.showDefaultDisplay();
-      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-      return false;
-    }
+    if (isTier1) {
+      await _deleteOrder();
+      return false; // Prevent default back behavior
+    } else {
+      final shouldExit = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text('Discard Payment?',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text(
+              'Are you sure you want to exit without completing payment?',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pushNamedAndRemoveUntil(
+                    context, '/', (route) => false);
+                CustomerDisplayController.showDefaultDisplay();
+              },
+              child: const Text('Exit',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
 
-    return false; // Don't pop the screen if user cancelled
+      if (shouldExit == true) {
+        // Navigate to the root page if user confirms exit
+        CustomerDisplayController.showDefaultDisplay();
+        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+        return false;
+      }
+
+      return false; // Don't pop the screen if user cancelled
+    }
   }
 
   Future<bool> _showCashPaymentDialog() async {

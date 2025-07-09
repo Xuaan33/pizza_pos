@@ -8,8 +8,8 @@ import 'package:shiok_pos_android_app/components/customer_display_controller.dar
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
+import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
-import 'checkout_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final int tableNumber;
@@ -248,7 +248,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
-            // In home_screen.dart
             CustomerDisplayController.updateOrderDisplay(
               items: currentOrderItems.map((item) {
                 // Ensure quantity is converted to int for display
@@ -317,7 +316,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               const SizedBox(width: 10),
                                             ],
                                             Text(
-                                              'Table ${widget.tableNumber}',
+                                              widget.isTier1
+                                                  ? 'Instant Order'
+                                                  : 'Table ${widget.tableNumber}',
                                               style: const TextStyle(
                                                 fontSize: 24,
                                                 fontWeight: FontWeight.bold,
@@ -894,7 +895,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return true;
   }
 
-  // Handle back button press with confirmation dialog
   Future<bool> _onWillPop() async {
     if (currentOrderItems.isEmpty) {
       return true;
@@ -1208,18 +1208,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         // Get the full table name from floors and tables API
         final floorsResponse = await PosService().getFloorsAndTables(branch);
-        String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+        String? tableFullName;
 
-        if (floorsResponse['success'] == true) {
-          for (var floor in floorsResponse['message']) {
-            for (var table in floor['tables']) {
+        for (var floor in floorsResponse['message']) {
+          final tables = floor['tables'];
+
+          if (tables is Map<String, dynamic>) {
+            if (floor['floor'] == 'DEFAULT' && tables['is_default'] == 1) {
+              tableFullName = tables['name'];
+              break;
+            }
+          } else if (tables is List) {
+            for (var table in tables) {
               if (table['title'] == 'Table ${widget.tableNumber}') {
-                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                tableFullName = table['name'];
                 break;
               }
             }
           }
         }
+
+        tableFullName ??= 'Table ${widget.tableNumber}';
 
         // Prepare items with proper structure
         final items = currentOrderItems.map((item) {

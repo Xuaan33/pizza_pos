@@ -89,11 +89,34 @@ class _TableScreenState extends ConsumerState<TableScreen>
         final floorTables = <String, List<Map<String, dynamic>>>{};
         final floors = <String>[];
 
+        Map<String, dynamic>? defaultTable;
+
         for (var floor in floorsData) {
           final floorName = floor['floor'];
-          final tables = List<Map<String, dynamic>>.from(floor['tables']);
-          floorTables[floorName] = tables;
-          floors.add(floorName);
+          List<Map<String, dynamic>> tables = [];
+
+          // Handle both cases where tables is a Map or List
+          if (floor['tables'] is Map) {
+            tables.add(Map<String, dynamic>.from(floor['tables']));
+          } else if (floor['tables'] is List) {
+            tables = List<Map<String, dynamic>>.from(floor['tables']);
+          }
+
+          // Check for default table
+          for (var table in tables) {
+            if (table['is_default'] == 1) {
+              defaultTable = table;
+              break;
+            }
+          }
+
+          // Filter out default table from display
+          tables = tables.where((table) => table['is_default'] != 1).toList();
+
+          if (tables.isNotEmpty) {
+            floorTables[floorName] = tables;
+            floors.add(floorName);
+          }
         }
 
         if (!_isDisposed) {
@@ -108,7 +131,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
     } catch (e) {
       if (!_isDisposed) {
         setState(() => _isLoading = false);
-        // Only show error if we're still mounted and authenticated
         if (mounted && ref.read(authProvider) is AsyncData) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to load tables: $e')),
