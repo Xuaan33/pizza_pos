@@ -3,23 +3,23 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Main Content -->
+    <!-- Main Content (Initially Hidden) -->
     <LinearLayout
         android:id="@+id/orderDetailsContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:background="#FFF0F0"
         android:visibility="gone">
 
-        <!-- Logo Section (30%) -->
+        <!-- Logo Section (60%) -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="6"
             android:gravity="center"
             android:orientation="vertical"
-            android:background= "#FCE4EC">
+            android:background="#FCE4EC">
 
             <ImageView
                 android:layout_width="200dp"
@@ -27,11 +27,11 @@
                 android:src="@drawable/splash" />
         </LinearLayout>
 
-        <!-- Order Details Section (70%) -->
+        <!-- Order Details Section (40%) -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="7"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="4"
             android:orientation="vertical"
             android:padding="16dp">
 

@@ -903,6 +903,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<bool> _onBackPressed() async {
+    final authState = ref.read(authProvider);
+    final isTier1 = authState.maybeWhen(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        return tier.toLowerCase() == 'tier1';
+      },
+      orElse: () => false,
+    );
+
+    if (isTier1) {
+      Navigator.pop(context);
+      return true;
+    }
+
     if (currentOrderItems.isEmpty) {
       CustomerDisplayController.showDefaultDisplay();
       Navigator.pop(context);
@@ -1343,81 +1357,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildMenuItem(Map<String, dynamic> item, int index) {
     final availableStock = _itemStockQuantities[item['item_code']] ?? 999;
     final isInStock = availableStock > 0;
+    final isLoadingStock = _isLoadingStock;
+    final canAddItem = !isLoadingStock && isInStock;
 
     return GestureDetector(
-      onTap: isInStock
+      onTap: canAddItem
           ? () {
               _showItemOptionsDialog(item);
             }
           : null,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(15)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(
-                          8.0), // Adjust the value as needed
-                      child: item['image'] != null
-                          ? Image.network(
-                              '$baseImageUrl${item['image']}',
-                              fit: BoxFit.cover,
-                              height: 70,
-                              width: double.infinity,
-                              color: isInStock
-                                  ? null
-                                  : Colors.grey.withOpacity(0.5),
-                              colorBlendMode: BlendMode.saturation,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Image.network(
-                                item['image'],
+      child: Opacity(
+        opacity: canAddItem ? 1.0 : 0.6,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(15)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(
+                            8.0), // Adjust the value as needed
+                        child: item['image'] != null
+                            ? Image.network(
+                                '$baseImageUrl${item['image']}',
                                 fit: BoxFit.cover,
+                                height: 70,
+                                width: double.infinity,
+                                color: isInStock
+                                    ? null
+                                    : Colors.grey.withOpacity(0.5),
+                                colorBlendMode: BlendMode.saturation,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Image.network(
+                                  item['image'],
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Image.asset(
+                                'assets/pizza.png',
+                                fit: BoxFit.cover,
+                                height: 70,
+                                width: double.infinity,
                               ),
-                            )
-                          : Image.asset(
-                              'assets/pizza.png',
-                              fit: BoxFit.cover,
-                              height: 70,
-                              width: double.infinity,
-                            ),
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    children: [
-                      Text(
-                        item['item_name'],
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      children: [
+                        Text(
+                          item['item_name'],
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFFE732A0),
+                        Text(
+                          'RM ${(item['price_list_rate'] ?? 0).toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFE732A0),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            if (!isInStock) _buildOutOfStockOverlay(),
-          ],
+                ],
+              ),
+              if (!isInStock) _buildOutOfStockOverlay(),
+            ],
+          ),
         ),
       ),
     );
@@ -1455,6 +1474,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     double additionalCost = _calculateAdditionalCost(item);
     double totalPricePerItem = basePrice + additionalCost;
     double itemSubtotal = totalPricePerItem * item['quantity'];
+    final itemCode = item['item_code'];
+    final availableStock = _itemStockQuantities[itemCode] ?? 999;
+    final currentQuantity = item['quantity'];
+    final showStockLimit = currentQuantity >= availableStock;
 
     // Ensure we have a controller for this item
     if (index >= _itemRemarkControllers.length) {
@@ -1550,75 +1573,95 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Quantity controls and delete button
           Padding(
             padding: const EdgeInsets.only(top: 8.0, left: 0, right: 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                // Serve Later section on the left
-                Row(
-                  children: [
-                    Text(
-                      'Serve Later',
+                // Stock limit message (conditionally shown)
+                if (showStockLimit)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Text(
+                      'Cannot add more than available stock ($availableStock)',
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Transform.scale(
-                      scale: 0.75,
-                      child: Switch(
-                        value: item['custom_serve_later'] ?? false,
-                        onChanged: (value) {
-                          setState(() {
-                            currentOrderItems[index]['custom_serve_later'] =
-                                value;
-                          });
-                        },
-                        activeColor: Color(0xFFE732A0),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
 
-                // Quantity control and delete on the right
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove, size: 16),
-                            onPressed: () => _decreaseQuantity(index),
-                            padding: EdgeInsets.zero,
-                            constraints:
-                                BoxConstraints(minWidth: 30, minHeight: 30),
+                    // Serve Later section on the left
+                    Row(
+                      children: [
+                        Text(
+                          'Serve Later',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              '${(item['quantity']).toStringAsFixed(0)}',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                        ),
+                        const SizedBox(width: 10),
+                        Transform.scale(
+                          scale: 0.75,
+                          child: Switch(
+                            value: item['custom_serve_later'] ?? false,
+                            onChanged: (value) {
+                              setState(() {
+                                currentOrderItems[index]['custom_serve_later'] =
+                                    value;
+                              });
+                            },
+                            activeColor: Color(0xFFE732A0),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.add, size: 16),
-                            onPressed: () => _increaseQuantity(index),
-                            padding: EdgeInsets.zero,
-                            constraints:
-                                BoxConstraints(minWidth: 30, minHeight: 30),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                          size: 20, color: Colors.red),
-                      onPressed: () => _removeItem(index),
+
+                    // Quantity control and delete on the right
+                    Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove, size: 16),
+                                onPressed: () => _decreaseQuantity(index),
+                                padding: EdgeInsets.zero,
+                                constraints:
+                                    BoxConstraints(minWidth: 30, minHeight: 30),
+                              ),
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  '${(item['quantity']).toStringAsFixed(0)}',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add, size: 16),
+                                onPressed: showStockLimit
+                                    ? null
+                                    : () => _increaseQuantity(index),
+                                padding: EdgeInsets.zero,
+                                constraints:
+                                    BoxConstraints(minWidth: 30, minHeight: 30),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              size: 20, color: Colors.red),
+                          onPressed: () => _removeItem(index),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1824,18 +1867,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _increaseQuantity(int index) {
+    if (_isLoadingStock) return;
+
     final item = currentOrderItems[index];
     final itemCode = item['item_code'];
     final currentQuantity = item['quantity'];
     final availableStock = _itemStockQuantities[itemCode] ?? 999;
 
     if (currentQuantity >= availableStock) {
-      Fluttertoast.showToast(
-        msg: "Cannot add more than available stock ($availableStock)",
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
       return;
     }
 
