@@ -51,7 +51,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void dispose() {
     _isDisposed = true; // Mark as disposed
-    CustomerDisplayController.showDefaultDisplay();
+    // CustomerDisplayController.showDefaultDisplay();
 
     super.dispose();
   }
@@ -1234,7 +1234,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               onPressed: () {
                 Navigator.pushNamedAndRemoveUntil(
                     context, '/', (route) => false);
-                CustomerDisplayController.showDefaultDisplay();
+                // CustomerDisplayController.showDefaultDisplay();
               },
               child: const Text('Exit',
                   style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1245,7 +1245,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (shouldExit == true) {
         // Navigate to the root page if user confirms exit
-        CustomerDisplayController.showDefaultDisplay();
+        // CustomerDisplayController.showDefaultDisplay();
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         return false;
       }
@@ -1419,7 +1419,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
-          CustomerDisplayController.showDefaultDisplay();
+          // CustomerDisplayController.showDefaultDisplay();
         }
       }
     } catch (e) {

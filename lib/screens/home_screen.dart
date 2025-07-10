@@ -918,7 +918,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     if (currentOrderItems.isEmpty) {
-      CustomerDisplayController.showDefaultDisplay();
+      // CustomerDisplayController.showDefaultDisplay();
       Navigator.pop(context);
       return true;
     }
@@ -978,7 +978,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (result ?? false) {
       if (!mounted) return false;
       Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-      CustomerDisplayController.showDefaultDisplay();
+      // CustomerDisplayController.showDefaultDisplay();
       return true;
     }
     return false;
@@ -1107,7 +1107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               'tableFullName': tableFullName, // Pass both for reference
             });
 
-            CustomerDisplayController.showDefaultDisplay();
+            // CustomerDisplayController.showDefaultDisplay();
             Navigator.pushNamedAndRemoveUntil(
               context,
               '/',
