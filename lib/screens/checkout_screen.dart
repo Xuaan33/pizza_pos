@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,13 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
-import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
-import 'package:shiok_pos_android_app/screens/orders_screen.dart';
-import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -47,6 +43,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _amountGiven = 0.0;
   bool _isProcessingPayment = false;
   bool _isDisposed = false;
+  String _voucherCode = '';
+  double _discountAmount = 0.0;
+  bool _isValidatingVoucher = false;
 
   @override
   void dispose() {
@@ -113,6 +112,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  // Update the _fetchOrderDetails method in _CheckoutScreenState
   Future<void> _fetchOrderDetails() async {
     try {
       final invoiceName = widget.order['invoiceNumber'];
@@ -153,6 +153,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 invoice['base_rounding_adjustment']?.toDouble() ?? 0.0;
             widget.order['rounded_total'] =
                 invoice['rounded_total']?.toDouble() ?? 0.0;
+            widget.order['discount_amount'] =
+                (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0;
+            widget.order['coupon_code'] = invoice['coupon_code'];
+            widget.order['custom_user_voucher'] =
+                invoice['custom_user_voucher'];
+            _discountAmount = widget.order['discount_amount'];
           });
         }
       }
@@ -588,6 +594,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             Spacer(),
             GestureDetector(
+              onTap: () => _showVoucherDialog(),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Apply Discount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
               onTap: () => _navigateToHomeScreen(),
               child: Container(
                 padding:
@@ -764,6 +789,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           _buildSummaryRow(
               'Net Total', "RM ${_calculateSubtotal().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
+          if (_discountAmount > 0) ...[
+            _buildSummaryRow(
+                'Discount', "-RM ${_discountAmount.toStringAsFixed(2)}"),
+            const SizedBox(height: 8),
+          ],
           _buildSummaryRow(
               'Rounding', "RM ${_calculateRounding().toStringAsFixed(2)}"),
           const SizedBox(height: 8),
@@ -1435,9 +1465,173 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Future<void> _showVoucherDialog() async {
+    final voucherController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Apply Discount Voucher',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: TextField(
+            controller: voucherController,
+            decoration: const InputDecoration(
+              labelText: 'Voucher Code',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Apply',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true && voucherController.text.isNotEmpty) {
+      _validateVoucher(voucherController.text);
+    }
+  }
+
+  Future<void> _validateVoucher(String voucherCode) async {
+    _showLoadingOverlay(true);
+
+    try {
+      final response = await PosService().validateVoucher(voucherCode);
+
+      if (response['success'] == true) {
+        final voucherData = response['message'];
+        final voucherName = voucherData['name'];
+        final couponCode = voucherData['coupon_code'];
+
+        setState(() {
+          _voucherCode = voucherName;
+        });
+
+        // Update the order with the voucher
+        await _updateOrderWithVoucher(voucherName, couponCode);
+
+        Fluttertoast.showToast(
+          msg: "Voucher applied successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        Fluttertoast.showToast(
+          msg: "Voucher code is invalid or redeemed",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error validating voucher: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
+    }
+  }
+
+  // Update the _updateOrderWithVoucher method in _CheckoutScreenState
+  Future<void> _updateOrderWithVoucher(
+      String voucherName, String couponCode) async {
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        items: orderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        couponCode: couponCode,
+        custom_user_voucher: voucherName,
+      );
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts
+        await _fetchOrderDetails();
+      }
+    } catch (e) {
+      debugPrint('Error updating order with voucher: $e');
+    }
+  }
+
+  void _showLoadingOverlay(bool show) {
+    if (show) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return WillPopScope(
+            onWillPop: () async => false,
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
+      );
+    } else {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
   double _calculateSubtotal() {
     // Use server value if available, otherwise calculate from items
-    return (widget.order['grand_total'] as num?)?.toDouble() ??
+    return (widget.order['total'] as num?)?.toDouble() ??
         orderItems.fold(
             0.0, (sum, item) => sum + (item['price'] * item['quantity']));
   }

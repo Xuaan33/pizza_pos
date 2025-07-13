@@ -165,6 +165,7 @@ class PosService {
     double? discountAmount,
     String? table,
     String? orderChannel,
+    String? custom_user_voucher, // Add this parameter
   }) async {
     return _makeRequest(
       endpoint: 'shiok_pos.api.submit_order',
@@ -177,6 +178,9 @@ class PosService {
         if (name != null) 'name': name,
         if (table != null) 'custom_table': table,
         if (orderChannel != null) 'custom_order_channel': orderChannel,
+        if (couponCode != null) 'coupon_code': couponCode,
+        if (custom_user_voucher != null)
+          'custom_user_voucher': custom_user_voucher,
       },
     );
   }
@@ -298,6 +302,16 @@ class PosService {
       print('API Error: $e');
       rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>> validateVoucher(String voucherCode) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.validate_user_voucher',
+      method: 'POST',
+      body: {
+        'user_voucher': voucherCode,
+      },
+    );
   }
 
   Uint8List hexStringToBytes(String hexString) {

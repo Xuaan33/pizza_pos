@@ -62,7 +62,7 @@ class ReceiptPrinter {
 
   static Future<void> showPrintDialog(
       BuildContext context, String orderName) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    ScaffoldMessenger.of(context);
     try {
       showDialog(
         context: context,

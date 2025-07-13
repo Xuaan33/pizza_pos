@@ -10,7 +10,6 @@ import 'package:shiok_pos_android_app/screens/orders_screen.dart';
 import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
 import 'package:shiok_pos_android_app/screens/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/delivery_screen.dart';
-import 'package:shiok_pos_android_app/service/auth_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -28,7 +27,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Set<int> tablesWithSubmittedOrders = {};
   bool _isOrdersLoading = false;
   bool _isLoggingOut = false;
-  int _orderCounter = 1;
+  // int _orderCounter = 1;
   bool _customerScreenShown = false;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
