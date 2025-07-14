@@ -189,12 +189,37 @@ class PosService {
     required String invoiceName,
     required List<Map<String, dynamic>> payments,
   }) async {
+    // Extract pos_invoice_number from payments if it exists
+    String? posInvoiceNumber;
+    for (final payment in payments) {
+      if (payment['pos_response'] != null) {
+        posInvoiceNumber =
+            payment['pos_response']['pos_invoice_number']?.toString();
+        if (posInvoiceNumber != null) break;
+      }
+    }
+
     return _makeRequest(
       endpoint: 'shiok_pos.api.checkout',
       method: 'POST',
       body: {
         'name': invoiceName,
-        'payments': payments,
+        'payments': payments.map((payment) {
+          // Create a new payment object without the pos_response
+          final newPayment = {
+            'mode_of_payment': payment['mode_of_payment'],
+            'amount': payment['amount'],
+          };
+
+          // Include reference_no if it exists
+          if (payment['reference_no'] != null) {
+            newPayment['reference_no'] = payment['reference_no'];
+          }
+
+          return newPayment;
+        }).toList(),
+        if (posInvoiceNumber != null)
+          'fiuu_invoice_number': posInvoiceNumber,
       },
     );
   }
@@ -406,6 +431,7 @@ class OrderMapper {
             : null,
         'paymentDate': order['creation']?.toString(),
         'invoiceNumber': order['name'] as String,
+        'pos_invoice_number': order['custom_fiuu_invoice_number']
       };
     } catch (e) {
       print('[OrderMapper] Error mapping paid order: $e');

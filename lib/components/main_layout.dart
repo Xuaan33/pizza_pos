@@ -231,6 +231,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               (invoice['base_rounding_adjustment'] as num?)
                                       ?.toDouble() ??
                                   0.0,
+                                  "pos_invoice_number": invoice['custom_fiuu_invoice_number']?.toString() ?? '000000',
                         };
                       } catch (e) {
                         print(

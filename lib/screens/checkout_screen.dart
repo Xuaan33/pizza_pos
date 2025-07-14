@@ -1181,11 +1181,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
 
         // 2. Extract POS invoice number - CORRECTED PATTERN
-        // Looks for "65000" followed by exactly 6 digits (the POS invoice number)
-        final posInvoiceMatch = RegExp(r'65(\d{6})').firstMatch(asciiData);
-        if (posInvoiceMatch != null) {
-          posInvoiceNumber =
-              posInvoiceMatch.group(1)!; // This will capture "000497"
+        final index = asciiData.indexOf('6400');
+        if (index != -1 && index >= 6) {
+          posInvoiceNumber = asciiData.substring(index - 6, index);
         }
 
         // 3. Check approval status
@@ -1223,6 +1221,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         .split(' ')
         .map((hex) => int.parse(hex, radix: 16))
         .toList();
+  }
+
+  String extractPosInvoiceNumber(String asciiData) {
+    try {
+      // Find the index of "6400"
+      final index = asciiData.indexOf('6400');
+      if (index != -1 && index >= 6) {
+        // Extract 6 characters before "6400"
+        return asciiData.substring(index - 6, index);
+      }
+    } catch (e) {
+      debugPrint('Error extracting POS invoice number: $e');
+    }
+    return '000000';
   }
 
   Future<bool> _confirmExit() async {

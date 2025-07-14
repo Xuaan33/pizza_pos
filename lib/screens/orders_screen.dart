@@ -732,8 +732,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (!confirmed) return;
 
     try {
-      final posInvoiceNumber = '000502';
-      // final posInvoiceNumber = order['pos_invoice_number']?.toString();
+      // final posInvoiceNumber = '000502';
+      final posInvoiceNumber = order['pos_invoice_number']?.toString();
 
       if (posInvoiceNumber == null || posInvoiceNumber.isEmpty) {
         throw Exception('POS invoice number not available for refund');
