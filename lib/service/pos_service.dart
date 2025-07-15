@@ -218,8 +218,7 @@ class PosService {
 
           return newPayment;
         }).toList(),
-        if (posInvoiceNumber != null)
-          'fiuu_invoice_number': posInvoiceNumber,
+        if (posInvoiceNumber != null) 'fiuu_invoice_number': posInvoiceNumber,
       },
     );
   }
@@ -335,6 +334,16 @@ class PosService {
       method: 'POST',
       body: {
         'user_voucher': voucherCode,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> cancelOrder(String orderName) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.cancel_order',
+      method: 'POST',
+      body: {
+        'name': orderName,
       },
     );
   }

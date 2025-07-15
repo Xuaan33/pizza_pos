@@ -165,7 +165,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Widget _buildOrderListItem(Map<String, dynamic> order) {
     final isSelected = _selectedOrder != null &&
         _selectedOrder!['orderId'] == order['orderId'];
-    final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
+    final isCancelled =
+        order['status']?.toString().toLowerCase() == 'cancelled';
+    final isDraft =
+        !isCancelled && (order['status']?.toString().toLowerCase() == 'draft');
     final total = _calculateOrderTotal(order);
 
     return Card(
@@ -191,16 +194,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: isDraft ? Colors.blue[100] : Colors.green[100],
-                      borderRadius: BorderRadius.circular(20),
+                      color: isCancelled
+                          ? Colors.red[200]
+                          : (isDraft ? Colors.blue[100] : Colors.green[100]),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      isDraft ? "DRAFT" : "PAID",
+                      isCancelled ? 'CANCELLED' : (isDraft ? 'DRAFT' : 'PAID'),
                       style: TextStyle(
-                        fontSize: 12,
-                        color: isDraft ? Colors.blue[800] : Colors.green[800],
+                        color: isCancelled
+                            ? Colors.red[800]
+                            : (isDraft ? Colors.blue[800] : Colors.green[800]),
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -237,6 +244,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   Widget _buildOrderDetailsPanel(Map<String, dynamic> order) {
     final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
+    final isCancelled =
+        (order['status']?.toString() ?? 'Cancelled') == 'Cancelled';
+
     final items = (order['items'] as List<dynamic>?) ?? [];
     final subtotal = (order['net_total'] as num?)?.toDouble() ??
         _calculateOrderSubtotal(order);
@@ -288,17 +298,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           padding:
                               EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
-                            color:
-                                isDraft ? Colors.blue[100] : Colors.green[100],
-                            borderRadius: BorderRadius.circular(20),
+                            color: isCancelled
+                                ? Colors.red[200]
+                                : (isDraft
+                                    ? Colors.blue[100]
+                                    : Colors.green[100]),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
-                            isDraft ? "DRAFT" : "PAID",
+                            isCancelled
+                                ? 'CANCELLED'
+                                : (isDraft ? 'DRAFT' : 'PAID'),
                             style: TextStyle(
-                              color: isDraft
-                                  ? Colors.blue[800]
-                                  : Colors.green[800],
-                              fontWeight: FontWeight.w600,
+                              color: isCancelled
+                                  ? Colors.red[800]
+                                  : (isDraft
+                                      ? Colors.blue[800]
+                                      : Colors.green[800]),
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
@@ -548,11 +565,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
             // Inside _buildOrderDetailsPanel method, after the existing buttons:
             if (!isDraft &&
-                order['paymentMethod']
-                        ?.toString()
-                        .toLowerCase()
-                        .contains('card') ==
-                    true) ...[
+                !isCancelled) ...[
               SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => _processRefund(order),
@@ -734,6 +747,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     try {
       // final posInvoiceNumber = '000502';
       final posInvoiceNumber = order['pos_invoice_number']?.toString();
+      print('pos lanjiao: $posInvoiceNumber');
 
       if (posInvoiceNumber == null || posInvoiceNumber.isEmpty) {
         throw Exception('POS invoice number not available for refund');
@@ -746,10 +760,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           .substring(0, 20);
 
       // Generate the void hex message
-      final hexMessage = PosHexGenerator.generateVoidHexMessage(
+      final hexMessage = order['paymentMethod']?.toString().toLowerCase().contains('card') == true
+    ? PosHexGenerator.generateVoidHexMessage(
         transactionId: transactionId,
         invoiceNumber: posInvoiceNumber,
+      )
+      
+    : PosHexGenerator.generateVoidWalletQrHexMessage(
+        transactionId,
+        extendedInvoiceNumber: posInvoiceNumber,
       );
+
 
       // Connect to POS terminal
       final prefs = await SharedPreferences.getInstance();
@@ -768,22 +789,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         }
 
         // If successful, call the refund API
-        // final refundResponse = await PosService().refundOrder(
-        //   invoiceName: order['orderId']?.toString() ?? '',
-        //   posResponse: response,
-        // );
+        final refundResponse =
+            await PosService().cancelOrder(order['orderId']?.toString() ?? '');
 
-        // if (refundResponse['success'] == true) {
-        if (mounted) {
-          Fluttertoast.showToast(
-            msg: "Refund Successful",
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-          );
-          _refreshOrders();
+        if (refundResponse['success'] == true) {
+          if (mounted) {
+            Fluttertoast.showToast(
+              msg: "Refund Successful",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+            _refreshOrders();
+          }
         }
-        // }
       } finally {
         socket.destroy();
       }

@@ -77,6 +77,128 @@ class PosHexGenerator {
     return value.toString().padLeft(12, '0');
   }
 
+  static String generateVoidWalletQrHexMessage(String transactionId,{String? extendedInvoiceNumber}) {
+    try {
+      // Validate transaction ID length
+      if (transactionId.length != 20) {
+        throw ArgumentError("Transaction ID must be exactly 20 characters long.");
+      }
+
+      // Ensure extended invoice number is provided
+      if (extendedInvoiceNumber == null || extendedInvoiceNumber.isEmpty) {
+        throw ArgumentError("Extended Invoice Number must be provided.");
+      }
+
+      // Base HEX message template for VOID QR
+      const originalMessage = "02 00 98 36 30 30 30 30 30 30 30 30 30 31 30 34 30 30 30 30 "
+          "1C 30 30 00 20 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 "
+          "1C 36 36 00 20 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 31 32 33 "
+          "1C 36 35 00 06 30 30 30 30 37 30 "
+          "1C 30 39 00 01 30 "
+          "1C 03 93";
+
+      // Step 1: Tokenize and normalize presentation header (Field 00)
+      List<String> tokens = originalMessage.split(' ');
+      tokens = _normalizePresentationHeader(tokens, expectedLength: 24);
+
+      // Step 2: Update transaction ID in Field 66
+      tokens = _updateField(
+        tokens,
+        ["1C", "36", "36", "00", "20"],
+        transactionId,
+        20,
+      );
+
+      // Step 3: Pad or truncate extended invoice number to exactly 25 characters
+      final paddedExtendedInvoice = extendedInvoiceNumber.padLeft(25).substring(0, 25);
+
+      // Step 4: Try to update Field 67 (Extended Invoice Number). If not found, insert it before ETX.
+      try {
+        tokens = _updateField(
+          tokens,
+          ["1C", "36", "37", "00", "25"],
+          paddedExtendedInvoice,
+          25,
+        );
+      } catch (e) {
+        if (e.toString().contains("not found")) {
+          // Find the position to insert Field 67 (before ETX field)
+          int insertPos = _findLastSeparatorBeforeEtx(tokens);
+          
+          // Insert field 67 with encoded data before ETX
+          final fieldHeader = ["1C", "36", "37", "00", "25"];
+          final fieldData = _asciiToHexTokens(paddedExtendedInvoice);
+          
+          tokens = [
+            ...tokens.sublist(0, insertPos),
+            ...fieldHeader,
+            ...fieldData,
+            ...tokens.sublist(insertPos)
+          ];
+        } else {
+          rethrow;
+        }
+      }
+
+      // Step 5: Remove Field 65 (Invoice Number, not used for QR)
+      tokens = _removeField(tokens, ["1C", "36", "35", "00", "06"], 6);
+
+      // Step 6: Remove Field 09 (Receipt Required flag)
+      tokens = _removeField(tokens, ["1C", "30", "39", "00", "01"], 1);
+
+      // Step 7: Recalculate and update LRC
+      tokens = _updateLrc(tokens);
+
+      // Return final space-separated message
+      return tokens.join(' ');
+    } catch (e) {
+      throw Exception("Error generating Void message: ${e.toString()}");
+    }
+  }
+
+  static int _findLastSeparatorBeforeEtx(List<String> tokens) {
+    // Look for the ETX field (1C 03) and find the separator before it
+    for (int i = tokens.length - 3; i >= 0; i--) {
+      if (tokens[i] == "1C" && tokens[i + 1] == "03") {
+        return i;
+      }
+    }
+    throw ArgumentError("ETX field not found in message");
+  }
+
+  static List<String> _removeField(
+      List<String> tokens, List<String> pattern, int dataLength) {
+    final normalizedPattern = pattern.map((e) => e.toUpperCase()).toList();
+    final normalizedTokens = tokens.map((e) => e.toUpperCase()).toList();
+
+    int? idx;
+    for (var i = 0;
+        i < normalizedTokens.length - normalizedPattern.length;
+        i++) {
+      var match = true;
+      for (var j = 0; j < normalizedPattern.length; j++) {
+        if (normalizedTokens[i + j] != normalizedPattern[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        idx = i;
+        break;
+      }
+    }
+
+    if (idx == null) {
+      return tokens; // Field not found, return original tokens
+    }
+
+    // Remove the field header and data
+    return [
+      ...tokens.sublist(0, idx),
+      ...tokens.sublist(idx + pattern.length + dataLength)
+    ];
+  }
+
   static List<String> _normalizePresentationHeader(List<String> tokens,
       {required int expectedLength}) {
     int? firstSep;

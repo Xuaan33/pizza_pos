@@ -1168,25 +1168,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       String responseText = 'UNKNOWN';
       String status = 'error';
       String transactionId = '';
+      bool isQrPayment = false;
 
       try {
         final asciiData =
             String.fromCharCodes(rawData.where((b) => b >= 32 && b <= 126));
 
-        // 1. Extract main invoice number (INV202500293)
+        // 1. Check if this is a QR payment (look for "QR" marker)
+        isQrPayment = asciiData.contains(' QR ');
+
+        // 2. Extract main invoice number
         final invoiceMatch = RegExp(r'INV(\d{9})').firstMatch(asciiData);
         if (invoiceMatch != null) {
           invoiceNumber = invoiceMatch.group(1)!;
           transactionId = 'INV$invoiceNumber';
         }
 
-        // 2. Extract POS invoice number - CORRECTED PATTERN
-        final index = asciiData.indexOf('6400');
-        if (index != -1 && index >= 6) {
-          posInvoiceNumber = asciiData.substring(index - 6, index);
+        // 3. Extract reference number based on payment type
+        if (isQrPayment) {
+          posInvoiceNumber = extractQrReferenceId(asciiData);
+        } else {
+          // Card Payment - Standard extraction (6 digits before "6400")
+          final index = asciiData.indexOf('6400');
+          if (index != -1 && index >= 6) {
+            posInvoiceNumber = asciiData.substring(index - 6, index);
+          }
         }
 
-        // 3. Check approval status
+        // 4. Check approval status
         if (asciiData.contains('APPROVED')) {
           status = 'success';
           responseText = 'APPROVED';
@@ -1196,12 +1205,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
 
       return {
-        'invoice_number': invoiceNumber, // "202500293" (correct)
-        'pos_invoice_number':
-            posInvoiceNumber, // Should be "000497" (was incorrectly "976400")
+        'invoice_number': invoiceNumber,
+        'pos_invoice_number': posInvoiceNumber,
         'response_text': responseText,
         'status': status,
         'transaction_id': transactionId,
+        'is_qr_payment': isQrPayment,
       };
     } catch (e) {
       debugPrint('❌ Decode error: $e');
@@ -1211,8 +1220,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'response_text': 'Decode error: ${e.toString()}',
         'status': 'error',
         'transaction_id': 'ERROR_${DateTime.now().millisecondsSinceEpoch}',
+        'is_qr_payment': false,
       };
     }
+  }
+
+  String extractQrReferenceId(String asciiData) {
+    try {
+      // Extract YYMM from E6600325YYYY04
+      final yymmMatch = RegExp(r'E6600325(\d{4})04').firstMatch(asciiData);
+
+      // Extract HHMMSS after '04'
+      final timeMatch = RegExp(r'E6600325\d{4}04(\d{6})').firstMatch(asciiData);
+
+      // Extract 6-digit payment ref from '65000XXXXXX'
+      final paymentRefMatch = RegExp(r'65(\d{6})64').firstMatch(asciiData);
+
+      if (yymmMatch != null && timeMatch != null && paymentRefMatch != null) {
+        final yymm = yymmMatch.group(1)!; // e.g. 0716
+        final timeStr = timeMatch.group(1)!; // e.g. 012026
+        final middleRef = paymentRefMatch.group(1)!; // e.g. 000521
+
+        // Parse HHMMSS and subtract 2 seconds
+        int hh = int.parse(timeStr.substring(0, 2));
+        int mm = int.parse(timeStr.substring(2, 4));
+        int ss = int.parse(timeStr.substring(4, 6));
+
+        int totalSeconds = hh * 3600 + mm * 60 + ss - 2;
+        if (totalSeconds < 0) totalSeconds = 0; // Guard against negatives
+
+        final adjHH = (totalSeconds ~/ 3600).toString().padLeft(2, '0');
+        final adjMM = ((totalSeconds % 3600) ~/ 60).toString().padLeft(2, '0');
+        final adjSS = (totalSeconds % 60).toString().padLeft(2, '0');
+
+        final adjustedTime = '$adjHH$adjMM$adjSS'; // HHMMSS adjusted
+        print("SOHAI $yymm$adjustedTime$middleRef");
+
+        return '$yymm$adjustedTime$middleRef';
+      }
+    } catch (e) {
+      debugPrint('Error extracting QR reference: $e');
+    }
+
+    return '000000000000000000';
   }
 
   // Helper function to convert hex string to bytes
@@ -1331,6 +1381,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         keyboardType:
                             TextInputType.numberWithOptions(decimal: true),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          for (var amount in [10, 50, 100])
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.black,
+                              ),
+                              onPressed: () {
+                                amountController.text =
+                                    amount.toStringAsFixed(2);
+                              },
+                              child: Text('RM $amount'),
+                            ),
+                        ],
                       ),
                     ],
                   ),
