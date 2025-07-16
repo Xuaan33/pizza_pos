@@ -1379,13 +1379,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       String status = 'error';
       String transactionId = '';
       bool isQrPayment = false;
+      bool isDuitNowPayment = false;
 
       try {
         final asciiData =
             String.fromCharCodes(rawData.where((b) => b >= 32 && b <= 126));
 
-        // 1. Check if this is a QR payment (look for "QR" marker)
+        // 1. Check if this is a QR or DuitNow payment
         isQrPayment = asciiData.contains(' QR ');
+        isDuitNowPayment = asciiData.contains('DevN5');
 
         // 2. Extract main invoice number
         final invoiceMatch = RegExp(r'INV(\d{9})').firstMatch(asciiData);
@@ -1395,10 +1397,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
 
         // 3. Extract reference number based on payment type
-        if (isQrPayment) {
+        if (isDuitNowPayment) {
+          posInvoiceNumber = extractDuitNowReferenceId(asciiData);
+        } else if (isQrPayment) {
           posInvoiceNumber = extractQrReferenceId(asciiData);
         } else {
-          // Card Payment - Standard extraction (6 digits before "6400")
+          // Card Payment
           final index = asciiData.indexOf('6400');
           if (index != -1 && index >= 6) {
             posInvoiceNumber = asciiData.substring(index - 6, index);
@@ -1421,6 +1425,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'status': status,
         'transaction_id': transactionId,
         'is_qr_payment': isQrPayment,
+        'is_duitnow_payment': isDuitNowPayment,
       };
     } catch (e) {
       debugPrint('❌ Decode error: $e');
@@ -1431,6 +1436,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'status': 'error',
         'transaction_id': 'ERROR_${DateTime.now().millisecondsSinceEpoch}',
         'is_qr_payment': false,
+        'is_duitnow_payment': false,
       };
     }
   }
@@ -1472,6 +1478,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint('Error extracting QR reference: $e');
     }
 
+    return '000000000000000000';
+  }
+
+  String extractDuitNowReferenceId(String asciiData) {
+    try {
+      final match = RegExp(r'DevN5(\d{16})').firstMatch(asciiData);
+      if (match != null) {
+        return match.group(1)!;
+      }
+    } catch (e) {
+      debugPrint('Error extracting DuitNow reference: $e');
+    }
     return '000000000000000000';
   }
 
