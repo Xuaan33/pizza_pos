@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -46,6 +47,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String _voucherCode = '';
   double _discountAmount = 0.0;
   bool _isValidatingVoucher = false;
+  bool _isEditing = false;
+  List<Map<String, dynamic>> _editableItems = [];
+  Map<String, int> _itemStockQuantities = {};
+  bool _isLoadingStock = false;
 
   @override
   void dispose() {
@@ -61,6 +66,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _loadPaymentMethods();
     _loadTodayInfo();
     _fetchOrderDetails();
+    _checkStockForItems();
   }
 
   void _loadPaymentMethods() {
@@ -173,6 +179,52 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   List<Map<String, dynamic>> get orderItems {
     return List<Map<String, dynamic>>.from(widget.order['items']);
+  }
+
+  // Add to _CheckoutScreenState class
+  Future<void> _checkStockForItems() async {
+    if (_isLoadingStock) return;
+
+    setState(() => _isLoadingStock = true);
+
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+        try {
+          final newStockQuantities = <String, int>{};
+
+          for (var item in orderItems) {
+            try {
+              final response = await PosService().getStockQuantity(
+                posProfile: posProfile,
+                itemCode: item['item_code'],
+              );
+
+              if (response['success'] == true) {
+                newStockQuantities[item['item_code']] =
+                    (response['message']['qty'] as num?)?.toInt() ?? 0;
+              } else {
+                newStockQuantities[item['item_code']] =
+                    999; // Assume unlimited if API fails
+              }
+            } catch (e) {
+              debugPrint('Error checking stock for ${item['item_code']}: $e');
+              newStockQuantities[item['item_code']] =
+                  999; // Assume unlimited on error
+            }
+          }
+
+          setState(() {
+            _itemStockQuantities = newStockQuantities;
+          });
+        } catch (e) {
+          debugPrint('Error checking stock: $e');
+        } finally {
+          setState(() => _isLoadingStock = false);
+        }
+      },
+    );
   }
 
   @override
@@ -372,7 +424,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
+            widget.order['tableNumber'] == 0
+                ? 'Instant Order'
+                : 'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -567,7 +621,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-// Replace your _buildOrderHeader() method with this:
+  List<Widget> _buildVariantText(Map<String, dynamic> item) {
+  dynamic variantInfo = item['custom_variant_info'];
+  if (variantInfo == null) return [];
+
+  // Handle case where variantInfo is a JSON string
+  if (variantInfo is String) {
+    try {
+      variantInfo = jsonDecode(variantInfo);
+    } catch (e) {
+      debugPrint('Error parsing variant info: $e');
+      return [];
+    }
+  }
+
+  // Handle case where variantInfo is a List
+  if (variantInfo is List) {
+    return variantInfo.expand((variant) {
+      if (variant is Map && variant['options'] is List) {
+        return (variant['options'] as List).map((option) {
+          return Text(
+            '• ${variant['variant_group']}: ${option['option']}'
+            '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
+            style: TextStyle(fontSize: 12, color: Colors.black),
+          );
+        }).toList();
+      }
+      return <Widget>[];
+    }).toList();
+  }
+
+  // Handle case where variantInfo is a Map (old format)
+  if (variantInfo is Map) {
+    return variantInfo.entries.map((entry) {
+      return Text(
+        '• ${entry.key}: ${entry.value}',
+        style: TextStyle(fontSize: 12, color: Colors.black),
+      );
+    }).toList();
+  }
+
+  return [];
+}
+
   Widget _buildOrderHeader() {
     return Column(
       children: [
@@ -606,6 +702,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   'Apply Discount',
                   style: TextStyle(
                     color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _isEditing ? _updateOrder : _toggleEditMode,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _isEditing ? Colors.green : Colors.yellow,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _isEditing ? 'Update Order' : 'Edit Order',
+                  style: TextStyle(
+                  color: _isEditing ? Colors.white : Colors.black,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -685,7 +800,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-// Replace your _buildOrderItemsList() method with this:
   Widget _buildOrderItemsList() {
     return Table(
       columnWidths: const {
@@ -697,7 +811,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
-        for (final item in orderItems)
+        for (int i = 0; i < orderItems.length; i++)
           TableRow(
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
@@ -705,37 +819,132 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Image.network(
-                  '${item['image']}',
-                  width: 50,
-                  height: 50,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 50,
-                    height: 50,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.fastfood),
-                  ),
+                child: Stack(
+                  children: [
+                    Image.network(
+                      '${orderItems[i]['image']}',
+                      width: 50,
+                      height: 50,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 50,
+                        height: 50,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.fastfood),
+                      ),
+                    ),
+                    if (_isEditing)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: GestureDetector(
+                          onTap: () => _deleteItem(i),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.delete,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Text(
-                  item['name'],
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      orderItems[i]['name'],
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (orderItems[i]['custom_variant_info'] != null)
+                      ..._buildVariantText(orderItems[i]),
+                  ],
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Text(
-                  'x${item['quantity'].toStringAsFixed(0)}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.center,
-                ),
+                child: _isEditing
+                    ? Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove, size: 20),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _decreaseQuantity(i),
+                              ),
+                              Container(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                child: Text(
+                                  _editableItems[i]['quantity']
+                                      .toStringAsFixed(0),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add, size: 20),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  final itemCode =
+                                      _editableItems[i]['item_code'];
+                                  final availableStock =
+                                      _itemStockQuantities[itemCode] ?? 999;
+                                  final currentQuantity =
+                                      _editableItems[i]['quantity'];
+
+                                  if (currentQuantity >= availableStock) {
+                                    Fluttertoast.showToast(
+                                      msg:
+                                          "Cannot add more than available stock ($availableStock)",
+                                      gravity: ToastGravity.BOTTOM,
+                                      backgroundColor: Colors.red,
+                                      textColor: Colors.white,
+                                    );
+                                    return;
+                                  }
+
+                                  setState(() {
+                                    _editableItems[i]['quantity'] += 1;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          if (_itemStockQuantities[_editableItems[i]
+                                  ['item_code']] !=
+                              null)
+                            Text(
+                              'Stock: ${_itemStockQuantities[_editableItems[i]['item_code']]}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                        ],
+                      )
+                    : Text(
+                        'x${orderItems[i]['quantity'].toStringAsFixed(0)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
+                      ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  item['price'].toStringAsFixed(2),
+                  orderItems[i]['price'].toStringAsFixed(2),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                   textAlign: TextAlign.right,
                 ),
@@ -743,7 +952,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  (item['price'] * item['quantity']).toStringAsFixed(2),
+                  (orderItems[i]['price'] * orderItems[i]['quantity'])
+                      .toStringAsFixed(2),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                   textAlign: TextAlign.right,
                 ),
@@ -755,22 +965,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _navigateToHomeScreen() {
-    // After TableScreen is shown, navigate to HomeScreen with the order data
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(
-          tableNumber: widget.order['tableNumber'],
-          existingOrder: {
-            ...widget.order,
-            'items': widget.order['items'],
-            'orderId': widget.order['invoiceNumber'],
-            'invoiceNumber': widget.order['invoiceNumber'],
-          },
-        ),
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => HomeScreen(
+        tableNumber: widget.order['tableNumber'],
+        existingOrder: {
+          ...widget.order,
+          'items': widget.order['items'],
+          'orderId': widget.order['invoiceNumber'],
+          'invoiceNumber': widget.order['invoiceNumber'],
+        },
+        isTier1: true,
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildOrderSummary() {
     final totalAmount = _calculateTotal();
@@ -1448,6 +1658,46 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         false; // Return false if dialog is dismissed
   }
 
+  Future<void> _deleteOrderFromItem() async {
+    final orderName = widget.order['invoiceNumber']?.toString();
+    if (orderName == null || orderName.isEmpty) {
+      // If no invoice number, just navigate back
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      return;
+    }
+
+    setState(() => _isProcessingPayment = true);
+
+    try {
+      final response = await PosService().deleteOrder(orderName);
+
+      if (response['success'] == true) {
+        if (mounted) {
+          Fluttertoast.showToast(
+            msg: "Order Deleted Successfully",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: "Failed to delete order: ${e.toString()}",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+      }
+    }
+  }
+
   Future<void> _deleteOrder() async {
     final orderName = widget.order['invoiceNumber']?.toString();
     if (orderName == null || orderName.isEmpty) return;
@@ -1514,28 +1764,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (response['success'] == true) {
         if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/',
-            (route) => false,
-            arguments: {
-              'action': 'deleted',
-              'tableNumber': widget.order['tableNumber'],
-            },
-          );
           Fluttertoast.showToast(
             msg: "Order Deleted Successfully",
             gravity: ToastGravity.BOTTOM,
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
-          // CustomerDisplayController.showDefaultDisplay();
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete order: ${e.toString()}')),
+        Fluttertoast.showToast(
+          msg: "Failed to delete order: ${e.toString()}",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
       }
     } finally {
@@ -1788,5 +2032,182 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
       },
     );
+  }
+
+  void _toggleEditMode() {
+    setState(() {
+      _isEditing = !_isEditing;
+      if (_isEditing) {
+        // Make a copy of the items for editing
+        _editableItems = List<Map<String, dynamic>>.from(widget.order['items']);
+      }
+    });
+  }
+
+  void _deleteItem(int index) async {
+    final isLastItem = _editableItems.length == 1;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Colors.white,
+            title: Text(
+              isLastItem ? 'Delete Order' : 'Remove Item',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Text(
+              isLastItem
+                  ? 'This is the last item in the order. Removing it will delete the entire order. Are you sure?'
+                  : 'Are you sure you want to remove this item from the order?',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text(
+                  'CANCEL',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE732A0),
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(
+                  isLastItem ? 'DELETE ORDER' : 'REMOVE',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirmed) {
+      if (isLastItem) {
+        // Delete the entire order
+        await _deleteOrderFromItem();
+      } else {
+        // Just remove the item
+        setState(() {
+          _editableItems.removeAt(index);
+        });
+      }
+    }
+  }
+
+  void _decreaseQuantity(int index) {
+    if (_editableItems[index]['quantity'] <= 1) {
+      Fluttertoast.showToast(
+        msg: "Item quantity cannot be 0",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    setState(() {
+      _editableItems[index]['quantity'] -= 1;
+    });
+  }
+
+  Future<void> _updateOrder() async {
+    if (_editableItems.isEmpty) {
+      Fluttertoast.showToast(
+        msg: "Order cannot be empty",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    // Validate stock before updating
+    for (var item in _editableItems) {
+      final itemCode = item['item_code'];
+      final availableStock = _itemStockQuantities[itemCode] ?? 999;
+      final quantity = item['quantity'];
+
+      if (quantity > availableStock) {
+        Fluttertoast.showToast(
+          msg:
+              "Cannot order more than available stock ($availableStock) for ${item['name']}",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        return;
+      }
+    }
+
+    _showLoadingOverlay(true);
+
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        items: _editableItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        couponCode: widget.order['coupon_code'],
+        custom_user_voucher: widget.order['custom_user_voucher'],
+      );
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts
+        await _fetchOrderDetails();
+        setState(() {
+          _isEditing = false;
+          widget.order['items'] = _editableItems;
+        });
+        Fluttertoast.showToast(
+          msg: "Order updated successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error updating order: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
+    }
   }
 }

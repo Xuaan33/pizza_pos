@@ -231,7 +231,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               (invoice['base_rounding_adjustment'] as num?)
                                       ?.toDouble() ??
                                   0.0,
-                                  "pos_invoice_number": invoice['custom_fiuu_invoice_number']?.toString() ?? '000000',
+                          "pos_invoice_number":
+                              invoice['custom_fiuu_invoice_number']
+                                      ?.toString() ??
+                                  '000000',
                         };
                       } catch (e) {
                         print(
@@ -622,7 +625,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     final bool isSelected = index == _selectedTabIndex;
     return GestureDetector(
       onTap: action ??
-          () {
+          () async {
             if (index == -1) {
               // Logout
               ref.read(authProvider.notifier).logout();
@@ -657,9 +660,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               child: Image.asset(
                 imagePath,
                 color: isSelected ? Colors.pink : const Color(0xFF555555),
-                // width: index == 2 ? 50 : 40, // adjust image size for index 2
-                // height: index == 2 ? 50 : 40,
-                width: index == 1 ? 50 : 40, // adjust image size for index 2
+                width: index == 1 ? 50 : 40,
                 height: index == 1 ? 50 : 40,
               ),
             ),
@@ -906,46 +907,66 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<Map<String, dynamic>?> _getDefaultTable() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final branch = prefs.getString('branch');
-    if (branch == null) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final branch = prefs.getString('branch');
+      if (branch == null) return null;
 
-    final response = await PosService().getFloorsAndTables(branch);
-    if (response['success'] == true) {
-      final floorsData = response['message'];
+      final response = await PosService().getFloorsAndTables(branch);
+      if (response['success'] == true) {
+        final floorsData = response['message'];
 
-      if (floorsData is List) {
-        for (var floor in floorsData) {
-          final floorName = floor['floor'];
-          final tables = floor['tables'];
+        if (floorsData is List) {
+          for (var floor in floorsData) {
+            final floorName = floor['floor'];
+            final tables = floor['tables'];
 
-          // Case 1: Single-table in a Map (e.g., "DEFAULT" floor)
-          if (tables is Map<String, dynamic>) {
-            if (floorName == 'DEFAULT' && tables['is_default'] == 1) {
-              return tables;
+            // Case 1: Single-table in a Map (e.g., "DEFAULT" floor)
+            if (tables is Map<String, dynamic>) {
+              if (floorName == 'DEFAULT' && tables['is_default'] == 1) {
+                return tables;
+              }
             }
-          }
 
-          // Case 2: Multi-table List
-          else if (tables is List) {
-            for (var table in tables) {
-              if (table['is_default'] == 1) {
-                return table;
+            // Case 2: Multi-table List
+            else if (tables is List) {
+              for (var table in tables) {
+                if (table['is_default'] == 1) {
+                  return table;
+                }
               }
             }
           }
         }
       }
+
+      return null; // No default table found
+    } catch (e, stackTrace) {
+      print('Error getting default table: $e\n$stackTrace');
+      return null;
     }
-
-    return null; // No default table found
-  } catch (e, stackTrace) {
-    print('Error getting default table: $e\n$stackTrace');
-    return null;
   }
-}
 
+  Future<bool> showOrderDiscardConfirmationDialog(BuildContext context) async {
+    return await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+                  title: const Text('Discard Order?'),
+                  content: const Text(
+                      'You have items in your current order. Navigating away will delete it. Do you want to continue?'),
+                  actions: [
+                    TextButton(
+                      child: const Text('Cancel'),
+                      onPressed: () => Navigator.of(context).pop(false),
+                    ),
+                    ElevatedButton(
+                      child: const Text('Yes, Discard'),
+                      onPressed: () => Navigator.of(context).pop(true),
+                    ),
+                  ],
+                )) ??
+        false;
+  }
 
   double calculateOrderSubtotal(Map<String, dynamic> order) {
     return (order['items'] as List).fold(0.0, (sum, item) {

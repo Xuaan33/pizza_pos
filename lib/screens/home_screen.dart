@@ -57,6 +57,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Convert old format to new format if needed
         double additionalCost = _calculateAdditionalCost(item);
         double itemPrice = (item['price'] ?? 0) + additionalCost;
+
+        String imageUrl = '';
+      if (item['image'] != null) {
+        imageUrl = item['image'].toString().startsWith('http')
+            ? item['image'].toString()
+            : '$baseImageUrl${item['image']}';
+      }
         Map<String, dynamic> newItem = {
           'item_code': item['item_code'] ?? '',
           'name': item['item_name'] ?? item['name'] ?? '',
@@ -794,6 +801,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final itemCode = item['item_code'];
     final availableStock = _itemStockQuantities[itemCode] ?? 999;
+    final isInStock = availableStock > 0;
+    final isLoadingStock = _isLoadingStock;
+    final canAddItem = !isLoadingStock && isInStock;
+     if (!canAddItem) {
+    Fluttertoast.showToast(
+      msg: "Item is out of stock",
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+    return;
+  }
+
+  // Calculate total quantity of this item (all variants) in current order
+  int totalQuantityOfItem = currentOrderItems
+    .where((orderItem) => orderItem['item_code'] == itemCode)
+    .fold(0, (sum, orderItem) => sum + (orderItem['quantity'] as num).toInt());
+
+
+
+  if (totalQuantityOfItem >= availableStock) {
+    Fluttertoast.showToast(
+      msg: "Cannot add more than available stock ($availableStock)",
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+    return;
+  }
 
     // Check if we're adding a new item or increasing quantity of existing one
     int existingIndex = currentOrderItems.indexWhere((orderItem) =>
@@ -1217,6 +1253,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           taxes,
           hasOpening,
           tier) async {
+        if (tier.toLowerCase() == "tier1") {
+          if (!hasOpening) {
+            // Show dialog if no opening entry exists
+            _showOpeningRequiredDialog();
+            return;
+          }
+        }
         // Auto-save all remarks before proceeding
         _autoSaveAllRemarks();
 
@@ -1864,6 +1907,110 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showOpeningRequiredDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap button to close
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Opening Entry Required',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Please create an opening entry before taking any orders. '
+          'You can create one in the Settings screen.',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext); // Close the dialog
+              // Use the original context (not dialogContext) to find MainLayout
+              final mainLayout = MainLayout.of(context);
+              if (mainLayout != null) {
+                mainLayout.setSelectedTabIndex(3);
+              } else {
+                print('MainLayout.of(context) returned null');
+              }
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: const Color(0xFFE732A0),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text(
+              'Go to Settings',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> showDiscardOrderDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        title: const Text(
+          'Discard Order?',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        content: const Text(
+          'You have items in your current order. Are you sure you want to discard them?',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'CANCEL',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFE732A0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: Text(
+              'DISCARD',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   void _increaseQuantity(int index) {

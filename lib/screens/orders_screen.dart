@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -62,6 +63,49 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       // Call the refresh function to reload data
     }
+  }
+
+  List<Widget> _buildVariantText(Map<String, dynamic> item) {
+    dynamic variantInfo = item['custom_variant_info'];
+    if (variantInfo == null) return [];
+
+    // Handle case where variantInfo is a JSON string
+    if (variantInfo is String) {
+      try {
+        variantInfo = jsonDecode(variantInfo);
+      } catch (e) {
+        debugPrint('Error parsing variant info: $e');
+        return [];
+      }
+    }
+
+    // Handle case where variantInfo is a List
+    if (variantInfo is List) {
+      return variantInfo.expand((variant) {
+        if (variant is Map && variant['options'] is List) {
+          return (variant['options'] as List).map((option) {
+            return Text(
+              '• ${variant['variant_group']}: ${option['option']}'
+              '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
+              style: TextStyle(fontSize: 12, color: Colors.black),
+            );
+          }).toList();
+        }
+        return <Widget>[];
+      }).toList();
+    }
+
+    // Handle case where variantInfo is a Map (old format)
+    if (variantInfo is Map) {
+      return variantInfo.entries.map((entry) {
+        return Text(
+          '• ${entry.key}: ${entry.value}',
+          style: TextStyle(fontSize: 12, color: Colors.black),
+        );
+      }).toList();
+    }
+
+    return [];
   }
 
   @override
@@ -330,7 +374,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       children: [
                         if (order['tableNumber'] != null) ...[
                           Text(
-                            'Table ${order['tableNumber']}',
+                            order['tableNumber'] == 0
+                                ? 'Instant Order'
+                                : 'Table ${order['tableNumber']}',
                             style: TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.w600),
@@ -455,16 +501,31 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                                 Expanded(
                                   child: Row(
                                     children: [
-                                      Text(
-                                        item['name']?.toString() ?? 'Item',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'x${(item['quantity'] ?? 1).toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Text(
+                                                item['name'],
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w600),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'x${(item['quantity'] ?? 1).toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                          if (item['custom_variant_info'] !=
+                                              null)
+                                            ..._buildVariantText(item),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -564,8 +625,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             ),
 
             // Inside _buildOrderDetailsPanel method, after the existing buttons:
-            if (!isDraft &&
-                !isCancelled) ...[
+            if (!isDraft && !isCancelled) ...[
               SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => _processRefund(order),
@@ -760,17 +820,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           .substring(0, 20);
 
       // Generate the void hex message
-      final hexMessage = order['paymentMethod']?.toString().toLowerCase().contains('card') == true
-    ? PosHexGenerator.generateVoidHexMessage(
-        transactionId: transactionId,
-        invoiceNumber: posInvoiceNumber,
-      )
-      
-    : PosHexGenerator.generateVoidWalletQrHexMessage(
-        transactionId,
-        extendedInvoiceNumber: posInvoiceNumber,
-      );
-
+      final hexMessage =
+          order['paymentMethod']?.toString().toLowerCase().contains('card') ==
+                  true
+              ? PosHexGenerator.generateVoidHexMessage(
+                  transactionId: transactionId,
+                  invoiceNumber: posInvoiceNumber,
+                )
+              : PosHexGenerator.generateVoidWalletQrHexMessage(
+                  transactionId,
+                  extendedInvoiceNumber: posInvoiceNumber,
+                );
 
       // Connect to POS terminal
       final prefs = await SharedPreferences.getInstance();
