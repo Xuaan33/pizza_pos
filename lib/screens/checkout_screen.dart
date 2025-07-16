@@ -622,47 +622,47 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   List<Widget> _buildVariantText(Map<String, dynamic> item) {
-  dynamic variantInfo = item['custom_variant_info'];
-  if (variantInfo == null) return [];
+    dynamic variantInfo = item['custom_variant_info'];
+    if (variantInfo == null) return [];
 
-  // Handle case where variantInfo is a JSON string
-  if (variantInfo is String) {
-    try {
-      variantInfo = jsonDecode(variantInfo);
-    } catch (e) {
-      debugPrint('Error parsing variant info: $e');
-      return [];
-    }
-  }
-
-  // Handle case where variantInfo is a List
-  if (variantInfo is List) {
-    return variantInfo.expand((variant) {
-      if (variant is Map && variant['options'] is List) {
-        return (variant['options'] as List).map((option) {
-          return Text(
-            '• ${variant['variant_group']}: ${option['option']}'
-            '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
-            style: TextStyle(fontSize: 12, color: Colors.black),
-          );
-        }).toList();
+    // Handle case where variantInfo is a JSON string
+    if (variantInfo is String) {
+      try {
+        variantInfo = jsonDecode(variantInfo);
+      } catch (e) {
+        debugPrint('Error parsing variant info: $e');
+        return [];
       }
-      return <Widget>[];
-    }).toList();
-  }
+    }
 
-  // Handle case where variantInfo is a Map (old format)
-  if (variantInfo is Map) {
-    return variantInfo.entries.map((entry) {
-      return Text(
-        '• ${entry.key}: ${entry.value}',
-        style: TextStyle(fontSize: 12, color: Colors.black),
-      );
-    }).toList();
-  }
+    // Handle case where variantInfo is a List
+    if (variantInfo is List) {
+      return variantInfo.expand((variant) {
+        if (variant is Map && variant['options'] is List) {
+          return (variant['options'] as List).map((option) {
+            return Text(
+              '• ${variant['variant_group']}: ${option['option']}'
+              '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
+              style: TextStyle(fontSize: 12, color: Colors.black),
+            );
+          }).toList();
+        }
+        return <Widget>[];
+      }).toList();
+    }
 
-  return [];
-}
+    // Handle case where variantInfo is a Map (old format)
+    if (variantInfo is Map) {
+      return variantInfo.entries.map((entry) {
+        return Text(
+          '• ${entry.key}: ${entry.value}',
+          style: TextStyle(fontSize: 12, color: Colors.black),
+        );
+      }).toList();
+    }
+
+    return [];
+  }
 
   Widget _buildOrderHeader() {
     return Column(
@@ -720,7 +720,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: Text(
                   _isEditing ? 'Update Order' : 'Edit Order',
                   style: TextStyle(
-                  color: _isEditing ? Colors.white : Colors.black,
+                    color: _isEditing ? Colors.white : Colors.black,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -825,11 +825,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       '${orderItems[i]['image']}',
                       width: 50,
                       height: 50,
-                      errorBuilder: (context, error, stackTrace) => Container(
+                      errorBuilder: (context, error, stackTrace) =>
+                          Image.network(
+                        'https://shiokpos.byondwave.com${orderItems[i]['image']}',
                         width: 50,
                         height: 50,
-                        color: Colors.grey.shade200,
-                        child: const Icon(Icons.fastfood),
                       ),
                     ),
                     if (_isEditing)
@@ -965,22 +965,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _navigateToHomeScreen() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => HomeScreen(
-        tableNumber: widget.order['tableNumber'],
-        existingOrder: {
-          ...widget.order,
-          'items': widget.order['items'],
-          'orderId': widget.order['invoiceNumber'],
-          'invoiceNumber': widget.order['invoiceNumber'],
-        },
-        isTier1: true,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HomeScreen(
+          tableNumber: widget.order['tableNumber'],
+          existingOrder: {
+            ...widget.order,
+            'items': widget.order['items'],
+            'orderId': widget.order['invoiceNumber'],
+            'invoiceNumber': widget.order['invoiceNumber'],
+          },
+          isTier1: true,
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildOrderSummary() {
     final totalAmount = _calculateTotal();

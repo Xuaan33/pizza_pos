@@ -58,12 +58,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         double additionalCost = _calculateAdditionalCost(item);
         double itemPrice = (item['price'] ?? 0) + additionalCost;
 
-        String imageUrl = '';
-      if (item['image'] != null) {
-        imageUrl = item['image'].toString().startsWith('http')
-            ? item['image'].toString()
-            : '$baseImageUrl${item['image']}';
-      }
         Map<String, dynamic> newItem = {
           'item_code': item['item_code'] ?? '',
           'name': item['item_name'] ?? item['name'] ?? '',
@@ -1566,11 +1560,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         height: 60,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
-                            Image.asset(
-                          'assets/pizza.png',
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
+                           Image.network(
+                        '${item['image']}',
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
                         ),
                       )
                     : Image.asset(
