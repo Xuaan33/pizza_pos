@@ -179,6 +179,7 @@ class PosService {
         if (table != null) 'custom_table': table,
         if (orderChannel != null) 'custom_order_channel': orderChannel,
         if (couponCode != null) 'coupon_code': couponCode,
+        if (discountAmount != null) 'discount_amount': discountAmount,
         if (custom_user_voucher != null)
           'custom_user_voucher': custom_user_voucher,
       },

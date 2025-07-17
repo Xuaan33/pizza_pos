@@ -1820,50 +1820,278 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _showVoucherDialog() async {
     final voucherController = TextEditingController();
+    final discountPercentageController = TextEditingController();
+    final discountAmountController = TextEditingController();
+    int selectedDiscountType = 0; // 0 = voucher, 1 = percentage, 2 = amount
 
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
-            'Apply Discount Voucher',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: TextField(
-            controller: voucherController,
-            decoration: const InputDecoration(
-              labelText: 'Voucher Code',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text(
-                'Cancel',
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Apply Discount',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              onPressed: () => Navigator.of(context).pop(false),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE732A0),
-                foregroundColor: Colors.white,
+              content: ScrollConfiguration(
+                behavior: NoStretchScrollBehavior(),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Discount type selector
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Voucher'),
+                              selected: selectedDiscountType == 0,
+                              onSelected: (selected) {
+                                setState(() {
+                                  selectedDiscountType =
+                                      selected ? 0 : selectedDiscountType;
+                                });
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Percentage'),
+                              selected: selectedDiscountType == 1,
+                              onSelected: (selected) {
+                                setState(() {
+                                  selectedDiscountType =
+                                      selected ? 1 : selectedDiscountType;
+                                  if (selected) {
+                                    voucherController.clear();
+                                    discountAmountController.clear();
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Amount'),
+                              selected: selectedDiscountType == 2,
+                              onSelected: (selected) {
+                                setState(() {
+                                  selectedDiscountType =
+                                      selected ? 2 : selectedDiscountType;
+                                  if (selected) {
+                                    voucherController.clear();
+                                    discountPercentageController.clear();
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Voucher code field (only visible when voucher is selected)
+                      if (selectedDiscountType == 0)
+                        TextField(
+                          controller: voucherController,
+                          decoration: const InputDecoration(
+                            labelText: 'Voucher Code',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+
+                      // Percentage field (only visible when percentage is selected)
+                      if (selectedDiscountType == 1)
+                        TextField(
+                          controller: discountPercentageController,
+                          decoration: const InputDecoration(
+                            labelText: 'Discount Percentage (%)',
+                            border: OutlineInputBorder(),
+                            suffixText: '%',
+                          ),
+                          keyboardType:
+                              TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (value) {
+                            if (value.isNotEmpty) {
+                              final percentage = double.tryParse(value) ?? 0;
+                              final amount =
+                                  _calculateSubtotal() * percentage / 100;
+                              discountAmountController.text =
+                                  amount.toStringAsFixed(2);
+                            } else {
+                              discountAmountController.clear();
+                            }
+                          },
+                        ),
+
+                      // Amount field (only visible when amount is selected)
+                      if (selectedDiscountType == 2)
+                        TextField(
+                          controller: discountAmountController,
+                          decoration: const InputDecoration(
+                            labelText: 'Discount Amount (RM)',
+                            border: OutlineInputBorder(),
+                            prefixText: 'RM ',
+                          ),
+                          keyboardType:
+                              TextInputType.numberWithOptions(decimal: true),
+                          onChanged: (value) {
+                            if (value.isNotEmpty) {
+                              final amount = double.tryParse(value) ?? 0;
+                              final percentage =
+                                  (amount / _calculateSubtotal()) * 100;
+                              discountPercentageController.text =
+                                  percentage.toStringAsFixed(2);
+                            } else {
+                              discountPercentageController.clear();
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ),
               ),
-              child: const Text(
-                'Apply',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-          ],
+              actions: <Widget>[
+                TextButton(
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Apply',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    if (selectedDiscountType == 0 &&
+                        voucherController.text.isEmpty) {
+                      Fluttertoast.showToast(
+                        msg: "Please enter a voucher code",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    } else if (selectedDiscountType == 1 &&
+                        discountPercentageController.text.isEmpty) {
+                      Fluttertoast.showToast(
+                        msg: "Please enter a discount percentage",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    } else if (selectedDiscountType == 2 &&
+                        discountAmountController.text.isEmpty) {
+                      Fluttertoast.showToast(
+                        msg: "Please enter a discount amount",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    }
+                    Navigator.of(context).pop(true);
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );
 
-    if (result == true && voucherController.text.isNotEmpty) {
-      _validateVoucher(voucherController.text);
+    if (result == true) {
+      if (selectedDiscountType == 0) {
+        // Voucher code
+        _validateVoucher(voucherController.text);
+      } else if (selectedDiscountType == 1) {
+        // Percentage discount
+        final percentage =
+            double.tryParse(discountPercentageController.text) ?? 0;
+        final amount = _calculateSubtotal() * percentage / 100;
+        await _applyManualDiscount(amount);
+      } else if (selectedDiscountType == 2) {
+        // Fixed amount discount
+        final amount = double.tryParse(discountAmountController.text) ?? 0;
+        await _applyManualDiscount(amount);
+      }
+    }
+  }
+
+  Future<void> _applyManualDiscount(double amount) async {
+    _showLoadingOverlay(true);
+
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        items: orderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        discountAmount: amount, // Pass the discount amount directly
+      );
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts
+        await _fetchOrderDetails();
+        setState(() {
+          _discountAmount = amount;
+        });
+        Fluttertoast.showToast(
+          msg: "Discount applied successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error applying discount: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
     }
   }
 
