@@ -364,7 +364,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 //   onPressed: () => _confirmExit(),
                 // ),
                 Text(
-                  'Table ${widget.order['tableNumber']}',
+                  widget.order['tableNumber'] == 0
+                      ? 'Instant Order'
+                      : 'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -584,7 +586,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 Expanded(
                   child: _buildActionButton(
                     'Split Bill',
-                    const Color(0xFF00203E),
+                    _isEditing ? Colors.grey : const Color(0xFF00203E),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -671,12 +673,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           children: [
             if (widget.order['invoiceNumber'] != null)
               GestureDetector(
-                onTap: _deleteOrder,
+                onTap: _isEditing ? null : _deleteOrder,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.red,
+                    color: _isEditing ? Colors.grey : Colors.red,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
@@ -690,12 +692,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             Spacer(),
             GestureDetector(
-              onTap: () => _showVoucherDialog(),
+              onTap: () => _isEditing ? null : _showVoucherDialog(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.blue,
+                  color: _isEditing ? Colors.grey : Colors.blue,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
@@ -728,12 +730,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => _navigateToHomeScreen(),
+              onTap: () => _isEditing ? null : _navigateToHomeScreen(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE732A0),
+                  color: _isEditing ? Colors.grey : const Color(0xFFE732A0),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
@@ -801,6 +803,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildOrderItemsList() {
+    final items = _isEditing ? _editableItems : orderItems;
+
+    if (items.isEmpty) {
+      return const Center(child: Text('No items in this order'));
+    }
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column
@@ -811,7 +818,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
-        for (int i = 0; i < orderItems.length; i++)
+        for (int i = 0; i < items.length; i++)
           TableRow(
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
@@ -1083,21 +1090,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return SizedBox(
       height: 50,
       child: ElevatedButton(
-        onPressed: () async {
-          if (_selectedPaymentMethod.isEmpty) {
-            Fluttertoast.showToast(
-              msg: "Please select a payment method",
-              gravity: ToastGravity.BOTTOM,
-              backgroundColor: Colors.red,
-              textColor: Colors.white,
-            );
-            return;
-          }
+        onPressed: _isEditing
+            ? null
+            : () async {
+                if (_selectedPaymentMethod.isEmpty) {
+                  Fluttertoast.showToast(
+                    msg: "Please select a payment method",
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.red,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
 
-          _completePayment();
-        },
+                _completePayment();
+              },
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE732A0),
+          backgroundColor: _isEditing ? Colors.grey : const Color(0xFFE732A0),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(4),
@@ -1612,22 +1621,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ),
                       const SizedBox(height: 10),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           for (var amount in [10, 50, 100])
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.black,
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.black,
+                                ),
+                                onPressed: () {
+                                  amountController.text =
+                                      amount.toStringAsFixed(2);
+                                },
+                                child: Text('RM $amount'),
                               ),
-                              onPressed: () {
-                                amountController.text =
-                                    amount.toStringAsFixed(2);
-                              },
-                              child: Text('RM $amount'),
                             ),
                         ],
-                      ),
+                      )
                     ],
                   ),
                 ),
@@ -2065,19 +2076,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void _deleteItem(int index) async {
     final isLastItem = _editableItems.length == 1;
 
+    if (!isLastItem) {
+      // For non-last items, just remove without confirmation
+      setState(() {
+        _editableItems.removeAt(index);
+        // Force rebuild the table by creating a new list
+        _editableItems = List<Map<String, dynamic>>.from(_editableItems);
+      });
+      return;
+    }
+
+    // Only show confirmation dialog for last item
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: Colors.white,
-            title: Text(
-              isLastItem ? 'Delete Order' : 'Remove Item',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            title: const Text(
+              'Delete Order',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            content: Text(
-              isLastItem
-                  ? 'This is the last item in the order. Removing it will delete the entire order. Are you sure?'
-                  : 'Are you sure you want to remove this item from the order?',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            content: const Text(
+              'This is the last item in the order. Removing it will delete the entire order. Are you sure?',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
             actions: [
               TextButton(
@@ -2093,9 +2113,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   backgroundColor: const Color(0xFFE732A0),
                   foregroundColor: Colors.white,
                 ),
-                child: Text(
-                  isLastItem ? 'DELETE ORDER' : 'REMOVE',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                child: const Text(
+                  'DELETE ORDER',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -2104,15 +2124,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         false;
 
     if (confirmed) {
-      if (isLastItem) {
-        // Delete the entire order
-        await _deleteOrderFromItem();
-      } else {
-        // Just remove the item
-        setState(() {
-          _editableItems.removeAt(index);
-        });
-      }
+      await _deleteOrderFromItem();
     }
   }
 

@@ -798,32 +798,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isInStock = availableStock > 0;
     final isLoadingStock = _isLoadingStock;
     final canAddItem = !isLoadingStock && isInStock;
-     if (!canAddItem) {
-    Fluttertoast.showToast(
-      msg: "Item is out of stock",
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.red,
-      textColor: Colors.white,
-    );
-    return;
-  }
 
-  // Calculate total quantity of this item (all variants) in current order
-  int totalQuantityOfItem = currentOrderItems
-    .where((orderItem) => orderItem['item_code'] == itemCode)
-    .fold(0, (sum, orderItem) => sum + (orderItem['quantity'] as num).toInt());
-
-
-
-  if (totalQuantityOfItem >= availableStock) {
-    Fluttertoast.showToast(
-      msg: "Cannot add more than available stock ($availableStock)",
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.red,
-      textColor: Colors.white,
-    );
-    return;
-  }
+    if (!canAddItem) {
+      Fluttertoast.showToast(
+        msg: "Item is out of stock",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
 
     // Check if we're adding a new item or increasing quantity of existing one
     int existingIndex = currentOrderItems.indexWhere((orderItem) =>
@@ -831,7 +815,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _compareOptions(orderItem['options'], selectedOptions));
 
     if (existingIndex != -1) {
-      // For existing item, check if we can increase quantity
+      // For existing item with same options, check if we can increase quantity
       if (currentOrderItems[existingIndex]['quantity'] >= availableStock) {
         Fluttertoast.showToast(
           msg: "Cannot add more than available stock ($availableStock)",
@@ -845,10 +829,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         currentOrderItems[existingIndex]['quantity']++;
       });
     } else {
-      // For new item, check if stock is available
-      if (availableStock <= 0) {
+      // For new item or new variant combination, check total stock across all variants
+      int totalQuantityOfAllVariants = currentOrderItems
+          .where((orderItem) => orderItem['item_code'] == itemCode)
+          .fold(0,
+              (sum, orderItem) => sum + (orderItem['quantity'] as num).toInt());
+
+      if (totalQuantityOfAllVariants >= availableStock) {
         Fluttertoast.showToast(
-          msg: "Item is out of stock",
+          msg: "Cannot add more than available stock ($availableStock)",
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.red,
           textColor: Colors.white,
@@ -1560,11 +1549,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         height: 60,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
-                           Image.network(
-                        '${item['image']}',
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
+                            Image.network(
+                          '${item['image']}',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
                         ),
                       )
                     : Image.asset(
@@ -2015,7 +2004,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final currentQuantity = item['quantity'];
     final availableStock = _itemStockQuantities[itemCode] ?? 999;
 
-    if (currentQuantity >= availableStock) {
+    // Calculate total quantity of this item across all variants
+    int totalQuantityOfAllVariants = currentOrderItems
+        .where((orderItem) => orderItem['item_code'] == itemCode)
+        .fold(0,
+            (sum, orderItem) => sum + (orderItem['quantity'] as num).toInt());
+
+    if (totalQuantityOfAllVariants >= availableStock) {
+      Fluttertoast.showToast(
+        msg: "Cannot add more than available stock ($availableStock)",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
       return;
     }
 

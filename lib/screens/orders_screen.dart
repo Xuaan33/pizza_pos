@@ -625,7 +625,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             ),
 
             // Inside _buildOrderDetailsPanel method, after the existing buttons:
-            if (!isDraft && !isCancelled) ...[
+            if (!isDraft &&
+                !isCancelled &&
+                _isToday(_parseDateTime(order['entryTime']))) ...[
               SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => _processRefund(order),
@@ -805,7 +807,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (!confirmed) return;
 
     try {
-      // final posInvoiceNumber = '000502';
+
+       final isCashPayment = (order['paymentMethod']?.toString().toLowerCase() ?? '') == 'cash';
+
+    if (isCashPayment) {
+      // For cash payments, just cancel the order directly
+      final refundResponse = await PosService().cancelOrder(order['orderId']?.toString() ?? '');
+
+      if (refundResponse['success'] == true) {
+        if (mounted) {
+          Fluttertoast.showToast(
+            msg: "Refund Successful",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+          _refreshOrders();
+        }
+      }
+      return;
+    }
       final posInvoiceNumber = order['pos_invoice_number']?.toString();
       print('pos lanjiao: $posInvoiceNumber');
 
@@ -1071,6 +1092,13 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         'transaction_id': 'ERROR_${DateTime.now().millisecondsSinceEpoch}',
       };
     }
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
