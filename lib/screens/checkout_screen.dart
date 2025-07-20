@@ -48,9 +48,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _discountAmount = 0.0;
   bool _isValidatingVoucher = false;
   bool _isEditing = false;
-  List<Map<String, dynamic>> _editableItems = [];
   Map<String, int> _itemStockQuantities = {};
   bool _isLoadingStock = false;
+// At the top of your state class
+  List<List<Map<String, dynamic>>> _editHistory = [];
+  List<Map<String, dynamic>> _editableItems = [];
+  List<Map<String, dynamic>> _previousEditableItems = [];
 
   @override
   void dispose() {
@@ -691,6 +694,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               ),
             Spacer(),
+            // Add these to your _buildOrderHeader method
+            if (_isEditing) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _undoLastChange,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Undo',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _discardChanges,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Discard',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: 8),
             GestureDetector(
               onTap: () => _isEditing ? null : _showVoucherDialog(),
               child: Container(
@@ -700,8 +745,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   color: _isEditing ? Colors.grey : Colors.blue,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  'Apply Discount',
+                child: Text(
+                  _discountAmount > 0 ? 'Remove Discount' : 'Apply Discount',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -808,6 +853,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (items.isEmpty) {
       return const Center(child: Text('No items in this order'));
     }
+
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column
@@ -820,6 +866,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       children: [
         for (int i = 0; i < items.length; i++)
           TableRow(
+            key: ValueKey(
+                items[i]['item_code'] + i.toString()), // Add unique key
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
             ),
@@ -829,12 +877,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: Stack(
                   children: [
                     Image.network(
-                      '${orderItems[i]['image']}',
+                      '${items[i]['image']}',
                       width: 50,
                       height: 50,
                       errorBuilder: (context, error, stackTrace) =>
                           Image.network(
-                        'https://shiokpos.byondwave.com${orderItems[i]['image']}',
+                        'https://shiokpos.byondwave.com${items[i]['image']}',
                         width: 50,
                         height: 50,
                       ),
@@ -868,11 +916,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      orderItems[i]['name'],
+                      items[i]['name'],
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    if (orderItems[i]['custom_variant_info'] != null)
-                      ..._buildVariantText(orderItems[i]),
+                    if (items[i]['custom_variant_info'] != null)
+                      ..._buildVariantText(items[i]),
                   ],
                 ),
               ),
@@ -943,7 +991,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ],
                       )
                     : Text(
-                        'x${orderItems[i]['quantity'].toStringAsFixed(0)}',
+                        'x${items[i]['quantity'].toStringAsFixed(0)}',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
                       ),
@@ -951,7 +999,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  orderItems[i]['price'].toStringAsFixed(2),
+                  items[i]['price'].toStringAsFixed(2),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                   textAlign: TextAlign.right,
                 ),
@@ -959,8 +1007,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  (orderItems[i]['price'] * orderItems[i]['quantity'])
-                      .toStringAsFixed(2),
+                  (items[i]['price'] * items[i]['quantity']).toStringAsFixed(2),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                   textAlign: TextAlign.right,
                 ),
@@ -1586,105 +1633,197 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Future<bool> _showCashPaymentDialog() async {
     final totalAmount = _calculateTotal();
     final amountController = TextEditingController();
+    double currentAmount = 0.0;
 
     return await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (BuildContext context) {
-            return AlertDialog(
+            return Dialog(
               backgroundColor: Colors.white,
-              title: const Text(
-                'Cash Payment',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              content: ScrollConfiguration(
-                behavior: NoStretchScrollBehavior(),
-                child: SingleChildScrollView(
-                  child: ListBody(
-                    children: <Widget>[
+              insetPadding: EdgeInsets.all(20), // Makes dialog bigger
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: 500), // Minimum width
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Cash Payment',
+                        style: TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 20),
                       Text(
                         'Total Amount: RM${totalAmount.toStringAsFixed(2)}',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: 20),
                       TextField(
                         controller: amountController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Amount Received',
-                          labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                          labelStyle: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
                           prefixText: 'RM ',
-                          hintStyle: TextStyle(fontWeight: FontWeight.bold),
                           border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: 15, horizontal: 15),
                         ),
+                        style: TextStyle(fontSize: 18),
                         keyboardType:
                             TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (value) {
+                          currentAmount = double.tryParse(value) ?? 0.0;
+                        },
                       ),
-                      const SizedBox(height: 10),
-                      Row(
+                      SizedBox(height: 20),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (var amount in [10, 50, 100])
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.black,
-                                ),
-                                onPressed: () {
-                                  amountController.text =
-                                      amount.toStringAsFixed(2);
-                                },
-                                child: Text('RM $amount'),
-                              ),
+                          // First row of buttons (1, 5, 10, 20)
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [1, 5, 10, 20].map((amount) {
+                                return Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4.0),
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        minimumSize: Size(80, 60),
+                                        textStyle: TextStyle(
+                                            fontSize: 18, color: Colors.black),
+                                      ),
+                                      onPressed: () {
+                                        currentAmount += amount;
+                                        amountController.text =
+                                            currentAmount.toStringAsFixed(2);
+                                      },
+                                      child: Text('RM$amount',
+                                          style: TextStyle(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
                             ),
+                          ),
+
+                          SizedBox(height: 12),
+
+                          // Second row of buttons (50, 100, Clear)
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12.0),
+                            child: Row(
+                              children: [
+                                for (var label in ['RM50', 'RM100', 'Clear'])
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 4.0),
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          minimumSize: Size(80, 60),
+                                          textStyle: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        onPressed: () {
+                                          if (label == 'Clear') {
+                                            currentAmount = 0.0;
+                                            amountController.clear();
+                                          } else {
+                                            final add = int.parse(
+                                                label.replaceAll('RM', ''));
+                                            currentAmount += add;
+                                            amountController.text =
+                                                currentAmount
+                                                    .toStringAsFixed(2);
+                                          }
+                                        },
+                                        child: Text(label,
+                                            style:
+                                                TextStyle(color: Colors.black)),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          SizedBox(height: 30),
+
+                          // Action buttons
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 30.0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextButton(
+                                    style: TextButton.styleFrom(
+                                      minimumSize: Size(120, 50),
+                                      textStyle: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: Text('Cancel',
+                                        style: TextStyle(color: Colors.black)),
+                                  ),
+                                ),
+                                SizedBox(width: 20),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      minimumSize: Size(120, 50),
+                                      backgroundColor: Color(0xFFE732A0),
+                                      textStyle: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () {
+                                      if (currentAmount >= totalAmount) {
+                                        setState(() {
+                                          _amountGiven = currentAmount;
+                                        });
+                                        Navigator.of(context).pop(true);
+                                      } else {
+                                        Fluttertoast.showToast(
+                                          msg:
+                                              "Amount received is less than total amount",
+                                          gravity: ToastGravity.BOTTOM,
+                                          backgroundColor: Colors.red,
+                                          textColor: Colors.white,
+                                        );
+                                      }
+                                    },
+                                    child: Text('OK',
+                                        style: TextStyle(color: Colors.white)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       )
                     ],
                   ),
                 ),
               ),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE732A0),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text(
-                    'OK',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () {
-                    final amount =
-                        double.tryParse(amountController.text) ?? 0.0;
-                    if (amount >= totalAmount) {
-                      setState(() {
-                        _amountGiven = amount;
-                      });
-                      Navigator.of(context).pop(true);
-                    } else {
-                      Fluttertoast.showToast(
-                        msg: "Amount received is less than total amount",
-                        gravity: ToastGravity.BOTTOM,
-                        backgroundColor: Colors.red,
-                        textColor: Colors.white,
-                      );
-                    }
-                  },
-                ),
-              ],
             );
           },
         ) ??
-        false; // Return false if dialog is dismissed
+        false;
   }
 
   Future<void> _deleteOrderFromItem() async {
@@ -1819,6 +1958,51 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<void> _showVoucherDialog() async {
+    final hasDiscount = _discountAmount > 0 ||
+        widget.order['coupon_code'] != null ||
+        widget.order['custom_user_voucher'] != null;
+
+    if (hasDiscount) {
+      final shouldRemove = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Remove Discount',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            'Are you sure you want to remove the current discount?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            TextButton(
+              child: const Text(
+                'CANCEL',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'REMOVE',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldRemove == true) {
+        await _removeDiscount();
+      }
+      return;
+    }
     final voucherController = TextEditingController();
     final discountPercentageController = TextEditingController();
     final discountAmountController = TextEditingController();
@@ -2095,6 +2279,76 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Future<void> _removeDiscount() async {
+    _showLoadingOverlay(true);
+
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        items: orderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        couponCode: null, // Set to null to remove
+        custom_user_voucher: null, // Set to null to remove
+        discountAmount: 0, // Set to 0 to remove
+      );
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts
+        await _fetchOrderDetails();
+        setState(() {
+          _discountAmount = 0;
+          _voucherCode = '';
+        });
+        Fluttertoast.showToast(
+          msg: "Discount removed successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error removing discount: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
+    }
+  }
+
   Future<void> _validateVoucher(String voucherCode) async {
     _showLoadingOverlay(true);
 
@@ -2295,9 +2549,45 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() {
       _isEditing = !_isEditing;
       if (_isEditing) {
-        // Make a copy of the items for editing
+        // Save original items
+        _previousEditableItems =
+            List<Map<String, dynamic>>.from(widget.order['items']);
+        // Make a copy for editing
         _editableItems = List<Map<String, dynamic>>.from(widget.order['items']);
+        // Clear history when starting new edit session
+        _editHistory = [];
       }
+    });
+  }
+
+  void _saveEditState() {
+    // Save current state to history before making changes
+    _editHistory.add(List<Map<String, dynamic>>.from(_editableItems));
+    // Keep only last 10 states to prevent memory issues
+    if (_editHistory.length > 10) {
+      _editHistory.removeAt(0);
+    }
+  }
+
+  void _undoLastChange() {
+    if (_editHistory.isNotEmpty) {
+      setState(() {
+        _editableItems = _editHistory.removeLast();
+      });
+    } else {
+      Fluttertoast.showToast(
+        msg: "Nothing to undo",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.grey,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  void _discardChanges() {
+    setState(() {
+      _editableItems = List<Map<String, dynamic>>.from(_previousEditableItems);
+      _editHistory.clear();
     });
   }
 
@@ -2305,32 +2595,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final isLastItem = _editableItems.length == 1;
 
     if (!isLastItem) {
-      // For non-last items, just remove without confirmation
+      _saveEditState(); // Save state before change
+
       setState(() {
         _editableItems.removeAt(index);
-        // Force rebuild the table by creating a new list
+        // Create a new list to force rebuild
         _editableItems = List<Map<String, dynamic>>.from(_editableItems);
       });
       return;
     }
-
     // Only show confirmation dialog for last item
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: Colors.white,
-            title: const Text(
+            title: Text(
               'Delete Order',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            content: const Text(
+            content: Text(
               'This is the last item in the order. Removing it will delete the entire order. Are you sure?',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text(
+                child: Text(
                   'CANCEL',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -2338,10 +2628,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE732A0),
+                  backgroundColor: Color(0xFFE732A0),
                   foregroundColor: Colors.white,
                 ),
-                child: const Text(
+                child: Text(
                   'DELETE ORDER',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -2366,6 +2656,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
       return;
     }
+    _saveEditState(); // Save state before change
 
     setState(() {
       _editableItems[index]['quantity'] -= 1;

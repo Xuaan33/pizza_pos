@@ -807,26 +807,27 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (!confirmed) return;
 
     try {
+      final isCashPayment =
+          (order['paymentMethod']?.toString().toLowerCase() ?? '') == 'cash';
 
-       final isCashPayment = (order['paymentMethod']?.toString().toLowerCase() ?? '') == 'cash';
+      if (isCashPayment) {
+        // For cash payments, just cancel the order directly
+        final refundResponse =
+            await PosService().cancelOrder(order['orderId']?.toString() ?? '');
 
-    if (isCashPayment) {
-      // For cash payments, just cancel the order directly
-      final refundResponse = await PosService().cancelOrder(order['orderId']?.toString() ?? '');
-
-      if (refundResponse['success'] == true) {
-        if (mounted) {
-          Fluttertoast.showToast(
-            msg: "Refund Successful",
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-          );
-          _refreshOrders();
+        if (refundResponse['success'] == true) {
+          if (mounted) {
+            Fluttertoast.showToast(
+              msg: "Refund Successful",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+            _refreshOrders();
+          }
         }
+        return;
       }
-      return;
-    }
       final posInvoiceNumber = order['pos_invoice_number']?.toString();
       print('pos lanjiao: $posInvoiceNumber');
 
