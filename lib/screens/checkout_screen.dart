@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
+import 'package:shiok_pos_android_app/components/split_order_payment_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -50,10 +52,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isEditing = false;
   Map<String, int> _itemStockQuantities = {};
   bool _isLoadingStock = false;
-// At the top of your state class
   List<List<Map<String, dynamic>>> _editHistory = [];
   List<Map<String, dynamic>> _editableItems = [];
   List<Map<String, dynamic>> _previousEditableItems = [];
+  List<Map<String, dynamic>> _itemsToSplit = [];
+  bool _isSplitting = false;
+  bool _isProcessingSplit = false;
+  Map<String, dynamic>? _splitOrder;
 
   @override
   void dispose() {
@@ -552,48 +557,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Widget _buildActionButtonsGrid() {
     return Container(
-      height: 120, // Fixed height for the action buttons grid
+      height: 120,
       child: Column(
         children: [
           Expanded(
             child: Row(
               children: [
-                // Expanded(
-                //   child: _buildActionButton(
-                //     'Split Bill',
-                //     const Color(
-                //         0xFF00203E),
-                //   ),
-                // ),
-                // const SizedBox(width: 10),
-                // Expanded(
-                //   child: _buildActionButton(
-                //     'Transfer Table',
-                //     const Color(0xFFFB8A3F),
-
-                //   ),
-                // ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Row(
-              children: [
-                // Expanded(
-                //   child: _buildActionButton(
-                //     'Pay Later',
-                //     const Color(0xFF4E73F8), // Blue color like in the image
-                //   ),
-                // ),
                 Expanded(
                   child: _buildActionButton(
-                    'Split Bill',
+                    _isSplitting ? 'Cancel Split' : 'Split Bill',
                     _isEditing ? Colors.grey : const Color(0xFF00203E),
+                    onPressed: _isEditing ? null : _toggleSplitMode,
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: _buildPayNowButton()),
+                if (_isSplitting)
+                  Expanded(
+                    child: _buildActionButton(
+                      'Confirm Split',
+                      Colors.green,
+                      onPressed: _confirmSplit,
+                    ),
+                  )
+                else
+                  Expanded(child: _buildPayNowButton()),
               ],
             ),
           ),
@@ -798,10 +785,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         Table(
           columnWidths: const {
             0: FixedColumnWidth(62), // Image column
-            1: FlexColumnWidth(3), // Item name (flexible, takes more space)
-            2: FlexColumnWidth(1.5), // Quantity (proportional)
-            3: FlexColumnWidth(2), // Price (proportional)
-            4: FlexColumnWidth(2), // Amount (proportional)
+            1: FlexColumnWidth(3), // Item name
+            2: FlexColumnWidth(2), // Quantity
+            3: FlexColumnWidth(1.7), // Split checkbox (new column)
+            4: FlexColumnWidth(1), // Price
+            5: FlexColumnWidth(2), // Amount
           },
           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
           children: [
@@ -810,34 +798,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 const SizedBox(), // Empty for image column
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text(
-                    'Item Name',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  child: Text('Item Name',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text(
-                    'Quantity',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
+                  child: Text('Quantity',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                if (_isSplitting) // Only show split header when in split mode
+                  const Padding(
+                    padding:
+                        EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                    child: Text('Split',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: Text('Price (RM)',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text(
-                    'Price (RM)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text(
-                    'Amount (RM)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.right,
-                  ),
+                  child: Text('Amount (RM)',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -850,28 +834,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _buildOrderItemsList() {
     final items = _isEditing ? _editableItems : orderItems;
 
-    if (items.isEmpty) {
-      return const Center(child: Text('No items in this order'));
-    }
-
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column
-        1: FlexColumnWidth(3), // Item name (flexible, takes more space)
-        2: FlexColumnWidth(1.5), // Quantity (proportional)
-        3: FlexColumnWidth(2), // Price (proportional)
-        4: FlexColumnWidth(2), // Amount (proportional)
+        1: FlexColumnWidth(3), // Item name
+        2: FlexColumnWidth(1.5), // Quantity
+        3: FlexColumnWidth(1.5), // Split checkbox
+        4: FlexColumnWidth(2), // Price
+        5: FlexColumnWidth(2), // Amount
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
         for (int i = 0; i < items.length; i++)
           TableRow(
-            key: ValueKey(
-                items[i]['item_code'] + i.toString()), // Add unique key
             decoration: BoxDecoration(
+              color: _itemsToSplit.any((item) => item['original_index'] == i)
+                  ? Colors.pink.withOpacity(0.1)
+                  : null,
               border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
             ),
             children: [
+              // Image cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Stack(
@@ -910,6 +893,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ],
                 ),
               ),
+
+              // Item name cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Column(
@@ -924,6 +909,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ],
                 ),
               ),
+
+              // Quantity cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: _isEditing
@@ -942,7 +929,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 2),
                                 child: Text(
-                                  _editableItems[i]['quantity']
+                                  (_editableItems[i]['quantity'] as num)
                                       .toStringAsFixed(0),
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600),
@@ -983,7 +970,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               null)
                             Text(
                               'Stock: ${_itemStockQuantities[_editableItems[i]['item_code']]}',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey,
                               ),
@@ -991,23 +978,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ],
                       )
                     : Text(
-                        'x${items[i]['quantity'].toStringAsFixed(0)}',
+                        'x${(items[i]['quantity'] as num).toStringAsFixed(0)}',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
                       ),
               ),
+
+              // Split checkbox cell (only visible in split mode)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: _isSplitting
+                    ? Checkbox(
+                        value: _itemsToSplit
+                            .any((item) => item['original_index'] == i),
+                        onChanged: (value) {
+                          if (value == true) {
+                            _selectItemForSplit(i, items[i]);
+                          } else {
+                            setState(() {
+                              _itemsToSplit.removeWhere(
+                                  (item) => item['original_index'] == i);
+                            });
+                          }
+                        },
+                      )
+                    : const SizedBox.shrink(), // keep cell alignment
+              ),
+
+              // Price cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  items[i]['price'].toStringAsFixed(2),
+                  (items[i]['price'] as num).toStringAsFixed(2),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                   textAlign: TextAlign.right,
                 ),
               ),
+
+              // Amount cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  (items[i]['price'] * items[i]['quantity']).toStringAsFixed(2),
+                  ((items[i]['price'] as num) * (items[i]['quantity'] as num))
+                      .toStringAsFixed(2),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                   textAlign: TextAlign.right,
                 ),
@@ -2757,6 +2770,243 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     } finally {
       _showLoadingOverlay(false);
+    }
+  }
+
+  void _toggleSplitMode() {
+    setState(() {
+      _isSplitting = !_isSplitting;
+      if (!_isSplitting) {
+        _itemsToSplit.clear();
+      }
+    });
+  }
+
+  Future<void> _selectItemForSplit(int index, Map<String, dynamic> item) async {
+    if (item['quantity'] > 1) {
+      final quantity = await showDialog<int>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Select Quantity to Split'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('How many of "${item['name']}" to split?'),
+              SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.remove),
+                    onPressed: () {
+                      Navigator.pop(
+                          context, max<int>((item['quantity'] as int) - 1, 1));
+                    },
+                  ),
+                  Text('${item['quantity']}'),
+                  IconButton(
+                    icon: Icon(Icons.add),
+                    onPressed: () {
+                      Navigator.pop(
+                          context,
+                          min<int>(item['quantity'] + 1 as int,
+                              item['quantity'] as int));
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 0),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, item['quantity']),
+              child: Text('Split All'),
+            ),
+          ],
+        ),
+      );
+
+      if (quantity == null || quantity <= 0) return;
+
+      setState(() {
+        _itemsToSplit.add({
+          ...item,
+          'original_index': index,
+          'split_quantity': quantity,
+        });
+      });
+    } else {
+      setState(() {
+        _itemsToSplit.add({
+          ...item,
+          'original_index': index,
+          'split_quantity': 1,
+        });
+      });
+    }
+  }
+
+  Future<void> _confirmSplit() async {
+    if (_itemsToSplit.isEmpty) {
+      Fluttertoast.showToast(
+        msg: "Please select items to split",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    setState(() => _isProcessingSplit = true);
+
+    try {
+      // 1. Create new order with split items
+      final authState = ref.read(authProvider);
+      final posProfile = authState.maybeWhen(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+          return posProfile;
+        },
+        orElse: () => null,
+      );
+
+      if (posProfile == null) throw Exception('Not authenticated');
+
+      final response = await PosService().submitOrder(
+        posProfile: posProfile,
+        customer: 'Guest',
+        items: _itemsToSplit
+            .map((item) => {
+                  'item_code': item['item_code'],
+                  'qty': item['split_quantity'],
+                  'price_list_rate': item['price'],
+                  "custom_item_remarks": item['custom_item_remarks'],
+                  "custom_serve_later": item['custom_serve_later'],
+                  if (item['custom_variant_info'] != null)
+                    'custom_variant_info': item['custom_variant_info'],
+                })
+            .toList(),
+        table: "MK-Floor 1-Take Away",
+        orderChannel: "Dine In"
+      );
+
+      if (response['success'] == true) {
+        final splitOrder = response['message'];
+        setState(() => _splitOrder = splitOrder);
+
+        // 2. Show payment dialog for split order
+        await _showSplitOrderPaymentDialog(splitOrder);
+
+        // 3. If payment successful, update original order
+        await _updateOriginalOrderAfterSplit();
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error splitting order: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() {
+        _isProcessingSplit = false;
+        _isSplitting = false;
+        _itemsToSplit.clear();
+      });
+    }
+  }
+
+  Future<void> _updateOriginalOrderAfterSplit() async {
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      // Create updated items list by reducing quantities or removing items
+      final updatedItems =
+          List<Map<String, dynamic>>.from(widget.order['items']);
+
+      for (var splitItem in _itemsToSplit) {
+        final originalIndex = splitItem['original_index'];
+        final originalItem = updatedItems[originalIndex];
+
+        if (originalItem['quantity'] == splitItem['split_quantity']) {
+          // Remove item if all quantity was split
+          updatedItems.removeAt(originalIndex);
+        } else {
+          // Reduce quantity
+          updatedItems[originalIndex] = {
+            ...originalItem,
+            'quantity': originalItem['quantity'] - splitItem['split_quantity'],
+          };
+        }
+      }
+
+      // Submit updated order
+      final authState = ref.read(authProvider);
+      final posProfile = authState.maybeWhen(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+          return posProfile;
+        },
+        orElse: () => null,
+      );
+
+      if (posProfile == null) throw Exception('Not authenticated');
+
+      await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: posProfile,
+        customer: 'Guest',
+        items: updatedItems
+            .map((item) => {
+                  'item_code': item['item_code'],
+                  'qty': item['quantity'],
+                  'price_list_rate': item['price'],
+                  if (item['custom_variant_info'] != null)
+                    'custom_variant_info': item['custom_variant_info'],
+                })
+            .toList(),
+      );
+
+      // Update local state
+      setState(() {
+        widget.order['items'] = updatedItems;
+      });
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error updating original order: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _showSplitOrderPaymentDialog(
+      Map<String, dynamic> splitOrder) async {
+    final paymentCompleted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        insetPadding: EdgeInsets.all(16),
+        child: SplitOrderPaymentDialog(
+          order: splitOrder,
+          paymentMethods: _paymentMethods,
+          onPaymentComplete: () => Navigator.pop(context, true),
+          onCancel: () => Navigator.pop(context, false),
+        ),
+      ),
+    );
+
+    if (paymentCompleted != true) {
+      // If payment was cancelled, delete the split order
+      await PosService().deleteOrder(splitOrder['name']);
+      throw Exception('Split order payment cancelled');
     }
   }
 }
