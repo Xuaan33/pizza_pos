@@ -989,20 +989,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: _isSplitting
                     ? Checkbox(
-                        value: _itemsToSplit
-                            .any((item) => item['original_index'] == i),
-                        onChanged: (value) {
+                        value: _itemsToSplit.any((splitItem) =>
+                            splitItem['item_code'] == items[i]['item_code'] &&
+                            _compareOptions(
+                                splitItem['options'], items[i]['options'])),
+                        onChanged: (value) async {
                           if (value == true) {
-                            _selectItemForSplit(i, items[i]);
+                            if ((items[i]['quantity'] as num).toInt() > 1) {
+                              await _showQuantitySelectorDialog(items[i]);
+                            } else {
+                              setState(() {
+                                _itemsToSplit.add({
+                                  ...items[i],
+                                  'split_quantity': 1,
+                                });
+                              });
+                            }
                           } else {
                             setState(() {
-                              _itemsToSplit.removeWhere(
-                                  (item) => item['original_index'] == i);
+                              _itemsToSplit.removeWhere((splitItem) =>
+                                  splitItem['item_code'] ==
+                                      items[i]['item_code'] &&
+                                  _compareOptions(splitItem['options'],
+                                      items[i]['options']));
                             });
                           }
                         },
                       )
-                    : const SizedBox.shrink(), // keep cell alignment
+                    : const SizedBox.shrink(),
               ),
 
               // Price cell
@@ -2877,22 +2891,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (posProfile == null) throw Exception('Not authenticated');
 
       final response = await PosService().submitOrder(
-        posProfile: posProfile,
-        customer: 'Guest',
-        items: _itemsToSplit
-            .map((item) => {
-                  'item_code': item['item_code'],
-                  'qty': item['split_quantity'],
-                  'price_list_rate': item['price'],
-                  "custom_item_remarks": item['custom_item_remarks'],
-                  "custom_serve_later": item['custom_serve_later'],
-                  if (item['custom_variant_info'] != null)
-                    'custom_variant_info': item['custom_variant_info'],
-                })
-            .toList(),
-        table: "MK-Floor 1-Take Away",
-        orderChannel: "Dine In"
-      );
+          posProfile: posProfile,
+          customer: 'Guest',
+          items: _itemsToSplit
+              .map((item) => {
+                    'item_code': item['item_code'],
+                    'qty': item['split_quantity'],
+                    'price_list_rate': item['price'],
+                    "custom_item_remarks": item['custom_item_remarks'],
+                    "custom_serve_later": item['custom_serve_later'],
+                    if (item['custom_variant_info'] != null)
+                      'custom_variant_info': item['custom_variant_info'],
+                  })
+              .toList(),
+          table: "MK-Floor 1-Take Away",
+          orderChannel: "Dine In");
 
       if (response['success'] == true) {
         final splitOrder = response['message'];
@@ -2920,6 +2933,154 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Future<void> _showQuantitySelectorDialog(Map<String, dynamic> item) async {
+    final selectedQuantity = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Select Quantity to Split'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('How many of "${item['name']}" to split?'),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.remove),
+                  onPressed: () {
+                    Navigator.pop(
+                        context, max((item['quantity'] as num).toInt() - 1, 1));
+                  },
+                ),
+                Text(
+                  '${item['quantity']}',
+                  style: const TextStyle(fontSize: 18),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () {
+                    Navigator.pop(
+                        context,
+                        min((item['quantity'] as num).toInt() + 1,
+                            (item['quantity'] as num).toInt()));
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 0),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(context, (item['quantity'] as num).toInt()),
+            child: const Text('Split All'),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedQuantity == null || selectedQuantity <= 0) return;
+
+    setState(() {
+      _itemsToSplit.add({
+        ...item,
+        'split_quantity': selectedQuantity,
+      });
+    });
+  }
+
+  Future<void> _createSplitOrder() async {
+    setState(() => _isProcessingSplit = true);
+
+    try {
+      final authState = ref.read(authProvider);
+      final posProfile = authState.maybeWhen(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+          return posProfile;
+        },
+        orElse: () => null,
+      );
+
+      if (posProfile == null) throw Exception('Not authenticated');
+
+      // Prepare items for split order
+      final splitItems = _itemsToSplit.map((item) {
+        return {
+          'item_code': item['item_code'],
+          'qty': item['split_quantity'],
+          'price_list_rate': item['price'],
+          'custom_item_remarks': item['custom_item_remarks'] ?? '',
+          'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+          if (item['custom_variant_info'] != null)
+            'custom_variant_info': item['custom_variant_info'],
+        };
+      }).toList();
+
+      // Create new split order
+      final response = await PosService().submitOrder(
+        posProfile: posProfile,
+        customer: 'Guest',
+        items: splitItems,
+        table: "MK-Floor 1-Take Away", // Or use original table if needed
+        orderChannel: "Dine In",
+      );
+
+      if (response['success'] == true) {
+        final splitOrder = response['message'];
+
+        // Show payment dialog for split order
+        final paymentSuccess = await _showSplitOrderPaymentDialog(splitOrder);
+
+        if (paymentSuccess) {
+          // Update original order by removing split items
+          await _updateOriginalOrderAfterSplit();
+
+          // Refresh the screen
+          if (mounted) {
+            setState(() {
+              _isSplitting = false;
+              _itemsToSplit.clear();
+            });
+          }
+        }
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error splitting order: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingSplit = false);
+      }
+    }
+  }
+
+  Future<bool> _showSplitOrderPaymentDialog(
+      Map<String, dynamic> splitOrder) async {
+    final paymentCompleted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => SplitOrderPaymentDialog(
+        order: splitOrder,
+        paymentMethods: _paymentMethods,
+        onPaymentComplete: () => Navigator.pop(context, true),
+        onCancel: () => Navigator.pop(context, false),
+        onPaymentFailed: () => Navigator.pop(context, false),
+      ),
+    );
+
+    return paymentCompleted ?? false;
+  }
+
   Future<void> _updateOriginalOrderAfterSplit() async {
     try {
       final invoiceName = widget.order['invoiceNumber'];
@@ -2930,18 +3091,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           List<Map<String, dynamic>>.from(widget.order['items']);
 
       for (var splitItem in _itemsToSplit) {
-        final originalIndex = splitItem['original_index'];
-        final originalItem = updatedItems[originalIndex];
+        final originalItemIndex = updatedItems.indexWhere(
+          (item) =>
+              item['item_code'] == splitItem['item_code'] &&
+              _compareOptions(item['options'], splitItem['options']),
+        );
 
-        if (originalItem['quantity'] == splitItem['split_quantity']) {
-          // Remove item if all quantity was split
-          updatedItems.removeAt(originalIndex);
-        } else {
-          // Reduce quantity
-          updatedItems[originalIndex] = {
-            ...originalItem,
-            'quantity': originalItem['quantity'] - splitItem['split_quantity'],
-          };
+        if (originalItemIndex != -1) {
+          final originalItem = updatedItems[originalItemIndex];
+          final remainingQty = (originalItem['quantity'] as num).toInt() -
+              splitItem['split_quantity'];
+
+          if (remainingQty <= 0) {
+            updatedItems.removeAt(originalItemIndex);
+          } else {
+            updatedItems[originalItemIndex] = {
+              ...originalItem,
+              'quantity': remainingQty,
+            };
+          }
         }
       }
 
@@ -2961,21 +3129,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         name: invoiceName,
         posProfile: posProfile,
         customer: 'Guest',
-        items: updatedItems
-            .map((item) => {
-                  'item_code': item['item_code'],
-                  'qty': item['quantity'],
-                  'price_list_rate': item['price'],
-                  if (item['custom_variant_info'] != null)
-                    'custom_variant_info': item['custom_variant_info'],
-                })
-            .toList(),
+        items: updatedItems.map((item) {
+          return {
+            'item_code': item['item_code'],
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
       );
 
       // Update local state
-      setState(() {
-        widget.order['items'] = updatedItems;
-      });
+      if (mounted) {
+        setState(() {
+          widget.order['items'] = updatedItems;
+        });
+      }
     } catch (e) {
       Fluttertoast.showToast(
         msg: "Error updating original order: ${e.toString()}",
@@ -2986,27 +3158,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       rethrow;
     }
   }
-
-  Future<void> _showSplitOrderPaymentDialog(
-      Map<String, dynamic> splitOrder) async {
-    final paymentCompleted = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        insetPadding: EdgeInsets.all(16),
-        child: SplitOrderPaymentDialog(
-          order: splitOrder,
-          paymentMethods: _paymentMethods,
-          onPaymentComplete: () => Navigator.pop(context, true),
-          onCancel: () => Navigator.pop(context, false),
-        ),
-      ),
-    );
-
-    if (paymentCompleted != true) {
-      // If payment was cancelled, delete the split order
-      await PosService().deleteOrder(splitOrder['name']);
-      throw Exception('Split order payment cancelled');
+  bool _compareOptions(dynamic options1, dynamic options2) {
+  if (options1 == null && options2 == null) return true;
+  if (options1 == null || options2 == null) return false;
+  
+  // If they're both Maps, compare key-value pairs
+  if (options1 is Map && options2 is Map) {
+    final map1 = Map<String, dynamic>.from(options1);
+    final map2 = Map<String, dynamic>.from(options2);
+    
+    if (map1.length != map2.length) return false;
+    
+    for (final key in map1.keys) {
+      if (map1[key] != map2[key]) return false;
     }
+    
+    return true;
   }
+  
+  // If they're both Lists, compare elements
+  if (options1 is List && options2 is List) {
+    if (options1.length != options2.length) return false;
+    
+    for (int i = 0; i < options1.length; i++) {
+      if (options1[i] != options2[i]) return false;
+    }
+    
+    return true;
+  }
+  
+  // Fallback to simple equality
+  return options1 == options2;
+}
 }
