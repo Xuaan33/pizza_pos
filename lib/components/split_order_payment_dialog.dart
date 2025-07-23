@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -36,19 +37,89 @@ class _SplitOrderPaymentDialogState
   bool _isProcessingPayment = false;
   bool _isCashPayment = false;
   String baseImageUrl = 'http://shiokpos.byondwave.com';
+  bool _isDeletingOrder = false;
+  bool _isLoading = true;
+  Map<String, dynamic> _orderDetails = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrderDetails();
+  }
+
+  Future<void> _fetchOrderDetails() async {
+    try {
+      final response = await PosService().getOrders(
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        search: widget.order['name'],
+      );
+
+      if (response['message']?['success'] == true) {
+        final invoices = response['message']?['message'] ?? [];
+        if (invoices.isNotEmpty) {
+          setState(() {
+            _orderDetails = invoices.first;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Fluttertoast.showToast(
+          msg: 'Failed to fetch order details: $e',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Loading order details...'),
+            ],
+          ),
+        ),
+      );
+    }
+
     final items = List<Map<String, dynamic>>.from(widget.order['items'] ?? []);
-    final subtotal = items.fold<double>(
-      0,
-      (sum, item) =>
-          sum +
-          ((item['price'] ?? item['price_list_rate'] ?? 0).toDouble() *
-              (item['quantity'] ?? item['qty'] ?? 1).toDouble()),
-    );
-    final gst = subtotal * 0.06;
-    final total = (subtotal + gst);
+
+    final isCashPayment = _selectedPaymentMethod == 'Cash';
+    final paidAmount = isCashPayment
+        ? _amountGiven
+        : (_orderDetails['rounded_total'] ?? 0).toDouble();
+    final changeAmount = isCashPayment
+        ? _amountGiven - (_orderDetails['rounded_total'] ?? 0).toDouble()
+        : 0.0;
 
     return Dialog(
       backgroundColor: Colors.white,
@@ -85,252 +156,310 @@ class _SplitOrderPaymentDialogState
             ),
             const SizedBox(height: 20),
 
-            // Order Items
-            Container(
-              constraints: BoxConstraints(maxHeight: 300),
-              child: ScrollConfiguration(
-                behavior:
-                    ScrollConfiguration.of(context).copyWith(scrollbars: false),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    final price =
-                        (item['price'] ?? item['price_list_rate'] ?? 0)
-                            .toDouble();
-                    final quantity =
-                        (item['quantity'] ?? item['qty'] ?? 1).toDouble();
-                    final totalPrice = price * quantity;
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Order Items
+                    Container(
+                      constraints: BoxConstraints(maxHeight: 300),
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context)
+                            .copyWith(scrollbars: false),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final price =
+                                (item['price'] ?? item['price_list_rate'] ?? 0)
+                                    .toDouble();
+                            final quantity =
+                                (item['quantity'] ?? item['qty'] ?? 1)
+                                    .toDouble();
+                            final totalPrice = price * quantity;
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(8),
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      item['image'] != null
+                                          ? '$baseImageUrl${item['image']}'
+                                          : '$baseImageUrl${item['image']}',
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Image.asset(
+                                        'assets/pizza.png',
+                                        width: 50,
+                                        height: 50,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item['item_name'] ??
+                                              item['name'] ??
+                                              'Unknown Item',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        if (item['option_text'] != null)
+                                          Text(
+                                            item['option_text'],
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'RM${price.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        'x${quantity.toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                      Text(
+                                        'RM${totalPrice.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFFE732A0),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Order Summary
+                    Container(
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey.shade300),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
+                      child: Column(
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              item['image'] != null
-                                  ? '$baseImageUrl${item['image']}'
-                                  : '$baseImageUrl${item['image']}',
-                              width: 50,
-                              height: 50,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Image.asset(
-                                'assets/pizza.png',
-                                width: 50,
-                                height: 50,
-                                fit: BoxFit.cover,
+                          _buildSummaryRow(
+                              'Net Total',
+                              (_orderDetails['total'] ?? 0)
+                                  .toDouble() // Convert to double
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item['item_name'] ??
-                                      item['name'] ??
-                                      'Unknown Item',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
+                          if ((_orderDetails['discount_amount'] ?? 0) > 0) ...[
+                            const SizedBox(height: 8),
+                            _buildSummaryRow(
+                                'Discount',
+                                -(_orderDetails['discount_amount'] ?? 0)
+                                    .toDouble() // Convert to double and make negative
                                 ),
-                                if (item['option_text'] != null)
-                                  Text(
-                                    item['option_text'],
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'RM${price.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                          ],
+                          const SizedBox(height: 8),
+                          _buildSummaryRow(
+                              'Rounding',
+                              (_orderDetails['base_rounding_adjustment'] ?? 0)
+                                  .toDouble() // Convert to double
                               ),
-                              Text(
-                                'x${quantity.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
+                          const SizedBox(height: 8),
+                          _buildSummaryRow(
+                              'GST (6%)',
+                              ((_orderDetails['total_taxes_and_charges'] ?? 0) -
+                                      (_orderDetails['discount_amount'] ?? 0))
+                                  .toDouble()),
+                          const Divider(thickness: 1, height: 24),
+                          _buildSummaryRow(
+                              'Grand Total',
+                              (_orderDetails['rounded_total'] ?? 0)
+                                  .toDouble(), // Convert to double
+                              isTotal: true),
+                          const SizedBox(height: 8),
+                          if (isCashPayment) ...[
+                            _buildSummaryRow(
+                                'Amount Given', _amountGiven // Already a double
                                 ),
-                              ),
-                              Text(
-                                'RM${totalPrice.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFE732A0),
-                                ),
-                              ),
-                            ],
-                          ),
+                            const SizedBox(height: 8),
+                            _buildSummaryRow('Change Amount',
+                                changeAmount, // Already a double
+                                isTotal: true),
+                          ] else ...[
+                            _buildSummaryRow('Payment Method',
+                                _selectedPaymentMethod, // String value
+                                isTotal: true),
+                          ],
                         ],
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
+                    ),
+                    const SizedBox(height: 20),
 
-            // Order Summary
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  _buildSummaryRow('Subtotal', subtotal),
-                  _buildSummaryRow('GST (6%)', gst),
-                  const Divider(),
-                  _buildSummaryRow('Total', total, isTotal: true),
-                  if (_isCashPayment) ...[
-                    const SizedBox(height: 8),
-                    _buildSummaryRow('Amount Given', _amountGiven),
-                    const SizedBox(height: 8),
-                    _buildSummaryRow(
-                      'Change Amount',
-                      _amountGiven - total,
-                      isTotal: true,
+                    // Payment Method Selection
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Select Payment Method',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: widget.paymentMethods.map((method) {
+                            final isSelected =
+                                _selectedPaymentMethod == method['name'];
+                            return ChoiceChip(
+                              label: Text(method['name']),
+                              selected: isSelected,
+                              onSelected: (selected) async {
+                                if (selected) {
+                                  if (method['name'] == 'Cash') {
+                                    final totalAmount =
+                                        (_orderDetails['rounded_total'] ?? 0)
+                                            .toDouble();
+                                    final confirmed =
+                                        await _showCashPaymentDialog(
+                                            totalAmount);
+                                    if (confirmed) {
+                                      setState(() {
+                                        _selectedPaymentMethod = method['name'];
+                                        _isCashPayment = true;
+                                      });
+                                    }
+                                  } else {
+                                    setState(() {
+                                      _selectedPaymentMethod = method['name'];
+                                      _isCashPayment = false;
+                                    });
+                                  }
+                                } else {
+                                  setState(() {
+                                    _selectedPaymentMethod = '';
+                                    _isCashPayment = false;
+                                  });
+                                }
+                              },
+                              backgroundColor: Colors.white,
+                              selectedColor: const Color(0xFFE732A0),
+                              labelStyle: TextStyle(
+                                color: isSelected ? Colors.white : Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? const Color(0xFFE732A0)
+                                      : Colors.grey,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
                   ],
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 20),
 
-            // Payment Method Selection
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Select Payment Method',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: widget.paymentMethods.map((method) {
-                    final isSelected = _selectedPaymentMethod == method['name'];
-                    return ChoiceChip(
-                      label: Text(method['name']),
-                      selected: isSelected,
-                      onSelected: (selected) async {
-                        if (selected) {
-                          if (method['name'] == 'Cash') {
-                            final confirmed =
-                                await _showCashPaymentDialog(total);
-                            if (confirmed) {
-                              setState(() {
-                                _selectedPaymentMethod = method['name'];
-                                _isCashPayment = true;
-                              });
-                            }
-                          } else {
-                            setState(() {
-                              _selectedPaymentMethod = method['name'];
-                              _isCashPayment = false;
-                            });
-                          }
-                        } else {
-                          setState(() {
-                            _selectedPaymentMethod = '';
-                            _isCashPayment = false;
-                          });
-                        }
-                      },
-                      backgroundColor: Colors.white,
-                      selectedColor: const Color(0xFFE732A0),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        side: BorderSide(
-                          color: isSelected
-                              ? const Color(0xFFE732A0)
-                              : Colors.grey,
+            // Fixed footer with action buttons
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey.shade300)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isDeletingOrder ? null : _deleteSplitOrder,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _isDeletingOrder ? Colors.grey : Colors.red,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: widget.onCancel,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Cancel Split',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed:
-                        _selectedPaymentMethod.isEmpty ? null : _processPayment,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedPaymentMethod.isEmpty
-                          ? Colors.grey
-                          : const Color(0xFFE732A0),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: _isProcessingPayment
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Pay Now',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                      child: _isDeletingOrder
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Cancel Split',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _selectedPaymentMethod.isEmpty
+                          ? null
+                          : _processPayment,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selectedPaymentMethod.isEmpty
+                            ? Colors.grey
+                            : const Color(0xFFE732A0),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: _isProcessingPayment
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Pay Now',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -338,24 +467,34 @@ class _SplitOrderPaymentDialogState
     );
   }
 
-  Widget _buildSummaryRow(String label, double value, {bool isTotal = false}) {
+  Widget _buildSummaryRow(String label, dynamic value, {bool isTotal = false}) {
+    String formattedValue;
+
+    if (value == null) {
+      formattedValue = '';
+    } else if (value is num) {
+      formattedValue = 'RM ${value.toStringAsFixed(2)}';
+    } else {
+      formattedValue = value.toString();
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontSize: 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
             ),
           ),
           Text(
-            'RM${value.toStringAsFixed(2)}',
+            formattedValue,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              fontSize: 18,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.bold,
               color: isTotal ? const Color(0xFFE732A0) : Colors.black,
             ),
           ),
@@ -660,6 +799,44 @@ class _SplitOrderPaymentDialogState
     } finally {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
+      }
+    }
+  }
+
+  Future<void> _deleteSplitOrder() async {
+    if (_isDeletingOrder) return;
+
+    setState(() => _isDeletingOrder = true);
+
+    try {
+      final orderName = widget.order['name'];
+      if (orderName == null || orderName.isEmpty) {
+        throw Exception('Invalid order name');
+      }
+
+      final response = await PosService().deleteOrder(orderName);
+
+      if (response['success'] == true) {
+        Fluttertoast.showToast(
+          msg: "Split order deleted",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+        widget.onCancel();
+      } else {
+        throw Exception(response['message'] ?? 'Failed to delete split order');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error deleting split order: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDeletingOrder = false);
       }
     }
   }

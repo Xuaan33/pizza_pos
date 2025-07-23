@@ -178,8 +178,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to fetch order details: $e')),
+        Fluttertoast.showToast(
+          msg: 'Failed to fetch order details: $e',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
       }
     }
@@ -2878,7 +2881,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isProcessingSplit = true);
 
     try {
-      // 1. Create new order with split items
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
@@ -2890,6 +2892,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (posProfile == null) throw Exception('Not authenticated');
 
+      // 1. Create new order with split items
       final response = await PosService().submitOrder(
           posProfile: posProfile,
           customer: 'Guest',
@@ -2912,10 +2915,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() => _splitOrder = splitOrder);
 
         // 2. Show payment dialog for split order
-        await _showSplitOrderPaymentDialog(splitOrder);
+        final paymentSuccess = await _showSplitOrderPaymentDialog(splitOrder);
 
-        // 3. If payment successful, update original order
-        await _updateOriginalOrderAfterSplit();
+        if (paymentSuccess) {
+          // 3. If payment successful, update original order
+          await _updateOriginalOrderAfterSplit();
+
+          // 4. Fetch updated order details from server
+          await _fetchOrderDetails();
+
+          Fluttertoast.showToast(
+            msg: "Order split and paid successfully",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+        } else {
+          // If payment failed or cancelled, delete the split order
+          await PosService().deleteOrder(splitOrder['name']);
+
+          Fluttertoast.showToast(
+            msg: "Split cancelled - items restored to original order",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.blue,
+            textColor: Colors.white,
+          );
+        }
       }
     } catch (e) {
       Fluttertoast.showToast(
@@ -2925,73 +2950,136 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         textColor: Colors.white,
       );
     } finally {
-      setState(() {
-        _isProcessingSplit = false;
-        _isSplitting = false;
-        _itemsToSplit.clear();
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessingSplit = false;
+          _isSplitting = false;
+          _itemsToSplit.clear();
+        });
+      }
     }
   }
 
   Future<void> _showQuantitySelectorDialog(Map<String, dynamic> item) async {
-    final selectedQuantity = await showDialog<int>(
+    final quantity = (item['quantity'] as num).toDouble();
+    double selectedQuantity = quantity > 1 ? 1 : quantity;
+
+    final result = await showDialog<double>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Select Quantity to Split'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('How many of "${item['name']}" to split?'),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.remove),
-                  onPressed: () {
-                    Navigator.pop(
-                        context, max((item['quantity'] as num).toInt() - 1, 1));
-                  },
-                ),
-                Text(
-                  '${item['quantity']}',
-                  style: const TextStyle(fontSize: 18),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () {
-                    Navigator.pop(
-                        context,
-                        min((item['quantity'] as num).toInt() + 1,
-                            (item['quantity'] as num).toInt()));
-                  },
-                ),
-              ],
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.8,
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, 0),
-            child: const Text('Cancel'),
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Select Quantity to Split',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text('How many of "${item['name']}" to split?'),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove),
+                              onPressed: () {
+                                setState(() {
+                                  selectedQuantity = selectedQuantity > 1
+                                      ? selectedQuantity - 1
+                                      : 1;
+                                });
+                              },
+                            ),
+                            Text(
+                              selectedQuantity
+                                  .toStringAsFixed(quantity % 1 == 0 ? 0 : 2),
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              onPressed: () {
+                                setState(() {
+                                  selectedQuantity = selectedQuantity < quantity
+                                      ? selectedQuantity + 1
+                                      : quantity;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Slider(
+                            value: selectedQuantity,
+                            min: 1,
+                            max: quantity,
+                            divisions: (quantity - 1).toInt(),
+                            label: selectedQuantity
+                                .toStringAsFixed(quantity % 1 == 0 ? 0 : 2),
+                            onChanged: (value) {
+                              setState(() {
+                                selectedQuantity = value;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, 0.0),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, quantity),
+                              child: const Text('Split All'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () =>
+                                  Navigator.pop(context, selectedQuantity),
+                              child: const Text('Confirm'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
-          ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(context, (item['quantity'] as num).toInt()),
-            child: const Text('Split All'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
-    if (selectedQuantity == null || selectedQuantity <= 0) return;
+    if (result == null || result <= 0) return;
 
-    setState(() {
-      _itemsToSplit.add({
-        ...item,
-        'split_quantity': selectedQuantity,
+    if (mounted) {
+      setState(() {
+        _itemsToSplit.add({
+          ...item,
+          'split_quantity': result,
+          'original_quantity': quantity,
+        });
       });
-    });
+    }
   }
 
   Future<void> _createSplitOrder() async {
@@ -3099,8 +3187,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
         if (originalItemIndex != -1) {
           final originalItem = updatedItems[originalItemIndex];
-          final remainingQty = (originalItem['quantity'] as num).toInt() -
-              splitItem['split_quantity'];
+          final remainingQty = (originalItem['quantity'] as num).toDouble() -
+              (splitItem['split_quantity'] as num).toDouble();
 
           if (remainingQty <= 0) {
             updatedItems.removeAt(originalItemIndex);
@@ -3158,36 +3246,37 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       rethrow;
     }
   }
+
   bool _compareOptions(dynamic options1, dynamic options2) {
-  if (options1 == null && options2 == null) return true;
-  if (options1 == null || options2 == null) return false;
-  
-  // If they're both Maps, compare key-value pairs
-  if (options1 is Map && options2 is Map) {
-    final map1 = Map<String, dynamic>.from(options1);
-    final map2 = Map<String, dynamic>.from(options2);
-    
-    if (map1.length != map2.length) return false;
-    
-    for (final key in map1.keys) {
-      if (map1[key] != map2[key]) return false;
+    if (options1 == null && options2 == null) return true;
+    if (options1 == null || options2 == null) return false;
+
+    // If they're both Maps, compare key-value pairs
+    if (options1 is Map && options2 is Map) {
+      final map1 = Map<String, dynamic>.from(options1);
+      final map2 = Map<String, dynamic>.from(options2);
+
+      if (map1.length != map2.length) return false;
+
+      for (final key in map1.keys) {
+        if (map1[key] != map2[key]) return false;
+      }
+
+      return true;
     }
-    
-    return true;
-  }
-  
-  // If they're both Lists, compare elements
-  if (options1 is List && options2 is List) {
-    if (options1.length != options2.length) return false;
-    
-    for (int i = 0; i < options1.length; i++) {
-      if (options1[i] != options2[i]) return false;
+
+    // If they're both Lists, compare elements
+    if (options1 is List && options2 is List) {
+      if (options1.length != options2.length) return false;
+
+      for (int i = 0; i < options1.length; i++) {
+        if (options1[i] != options2[i]) return false;
+      }
+
+      return true;
     }
-    
-    return true;
+
+    // Fallback to simple equality
+    return options1 == options2;
   }
-  
-  // Fallback to simple equality
-  return options1 == options2;
-}
 }
