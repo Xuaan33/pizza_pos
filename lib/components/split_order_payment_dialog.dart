@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -101,7 +102,7 @@ class _SplitOrderPaymentDialogState
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: const [
               CircularProgressIndicator(),
               SizedBox(height: 20),
               Text('Loading order details...'),
@@ -123,26 +124,19 @@ class _SplitOrderPaymentDialogState
 
     return Dialog(
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       insetPadding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        width: 600,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.only(bottom: 16),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.grey)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.receipt, size: 30, color: Color(0xFFE732A0)),
-                  const SizedBox(width: 10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 600),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              // Header
+              Row(
+                children: const [
+                  Icon(Icons.receipt, size: 30, color: Color(0xFFE732A0)),
+                  SizedBox(width: 10),
                   Text(
                     'Split Order Payment',
                     style: TextStyle(
@@ -153,260 +147,236 @@ class _SplitOrderPaymentDialogState
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Order Items
-                    Container(
-                      constraints: BoxConstraints(maxHeight: 300),
-                      child: ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context)
-                            .copyWith(scrollbars: false),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: items.length,
-                          itemBuilder: (context, index) {
-                            final item = items[index];
-                            final price =
-                                (item['price'] ?? item['price_list_rate'] ?? 0)
-                                    .toDouble();
-                            final quantity =
-                                (item['quantity'] ?? item['qty'] ?? 1)
-                                    .toDouble();
-                            final totalPrice = price * quantity;
+              // Body Scrollable Content
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Item List
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          final price =
+                              (item['price'] ?? item['price_list_rate'] ?? 0)
+                                  .toDouble();
+                          final quantity =
+                              (item['quantity'] ?? item['qty'] ?? 1).toDouble();
+                          final totalPrice = price * quantity;
 
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      item['image'] != null
-                                          ? '$baseImageUrl${item['image']}'
-                                          : '$baseImageUrl${item['image']}',
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    item['image'] != null
+                                        ? '$baseImageUrl${item['image']}'
+                                        : '$baseImageUrl${item['image']}',
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Image.asset(
+                                      'assets/pizza.png',
                                       width: 50,
                                       height: 50,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Image.asset(
-                                        'assets/pizza.png',
-                                        width: 50,
-                                        height: 50,
-                                        fit: BoxFit.cover,
-                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item['item_name'] ??
-                                              item['name'] ??
-                                              'Unknown Item',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        if (item['option_text'] != null)
-                                          Text(
-                                            item['option_text'],
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'RM${price.toStringAsFixed(2)}',
+                                        item['item_name'] ??
+                                            item['name'] ??
+                                            'Unknown Item',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
+                                          fontSize: 16,
                                         ),
                                       ),
-                                      Text(
-                                        'x${quantity.toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                      Text(
-                                        'RM${totalPrice.toStringAsFixed(2)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFE732A0),
-                                        ),
-                                      ),
+                                      if (item['custom_variant_info'] != null)
+                                        ..._buildVariantText(item),
                                     ],
                                   ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'RM${price.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      'x${quantity.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                          color: Colors.grey.shade600),
+                                    ),
+                                    Text(
+                                      'RM${totalPrice.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFE732A0),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 20),
 
-                    // Order Summary
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildSummaryRow(
-                              'Net Total',
-                              (_orderDetails['total'] ?? 0)
-                                  .toDouble() // Convert to double
-                              ),
-                          if ((_orderDetails['discount_amount'] ?? 0) > 0) ...[
-                            const SizedBox(height: 8),
-                            _buildSummaryRow(
+                      const SizedBox(height: 16),
+
+                      // Summary
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            _buildSummaryRow('Net Total',
+                                (_orderDetails['total'] ?? 0).toDouble()),
+                            if ((_orderDetails['discount_amount'] ?? 0) > 0)
+                              _buildSummaryRow(
                                 'Discount',
                                 -(_orderDetails['discount_amount'] ?? 0)
-                                    .toDouble() // Convert to double and make negative
-                                ),
-                          ],
-                          const SizedBox(height: 8),
-                          _buildSummaryRow(
-                              'Rounding',
-                              (_orderDetails['base_rounding_adjustment'] ?? 0)
-                                  .toDouble() // Convert to double
+                                    .toDouble(),
                               ),
-                          const SizedBox(height: 8),
-                          _buildSummaryRow(
-                              'GST (6%)',
-                              ((_orderDetails['total_taxes_and_charges'] ?? 0) -
-                                      (_orderDetails['discount_amount'] ?? 0))
-                                  .toDouble()),
-                          const Divider(thickness: 1, height: 24),
-                          _buildSummaryRow(
-                              'Grand Total',
-                              (_orderDetails['rounded_total'] ?? 0)
-                                  .toDouble(), // Convert to double
-                              isTotal: true),
-                          const SizedBox(height: 8),
-                          if (isCashPayment) ...[
                             _buildSummaryRow(
-                                'Amount Given', _amountGiven // Already a double
-                                ),
+                                'Rounding',
+                                (_orderDetails['base_rounding_adjustment'] ?? 0)
+                                    .toDouble()),
+                            _buildSummaryRow(
+                                'GST (6%)',
+                                ((_orderDetails['total_taxes_and_charges'] ??
+                                            0) -
+                                        (_orderDetails['discount_amount'] ?? 0))
+                                    .toDouble()),
+                            const Divider(height: 24),
+                            _buildSummaryRow(
+                                'Grand Total',
+                                (_orderDetails['rounded_total'] ?? 0)
+                                    .toDouble(),
+                                isTotal: true),
                             const SizedBox(height: 8),
-                            _buildSummaryRow('Change Amount',
-                                changeAmount, // Already a double
-                                isTotal: true),
-                          ] else ...[
-                            _buildSummaryRow('Payment Method',
-                                _selectedPaymentMethod, // String value
-                                isTotal: true),
+                            if (isCashPayment) ...[
+                              _buildSummaryRow('Amount Given', _amountGiven),
+                              _buildSummaryRow('Change Amount', changeAmount,
+                                  isTotal: true),
+                            ] else
+                              _buildSummaryRow(
+                                'Payment Method',
+                                _selectedPaymentMethod,
+                                isTotal: true,
+                              ),
                           ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Payment Method Selection
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Select Payment Method',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
                         ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: widget.paymentMethods.map((method) {
-                            final isSelected =
-                                _selectedPaymentMethod == method['name'];
-                            return ChoiceChip(
-                              label: Text(method['name']),
-                              selected: isSelected,
-                              onSelected: (selected) async {
-                                if (selected) {
-                                  if (method['name'] == 'Cash') {
-                                    final totalAmount =
-                                        (_orderDetails['rounded_total'] ?? 0)
-                                            .toDouble();
-                                    final confirmed =
-                                        await _showCashPaymentDialog(
-                                            totalAmount);
-                                    if (confirmed) {
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Payment method chips
+                      Align(
+                        alignment: Alignment.center,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Select Payment Method',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: widget.paymentMethods.map((method) {
+                                final isSelected =
+                                    _selectedPaymentMethod == method['name'];
+                                return ChoiceChip(
+                                  label: Text(method['name']),
+                                  selected: isSelected,
+                                  onSelected: (selected) async {
+                                    if (selected) {
+                                      if (method['name'] == 'Cash') {
+                                        final totalAmount =
+                                            (_orderDetails['rounded_total'] ??
+                                                    0)
+                                                .toDouble();
+                                        final confirmed =
+                                            await _showCashPaymentDialog(
+                                                totalAmount);
+                                        if (confirmed) {
+                                          setState(() {
+                                            _selectedPaymentMethod =
+                                                method['name'];
+                                            _isCashPayment = true;
+                                          });
+                                        }
+                                      } else {
+                                        setState(() {
+                                          _selectedPaymentMethod =
+                                              method['name'];
+                                          _isCashPayment = false;
+                                        });
+                                      }
+                                    } else {
                                       setState(() {
-                                        _selectedPaymentMethod = method['name'];
-                                        _isCashPayment = true;
+                                        _selectedPaymentMethod = '';
+                                        _isCashPayment = false;
                                       });
                                     }
-                                  } else {
-                                    setState(() {
-                                      _selectedPaymentMethod = method['name'];
-                                      _isCashPayment = false;
-                                    });
-                                  }
-                                } else {
-                                  setState(() {
-                                    _selectedPaymentMethod = '';
-                                    _isCashPayment = false;
-                                  });
-                                }
-                              },
-                              backgroundColor: Colors.white,
-                              selectedColor: const Color(0xFFE732A0),
-                              labelStyle: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: isSelected
-                                      ? const Color(0xFFE732A0)
-                                      : Colors.grey,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            );
-                          }).toList(),
+                                  },
+                                  backgroundColor: Colors.white,
+                                  selectedColor: const Color(0xFFE732A0),
+                                  labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? const Color(0xFFE732A0)
+                                          : Colors.grey,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
 
-            // Fixed footer with action buttons
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.grey.shade300)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const SizedBox(height: 20),
+
+              // Action buttons
+              Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
@@ -460,8 +430,8 @@ class _SplitOrderPaymentDialogState
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -704,7 +674,7 @@ class _SplitOrderPaymentDialogState
               ((item['price'] ?? item['price_list_rate'] ?? 0).toDouble() *
                   (item['quantity'] ?? item['qty'] ?? 1).toDouble()));
       final gst = subtotal * 0.06;
-      final total = (subtotal + gst);
+      final total = (_orderDetails['rounded_total'] ?? 0).toDouble();
 
       // Prepare payment data
       final payments = [
@@ -801,6 +771,49 @@ class _SplitOrderPaymentDialogState
         setState(() => _isProcessingPayment = false);
       }
     }
+  }
+
+  List<Widget> _buildVariantText(Map<String, dynamic> item) {
+    dynamic variantInfo = item['custom_variant_info'];
+    if (variantInfo == null) return [];
+
+    // Handle case where variantInfo is a JSON string
+    if (variantInfo is String) {
+      try {
+        variantInfo = jsonDecode(variantInfo);
+      } catch (e) {
+        debugPrint('Error parsing variant info: $e');
+        return [];
+      }
+    }
+
+    // Handle case where variantInfo is a List
+    if (variantInfo is List) {
+      return variantInfo.expand((variant) {
+        if (variant is Map && variant['options'] is List) {
+          return (variant['options'] as List).map((option) {
+            return Text(
+              '• ${variant['variant_group']}: ${option['option']}'
+              '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
+              style: TextStyle(fontSize: 12, color: Colors.black),
+            );
+          }).toList();
+        }
+        return <Widget>[];
+      }).toList();
+    }
+
+    // Handle case where variantInfo is a Map (old format)
+    if (variantInfo is Map) {
+      return variantInfo.entries.map((entry) {
+        return Text(
+          '• ${entry.key}: ${entry.value}',
+          style: TextStyle(fontSize: 12, color: Colors.black),
+        );
+      }).toList();
+    }
+
+    return [];
   }
 
   Future<void> _deleteSplitOrder() async {

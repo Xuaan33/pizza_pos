@@ -3414,12 +3414,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       }
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: "Error splitting order: ${e.toString()}",
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
+      // Fluttertoast.showToast(
+      //   msg: "Error splitting order: ${e.toString()}",
+      //   gravity: ToastGravity.BOTTOM,
+      //   backgroundColor: Colors.red,
+      //   textColor: Colors.white,
+      // );
     } finally {
       if (mounted) {
         setState(() {
@@ -3610,12 +3610,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       }
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: "Error splitting order: ${e.toString()}",
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
+      // Fluttertoast.showToast(
+      //   msg: "Error splitting order: ${e.toString()}",
+      //   gravity: ToastGravity.BOTTOM,
+      //   backgroundColor: Colors.red,
+      //   textColor: Colors.white,
+      // );
     } finally {
       if (mounted) {
         setState(() => _isProcessingSplit = false);
@@ -3699,6 +3699,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               'custom_variant_info': item['custom_variant_info'],
           };
         }).toList(),
+        table: "MK-Floor 1-Take Away"
       );
 
       // Update local state

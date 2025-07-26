@@ -235,6 +235,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               invoice['custom_fiuu_invoice_number']
                                       ?.toString() ??
                                   '000000',
+                          'discount_amount':
+                              (invoice['discount_amount'] as num?)?.toDouble(),
                         };
                       } catch (e) {
                         print(
@@ -393,6 +395,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
       'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
       'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
+      'discount_amount': (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0,
       'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
           DateTime.now(),
       'paidTime': invoice['status']?.toString() == 'Paid'

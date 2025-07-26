@@ -441,7 +441,8 @@ class OrderMapper {
             : null,
         'paymentDate': order['creation']?.toString(),
         'invoiceNumber': order['name'] as String,
-        'pos_invoice_number': order['custom_fiuu_invoice_number']
+        'pos_invoice_number': order['custom_fiuu_invoice_number'],
+        'discount_amount': (order['discount_amount'] as num).toDouble(),
       };
     } catch (e) {
       print('[OrderMapper] Error mapping paid order: $e');

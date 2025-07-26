@@ -302,6 +302,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         (order['total'] as num?)?.toDouble() ?? (subtotal + tax + rounding);
     final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
+    final discountAmount = (order['discount_amount'] as num?)?.toDouble();
 
     return ScrollConfiguration(
       behavior: NoStretchScrollBehavior(),
@@ -559,6 +560,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 child: Column(
                   children: [
                     _buildSummaryRow('Subtotal', subtotal),
+                    if (discountAmount != null)
+                      _buildSummaryRow('Discount Amount', discountAmount),
                     if (taxBreakdown != null)
                       _buildSummaryRow(
                         'GST (${taxBreakdown['rate']?.toStringAsFixed(0) ?? '6.0'}%)',
