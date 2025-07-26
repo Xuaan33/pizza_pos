@@ -789,10 +789,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           columnWidths: const {
             0: FixedColumnWidth(62), // Image column
             1: FlexColumnWidth(3), // Item name
-            2: FlexColumnWidth(2), // Quantity
-            3: FlexColumnWidth(1.7), // Split checkbox (new column)
-            4: FlexColumnWidth(1), // Price
-            5: FlexColumnWidth(2), // Amount
+            2: FlexColumnWidth(1.5), // Quantity
+            3: FlexColumnWidth(1.5), // Split checkbox
+            4: FlexColumnWidth(1.5), // Price
+            5: FlexColumnWidth(1.5), // Amount
           },
           defaultVerticalAlignment: TableCellVerticalAlignment.middle,
           children: [
@@ -800,31 +800,47 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               children: [
                 const SizedBox(), // Empty for image column
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text('Item Name',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Item Name',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.left, // Align left for Item Name
+                  ),
                 ),
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text('Quantity',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Quantity',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center, // Center align Quantity
+                  ),
                 ),
                 if (_isSplitting) // Only show split header when in split mode
                   const Padding(
-                    padding:
-                        EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                    child: Text('Split',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text(
+                      'Split',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center, // Center align Split
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text('Price (RM)',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Price (RM)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right, // Right align Price
+                  ),
                 ),
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Text('Amount (RM)',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Amount (RM)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.right, // Right align Amount
+                  ),
                 ),
               ],
             ),
@@ -840,8 +856,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column
-        1: FlexColumnWidth(3), // Item name
-        2: FlexColumnWidth(1.5), // Quantity
+        1: FlexColumnWidth(3.5), // Item name
+        2: FlexColumnWidth(2.5), // Quantity
         3: FlexColumnWidth(1.5), // Split checkbox
         4: FlexColumnWidth(2), // Price
         5: FlexColumnWidth(2), // Amount
@@ -909,6 +925,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     if (items[i]['custom_variant_info'] != null)
                       ..._buildVariantText(items[i]),
+                    if ((items[i]['discount_amount'] ?? 0) > 0)
+                      Text(
+                        'Discount: -RM${(items[i]['discount_amount'] as num).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1035,11 +1059,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               // Amount cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Text(
-                  ((items[i]['price'] as num) * (items[i]['quantity'] as num))
-                      .toStringAsFixed(2),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.right,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if ((items[i]['discount_amount'] ?? 0) > 0)
+                      Text(
+                        'RM${(items[i]['price'] * items[i]['quantity']).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          decoration: TextDecoration.lineThrough,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    Text(
+                      'RM${((items[i]['price'] * items[i]['quantity']) - (items[i]['discount_amount'] ?? 0)).toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -2033,10 +2069,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
       return;
     }
+
     final voucherController = TextEditingController();
     final discountPercentageController = TextEditingController();
     final discountAmountController = TextEditingController();
-    int selectedDiscountType = 0; // 0 = voucher, 1 = percentage, 2 = amount
+    int selectedDiscountType =
+        0; // 0 = voucher, 1 = percentage, 2 = amount, 3 = itemized
 
     final result = await showDialog<bool>(
       context: context,
@@ -2057,51 +2095,62 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Discount type selector
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Expanded(
-                            child: ChoiceChip(
-                              label: const Text('Voucher'),
-                              selected: selectedDiscountType == 0,
-                              onSelected: (selected) {
-                                setState(() {
-                                  selectedDiscountType =
-                                      selected ? 0 : selectedDiscountType;
-                                });
-                              },
-                            ),
+                          ChoiceChip(
+                            label: const Text('Voucher'),
+                            selected: selectedDiscountType == 0,
+                            onSelected: (selected) {
+                              setState(() {
+                                selectedDiscountType =
+                                    selected ? 0 : selectedDiscountType;
+                              });
+                            },
                           ),
-                          Expanded(
-                            child: ChoiceChip(
-                              label: const Text('Percentage'),
-                              selected: selectedDiscountType == 1,
-                              onSelected: (selected) {
-                                setState(() {
-                                  selectedDiscountType =
-                                      selected ? 1 : selectedDiscountType;
-                                  if (selected) {
-                                    voucherController.clear();
-                                    discountAmountController.clear();
-                                  }
-                                });
-                              },
-                            ),
+                          ChoiceChip(
+                            label: const Text('Percentage'),
+                            selected: selectedDiscountType == 1,
+                            onSelected: (selected) {
+                              setState(() {
+                                selectedDiscountType =
+                                    selected ? 1 : selectedDiscountType;
+                                if (selected) {
+                                  voucherController.clear();
+                                  discountAmountController.clear();
+                                }
+                              });
+                            },
                           ),
-                          Expanded(
-                            child: ChoiceChip(
-                              label: const Text('Amount'),
-                              selected: selectedDiscountType == 2,
-                              onSelected: (selected) {
-                                setState(() {
-                                  selectedDiscountType =
-                                      selected ? 2 : selectedDiscountType;
-                                  if (selected) {
-                                    voucherController.clear();
-                                    discountPercentageController.clear();
-                                  }
-                                });
-                              },
-                            ),
+                          ChoiceChip(
+                            label: const Text('Amount'),
+                            selected: selectedDiscountType == 2,
+                            onSelected: (selected) {
+                              setState(() {
+                                selectedDiscountType =
+                                    selected ? 2 : selectedDiscountType;
+                                if (selected) {
+                                  voucherController.clear();
+                                  discountPercentageController.clear();
+                                }
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Text('Itemized Discount'),
+                            selected: selectedDiscountType == 3,
+                            onSelected: (selected) {
+                              setState(() {
+                                selectedDiscountType =
+                                    selected ? 3 : selectedDiscountType;
+                                if (selected) {
+                                  voucherController.clear();
+                                  discountPercentageController.clear();
+                                  discountAmountController.clear();
+                                }
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -2164,6 +2213,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             }
                           },
                         ),
+
+                      // Itemized discount button (only visible when itemized is selected)
+                      if (selectedDiscountType == 3)
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context)
+                                .pop(true); // Close this dialog
+                            _showItemizedDiscountDialog(); // Show itemized discount dialog
+                          },
+                          child: const Text('Select Items to Discount'),
+                        ),
                     ],
                   ),
                 ),
@@ -2176,47 +2236,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                   onPressed: () => Navigator.of(context).pop(false),
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE732A0),
-                    foregroundColor: Colors.white,
+                if (selectedDiscountType !=
+                    3) // Hide Apply button for itemized discount
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE732A0),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text(
+                      'Apply',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      if (selectedDiscountType == 0 &&
+                          voucherController.text.isEmpty) {
+                        Fluttertoast.showToast(
+                          msg: "Please enter a voucher code",
+                          gravity: ToastGravity.BOTTOM,
+                          backgroundColor: Colors.red,
+                          textColor: Colors.white,
+                        );
+                        return;
+                      } else if (selectedDiscountType == 1 &&
+                          discountPercentageController.text.isEmpty) {
+                        Fluttertoast.showToast(
+                          msg: "Please enter a discount percentage",
+                          gravity: ToastGravity.BOTTOM,
+                          backgroundColor: Colors.red,
+                          textColor: Colors.white,
+                        );
+                        return;
+                      } else if (selectedDiscountType == 2 &&
+                          discountAmountController.text.isEmpty) {
+                        Fluttertoast.showToast(
+                          msg: "Please enter a discount amount",
+                          gravity: ToastGravity.BOTTOM,
+                          backgroundColor: Colors.red,
+                          textColor: Colors.white,
+                        );
+                        return;
+                      }
+                      Navigator.of(context).pop(true);
+                    },
                   ),
-                  child: const Text(
-                    'Apply',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () {
-                    if (selectedDiscountType == 0 &&
-                        voucherController.text.isEmpty) {
-                      Fluttertoast.showToast(
-                        msg: "Please enter a voucher code",
-                        gravity: ToastGravity.BOTTOM,
-                        backgroundColor: Colors.red,
-                        textColor: Colors.white,
-                      );
-                      return;
-                    } else if (selectedDiscountType == 1 &&
-                        discountPercentageController.text.isEmpty) {
-                      Fluttertoast.showToast(
-                        msg: "Please enter a discount percentage",
-                        gravity: ToastGravity.BOTTOM,
-                        backgroundColor: Colors.red,
-                        textColor: Colors.white,
-                      );
-                      return;
-                    } else if (selectedDiscountType == 2 &&
-                        discountAmountController.text.isEmpty) {
-                      Fluttertoast.showToast(
-                        msg: "Please enter a discount amount",
-                        gravity: ToastGravity.BOTTOM,
-                        backgroundColor: Colors.red,
-                        textColor: Colors.white,
-                      );
-                      return;
-                    }
-                    Navigator.of(context).pop(true);
-                  },
-                ),
               ],
             );
           },
@@ -2239,6 +2301,401 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final amount = double.tryParse(discountAmountController.text) ?? 0;
         await _applyManualDiscount(amount);
       }
+      // Itemized discount handled separately in _showItemizedDiscountDialog
+    }
+  }
+
+  Future<void> _showItemizedDiscountDialog() async {
+    final items = _isEditing ? _editableItems : orderItems;
+    final List<Map<String, dynamic>> itemsWithDiscounts = List.from(items);
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.8,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'Itemized Discount',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: itemsWithDiscounts.length,
+                        itemBuilder: (context, index) {
+                          final item = itemsWithDiscounts[index];
+                          final itemTotal = item['price'] * item['quantity'];
+
+                          // Real-time calculation functions
+                          void updateFromPercentage(String value) {
+                            if (value.isEmpty) {
+                              setState(() {
+                                itemsWithDiscounts[index] = {
+                                  ...item,
+                                  'discount_percentage': 0,
+                                  'discount_amount': 0,
+                                };
+                              });
+                              return;
+                            }
+
+                            final percentage = double.tryParse(value) ?? 0;
+                            final cappedPercentage =
+                                percentage > 100 ? 100 : percentage;
+                            final amount = (itemTotal * cappedPercentage / 100)
+                                .clamp(0, itemTotal);
+
+                            setState(() {
+                              itemsWithDiscounts[index] = {
+                                ...item,
+                                'discount_percentage': cappedPercentage,
+                                'discount_amount': amount,
+                              };
+                            });
+                          }
+
+                          void updateFromAmount(String value) {
+                            if (value.isEmpty) {
+                              setState(() {
+                                itemsWithDiscounts[index] = {
+                                  ...item,
+                                  'discount_percentage': 0,
+                                  'discount_amount': 0,
+                                };
+                              });
+                              return;
+                            }
+
+                            final amount = double.tryParse(value) ?? 0;
+                            final cappedAmount =
+                                amount > itemTotal ? itemTotal : amount;
+                            final percentage = itemTotal > 0
+                                ? (cappedAmount / itemTotal) * 100
+                                : 0;
+
+                            setState(() {
+                              itemsWithDiscounts[index] = {
+                                ...item,
+                                'discount_percentage': percentage,
+                                'discount_amount': cappedAmount,
+                              };
+                            });
+                          }
+
+                          // Get current calculated values for display
+                          final currentDiscountAmount =
+                              itemsWithDiscounts[index]['discount_amount'] ?? 0;
+                          final currentDiscountPercentage =
+                              itemsWithDiscounts[index]
+                                      ['discount_percentage'] ??
+                                  0;
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item['name'],
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextFormField(
+                                          initialValue: (itemsWithDiscounts[
+                                                              index][
+                                                          'discount_percentage'] ??
+                                                      0) ==
+                                                  0
+                                              ? ''
+                                              : (itemsWithDiscounts[index][
+                                                          'discount_percentage']
+                                                      as num)
+                                                  .toStringAsFixed(2)
+                                                  .replaceAll(
+                                                      RegExp(r'\.?0+$'), ''),
+                                          decoration: InputDecoration(
+                                            labelText: 'Discount %',
+                                            border: OutlineInputBorder(),
+                                            suffixText: '%',
+                                            errorText:
+                                                currentDiscountPercentage > 100
+                                                    ? 'Max 100%'
+                                                    : null,
+                                          ),
+                                          keyboardType:
+                                              TextInputType.numberWithOptions(
+                                                  decimal: true),
+                                          onChanged: updateFromPercentage,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextFormField(
+                                          initialValue: (itemsWithDiscounts[
+                                                              index]
+                                                          ['discount_amount'] ??
+                                                      0) ==
+                                                  0
+                                              ? ''
+                                              : (itemsWithDiscounts[index]
+                                                          ['discount_amount']
+                                                      as num)
+                                                  .toStringAsFixed(2)
+                                                  .replaceAll(
+                                                      RegExp(r'\.?0+$'), ''),
+                                          decoration: InputDecoration(
+                                            labelText: 'Discount Amount (RM)',
+                                            border: OutlineInputBorder(),
+                                            prefixText: 'RM ',
+                                            errorText: currentDiscountAmount >
+                                                    itemTotal
+                                                ? 'Max RM${itemTotal.toStringAsFixed(2)}'
+                                                : null,
+                                          ),
+                                          keyboardType:
+                                              TextInputType.numberWithOptions(
+                                                  decimal: true),
+                                          onChanged: updateFromAmount,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Real-time calculated values display
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Original: RM${itemTotal.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                        if (currentDiscountAmount > 0) ...[
+                                          Text(
+                                            'Discount: ${currentDiscountPercentage.toStringAsFixed(1)}% = RM${currentDiscountAmount.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                        Text(
+                                          'Final Amount: RM${(itemTotal - currentDiscountAmount).toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: currentDiscountAmount > 0
+                                                ? Colors.green.shade700
+                                                : Colors.black,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE732A0),
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () async {
+                              // Validate all inputs before proceeding
+                              bool hasInvalidDiscounts = false;
+                              String errorMessage = '';
+
+                              for (int i = 0;
+                                  i < itemsWithDiscounts.length;
+                                  i++) {
+                                final item = itemsWithDiscounts[i];
+                                final discountAmount =
+                                    item['discount_amount'] ?? 0;
+                                final discountPercentage =
+                                    item['discount_percentage'] ?? 0;
+                                final itemTotal =
+                                    item['price'] * item['quantity'];
+
+                                if (discountAmount > itemTotal) {
+                                  hasInvalidDiscounts = true;
+                                  errorMessage =
+                                      "Discount for '${item['name']}' exceeds item amount";
+                                  break;
+                                }
+
+                                if (discountPercentage > 100) {
+                                  hasInvalidDiscounts = true;
+                                  errorMessage =
+                                      "Discount percentage for '${item['name']}' cannot exceed 100%";
+                                  break;
+                                }
+                              }
+
+                              if (hasInvalidDiscounts) {
+                                Fluttertoast.showToast(
+                                  msg: errorMessage,
+                                  gravity: ToastGravity.BOTTOM,
+                                  backgroundColor: Colors.red,
+                                  textColor: Colors.white,
+                                  toastLength: Toast.LENGTH_LONG,
+                                );
+                              } else {
+                                Navigator.of(context).pop();
+                                await _applyItemizedDiscounts(
+                                    itemsWithDiscounts);
+                              }
+                            },
+                            child: const Text(
+                              'Apply Discounts',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _applyItemizedDiscounts(
+      List<Map<String, dynamic>> itemsWithDiscounts) async {
+    _showLoadingOverlay(true);
+
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      // Prepare items for submission
+      final itemsToSubmit = itemsWithDiscounts.map((item) {
+        return {
+          'item_code': item['item_code'] ?? '',
+          'qty': item['quantity'],
+          'price_list_rate': item['price'],
+          'custom_item_remarks': item['custom_item_remarks'] ?? '',
+          'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+          if (item['discount_percentage'] != null &&
+              item['discount_percentage'] > 0)
+            'discount_percentage': item['discount_percentage'],
+          if (item['discount_amount'] != null && item['discount_amount'] > 0)
+            'discount_amount': item['discount_amount'],
+          if (item['custom_variant_info'] != null)
+            'custom_variant_info': item['custom_variant_info'],
+        };
+      }).toList();
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                  ) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        items: itemsToSubmit,
+      );
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts
+        await _fetchOrderDetails();
+
+        // Update local state
+        setState(() {
+          if (_isEditing) {
+            _editableItems = List.from(itemsWithDiscounts);
+          }
+          _discountAmount = itemsWithDiscounts.fold(
+            0.0,
+            (sum, item) => sum + (item['discount_amount'] ?? 0),
+          );
+        });
+
+        Fluttertoast.showToast(
+          msg: "Itemized discounts applied successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error applying itemized discounts: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
     }
   }
 
@@ -2316,28 +2773,39 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
+      final items = _isEditing ? _editableItems : orderItems;
+      final itemsWithoutDiscounts = items.map((item) {
+        return {
+          ...item,
+          'discount_percentage': 0,
+          'discount_amount': 0,
+        };
+      }).toList();
+
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier) {
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                  ) {
                     return posProfile;
                   },
                   orElse: () => null,
                 ) ??
             '',
         customer: 'Guest',
-        items: orderItems.map((item) {
+        items: itemsWithoutDiscounts.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
             'qty': item['quantity'],
@@ -2359,6 +2827,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() {
           _discountAmount = 0;
           _voucherCode = '';
+          if (_isEditing) {
+            _editableItems = List.from(itemsWithoutDiscounts);
+          }
         });
         Fluttertoast.showToast(
           msg: "Discount removed successfully",
