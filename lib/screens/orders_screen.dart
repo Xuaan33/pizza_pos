@@ -291,7 +291,18 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final isCancelled =
         (order['status']?.toString() ?? 'Cancelled') == 'Cancelled';
 
+    // Calculate discount amounts
+    final orderLevelDiscount =
+        (order['discount_amount'] as num?)?.toDouble() ?? 0.0;
+    final itemLevelDiscounts = _calculateItemLevelDiscounts(order);
+    final totalDiscount =
+        orderLevelDiscount > 0 ? orderLevelDiscount : itemLevelDiscounts;
+
     final items = (order['items'] as List<dynamic>?) ?? [];
+
+    // Calculate original subtotal (before any discounts)
+    final originalSubtotal = _calculateOriginalSubtotal(order);
+
     final subtotal = (order['net_total'] as num?)?.toDouble() ??
         _calculateOrderSubtotal(order);
     final tax = (order['total_taxes_and_charges'] as num?)?.toDouble() ??
@@ -302,7 +313,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         (order['total'] as num?)?.toDouble() ?? (subtotal + tax + rounding);
     final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
-    final discountAmount = (order['discount_amount'] as num?)?.toDouble();
 
     return ScrollConfiguration(
       behavior: NoStretchScrollBehavior(),
@@ -531,11 +541,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                                     ],
                                   ),
                                 ),
-                                Text(
-                                  'RM ${((item['price'] ?? 0) * (item['quantity'] ?? 1)).toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                      color: Color(0xFFE732A0),
-                                      fontWeight: FontWeight.w600),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: _buildItemPriceColumn(item),
                                 ),
                               ],
                             ),
@@ -559,9 +567,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 padding: EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _buildSummaryRow('Subtotal', subtotal),
-                    if (discountAmount != null)
-                      _buildSummaryRow('Discount Amount', discountAmount),
+                    _buildSummaryRow('Subtotal', originalSubtotal),
+                    if (totalDiscount > 0)
+                      _buildSummaryRow('Discount Amount', -totalDiscount),
                     if (taxBreakdown != null)
                       _buildSummaryRow(
                         'GST (${taxBreakdown['rate']?.toStringAsFixed(0) ?? '6.0'}%)',
@@ -651,6 +659,72 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     );
   }
 
+// Helper method to calculate original subtotal before discounts
+  double _calculateOriginalSubtotal(Map<String, dynamic> order) {
+    final items = (order['items'] as List?) ?? [];
+    return items.fold(0.0, (sum, item) {
+      final quantity = (item['quantity'] ?? 1).toDouble();
+      final discountedPrice = (item['price'] ?? 0).toDouble();
+      final discountAmount =
+          (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
+
+      // Calculate original price per unit by adding back the discount per unit
+      final originalPricePerUnit =
+          discountedPrice + (discountAmount / quantity);
+
+      return sum + (originalPricePerUnit * quantity);
+    });
+  }
+
+// Helper method to build item price column with proper original/discounted price display
+  List<Widget> _buildItemPriceColumn(Map<String, dynamic> item) {
+    final quantity = (item['quantity'] ?? 1).toDouble();
+    final discountedPrice = (item['price'] ?? 0).toDouble();
+    final discountAmount = (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
+
+    final discountedTotal = discountedPrice * quantity;
+
+    if (discountAmount > 0) {
+      // Calculate original price per unit
+      final originalPricePerUnit =
+          discountedPrice + (discountAmount / quantity);
+      final originalTotal = originalPricePerUnit * quantity;
+
+      return [
+        // Show original price with strikethrough
+        Text(
+          'RM ${originalTotal.toStringAsFixed(2)}',
+          style: TextStyle(
+            decoration: TextDecoration.lineThrough,
+            color: Colors.grey,
+            fontSize: 12,
+          ),
+        ),
+        // Show discounted price
+        Text(
+          'RM ${discountedTotal.toStringAsFixed(2)}',
+          style:
+              TextStyle(color: Color(0xFFE732A0), fontWeight: FontWeight.w600),
+        ),
+        // Show discount amount
+        Text(
+          'Discount: RM ${discountAmount.toStringAsFixed(2)}',
+          style: TextStyle(
+              color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+      ];
+    } else {
+      // No discount, just show the price
+      return [
+        Text(
+          'RM ${discountedTotal.toStringAsFixed(2)}',
+          style:
+              TextStyle(color: Color(0xFFE732A0), fontWeight: FontWeight.w600),
+        ),
+      ];
+    }
+  }
+
   Widget _buildFilterDropdown({
     required String value,
     required List<String> items,
@@ -729,6 +803,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         ],
       ),
     );
+  }
+
+  double _calculateItemLevelDiscounts(Map<String, dynamic> order) {
+    final items = (order['items'] as List?) ?? [];
+    return items.fold(0.0, (sum, item) {
+      final discount = (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
+      return sum + discount;
+    });
   }
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {

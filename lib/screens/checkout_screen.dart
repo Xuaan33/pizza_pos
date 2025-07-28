@@ -48,6 +48,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isDisposed = false;
   String _voucherCode = '';
   double _discountAmount = 0.0;
+  double total_taxes_and_charges = 0.0;
   bool _isValidatingVoucher = false;
   bool _isEditing = false;
   Map<String, int> _itemStockQuantities = {};
@@ -126,7 +127,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  // Update the _fetchOrderDetails method in _CheckoutScreenState
   Future<void> _fetchOrderDetails() async {
     try {
       final invoiceName = widget.order['invoiceNumber'];
@@ -172,6 +172,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             widget.order['coupon_code'] = invoice['coupon_code'];
             widget.order['custom_user_voucher'] =
                 invoice['custom_user_voucher'];
+            widget.order['taxes'] = invoice['taxes'];
+            widget.order['total_taxes_and_charges'] =
+                (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0;
+            widget.order['total'] =
+                (invoice['total'] as num?)?.toDouble() ?? 0.0;
+            total_taxes_and_charges =
+                (invoice['total_taxes_and_charges'] as num?)?.toDouble() ??
+                    _calculateGST();
             _discountAmount = widget.order['discount_amount'];
           });
         }
@@ -258,7 +266,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       })
                   .toList(),
               subtotal: _calculateSubtotal(),
-              tax: _calculateGST(),
+              tax: total_taxes_and_charges,
               total: _calculateTotal(),
             );
           });
@@ -559,6 +567,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildActionButtonsGrid() {
+    final canSplit =
+        orderItems.length > 1; // Check if more than one item exists
+
     return Container(
       height: 120,
       child: Column(
@@ -569,8 +580,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 Expanded(
                   child: _buildActionButton(
                     _isSplitting ? 'Cancel Split' : 'Split Bill',
-                    _isEditing ? Colors.grey : const Color(0xFF00203E),
-                    onPressed: _isEditing ? null : _toggleSplitMode,
+                    _isEditing
+                        ? Colors.grey
+                        : canSplit
+                            ? const Color(0xFF00203E)
+                            : Colors.grey,
+                    onPressed:
+                        _isEditing || !canSplit ? null : _toggleSplitMode,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1108,6 +1124,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final paidAmount = isCashPayment ? _amountGiven : totalAmount;
     final changeAmount = isCashPayment ? _amountGiven - totalAmount : 0.0;
 
+    // Calculate original subtotal before any discounts
+    final originalSubtotal = orderItems.fold(0.0, (sum, item) {
+      return sum + (item['price'] * item['quantity']);
+    });
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1116,24 +1137,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
       child: Column(
         children: [
+          // Show subtotal
           _buildSummaryRow(
-              'Net Total', "RM ${_calculateSubtotal().toStringAsFixed(2)}"),
+            'Subtotal',
+            "RM ${originalSubtotal.toStringAsFixed(2)}",
+          ),
           const SizedBox(height: 8),
+
           if (_discountAmount > 0) ...[
             _buildSummaryRow(
-                'Discount', "-RM ${_discountAmount.toStringAsFixed(2)}"),
+              'Discount',
+              "-RM ${_discountAmount.toStringAsFixed(2)}",
+            ),
             const SizedBox(height: 8),
           ],
+
           _buildSummaryRow(
-              'Rounding', "RM ${_calculateRounding().toStringAsFixed(2)}"),
+            'GST (6%)',
+            "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
+          ),
           const SizedBox(height: 8),
+
           _buildSummaryRow(
-              'GST (6%)', "RM ${_calculateGST().toStringAsFixed(2)}"),
+            'Rounding',
+            "RM ${_calculateRounding().toStringAsFixed(2)}",
+          ),
           const Divider(thickness: 1, height: 24),
+
           _buildSummaryRow(
-              'Grand Total', "RM ${totalAmount.toStringAsFixed(2)}",
-              isTotal: true),
+            'Grand Total',
+            "RM ${totalAmount.toStringAsFixed(2)}",
+            isTotal: true,
+          ),
           const SizedBox(height: 8),
+
           if (isCashPayment) ...[
             _buildSummaryRow(
               'Amount Given',
@@ -2785,22 +2822,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                  ) {
-                    return posProfile;
-                  },
+                  authenticated: (sid,
+                          apiKey,
+                          apiSecret,
+                          username,
+                          email,
+                          fullName,
+                          posProfile,
+                          branch,
+                          paymentMethods,
+                          taxes,
+                          hasOpening,
+                          tier) =>
+                      posProfile,
                   orElse: () => null,
                 ) ??
             '',
@@ -2822,15 +2856,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
 
       if (response['success'] == true) {
-        // Update the order details with new amounts
+        // Force a complete refresh of order details
         await _fetchOrderDetails();
+
         setState(() {
           _discountAmount = 0;
           _voucherCode = '';
           if (_isEditing) {
             _editableItems = List.from(itemsWithoutDiscounts);
           }
+
+          // Explicitly recalculate all amounts
+          widget.order['grand_total'] = _calculateTotal();
+          widget.order['total_taxes_and_charges'] = _calculateGST();
+          widget.order['base_rounding_adjustment'] = _calculateRounding();
         });
+
         Fluttertoast.showToast(
           msg: "Discount removed successfully",
           gravity: ToastGravity.BOTTOM,
@@ -3262,6 +3303,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _toggleSplitMode() {
+    if (orderItems.length <= 1) {
+      Fluttertoast.showToast(
+        msg: "Cannot split an order with only one item",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
     setState(() {
       _isSplitting = !_isSplitting;
       if (!_isSplitting) {
@@ -3339,6 +3390,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<void> _confirmSplit() async {
+    if (orderItems.length <= 1) {
+      Fluttertoast.showToast(
+        msg: "Cannot split an order with only one item",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
     if (_itemsToSplit.isEmpty) {
       Fluttertoast.showToast(
         msg: "Please select items to split",
@@ -3685,22 +3745,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (posProfile == null) throw Exception('Not authenticated');
 
       await PosService().submitOrder(
-        name: invoiceName,
-        posProfile: posProfile,
-        customer: 'Guest',
-        items: updatedItems.map((item) {
-          return {
-            'item_code': item['item_code'],
-            'qty': item['quantity'],
-            'price_list_rate': item['price'],
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        table: "MK-Floor 1-Take Away"
-      );
+          name: invoiceName,
+          posProfile: posProfile,
+          customer: 'Guest',
+          items: updatedItems.map((item) {
+            return {
+              'item_code': item['item_code'],
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['custom_variant_info'] != null)
+                'custom_variant_info': item['custom_variant_info'],
+            };
+          }).toList(),
+          table: "MK-Floor 1-Take Away");
 
       // Update local state
       if (mounted) {

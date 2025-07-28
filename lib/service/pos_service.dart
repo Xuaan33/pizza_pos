@@ -401,12 +401,16 @@ class OrderMapper {
             'options': options ?? {},
             'option_text': optionText ?? '',
             'custom_variant_info': customVariantInfo, // Preserve original
+            'discount_amount': (item['discount_amount'] as num).toDouble(),
           };
         }).toList(),
         'total': (order['rounded_total'] as num).toDouble(),
         'postingDate': DateTime.parse(order['creation'] as String),
         'customerName': order['customer_name'] as String? ?? 'Guest',
+        'taxes': order['taxes'],
         'taxBreakdown': _mapTaxes(order['taxes'] as List?),
+        'total_taxes_and_charges':
+            (order['total_taxes_and_charges'] as num).toDouble(),
       };
     } catch (e) {
       print('Error mapping submitted order: $e');
@@ -416,11 +420,18 @@ class OrderMapper {
 
   static Map<String, dynamic>? _mapTaxes(List<dynamic>? taxes) {
     if (taxes == null || taxes.isEmpty) return null;
-    final tax = taxes.first as Map<String, dynamic>;
+
+    // Find GST tax (or use first tax if not found)
+    final tax = taxes.firstWhere(
+      (t) => (t['description'] as String?)?.contains('GST') ?? false,
+      orElse: () => taxes.first,
+    ) as Map<String, dynamic>;
+
     return {
       'rate': (tax['rate'] as num).toDouble(),
-      'amount': (tax['amount'] as num).toDouble(),
-      'description': tax['account_head'] as String? ?? 'Tax',
+      'amount': (tax['tax_amount'] as num)
+          .toDouble(), // Changed from 'amount' to 'tax_amount'
+      'description': tax['description'] as String? ?? 'Tax',
     };
   }
 
@@ -443,6 +454,8 @@ class OrderMapper {
         'invoiceNumber': order['name'] as String,
         'pos_invoice_number': order['custom_fiuu_invoice_number'],
         'discount_amount': (order['discount_amount'] as num).toDouble(),
+        'total_taxes_and_charges':
+            (order['total_taxes_and_charges'] as num).toDouble(),
       };
     } catch (e) {
       print('[OrderMapper] Error mapping paid order: $e');

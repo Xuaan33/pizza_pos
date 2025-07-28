@@ -158,6 +158,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                                 item['custom_item_remarks']?.toString() ?? '',
                             'custom_variant_info':
                                 item['custom_variant_info']?.toString() ?? '',
+                            'discount_amount':
+                                (item['discount_amount'] as num?)?.toDouble() ??
+                                    0.0,
                           };
                         }).toList();
 
@@ -235,7 +238,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               invoice['custom_fiuu_invoice_number']
                                       ?.toString() ??
                                   '000000',
-                          'discount_amount':
+                                  'total_taxes_and_charges':(invoice['total_taxes_and_charges'] as num?)
+                                      ?.toDouble() ??
+                                  0.0,
+                          'discount_amount': 
                               (invoice['discount_amount'] as num?)?.toDouble(),
                         };
                       } catch (e) {
@@ -382,6 +388,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         'custom_serve_later': item['custom_serve_later'] == 1,
         'custom_item_remarks': item['custom_item_remarks'] ?? '',
         'custom_variant_info': customVariantInfo, // Include exactly as received
+        'discount_amount': (item['discount_amount']).toDouble(),
       };
     }).toList();
 
@@ -395,7 +402,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
       'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
       'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
-      'discount_amount': (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0,
+      'total_taxes_and_charges':
+          (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
+      'discount_amount':
+          (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0,
       'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
           DateTime.now(),
       'paidTime': invoice['status']?.toString() == 'Paid'
