@@ -979,33 +979,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.add, size: 20),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () {
-                                  final itemCode =
-                                      _editableItems[i]['item_code'];
-                                  final availableStock =
-                                      _itemStockQuantities[itemCode] ?? 999;
-                                  final currentQuantity =
-                                      _editableItems[i]['quantity'];
-
-                                  if (currentQuantity >= availableStock) {
-                                    Fluttertoast.showToast(
-                                      msg:
-                                          "Cannot add more than available stock ($availableStock)",
-                                      gravity: ToastGravity.BOTTOM,
-                                      backgroundColor: Colors.red,
-                                      textColor: Colors.white,
-                                    );
-                                    return;
-                                  }
-
-                                  setState(() {
-                                    _editableItems[i]['quantity'] += 1;
-                                  });
-                                },
-                              ),
+                                  icon: const Icon(Icons.add, size: 20),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => _increaseQuantity(i)),
                             ],
                           ),
                           if (_itemStockQuantities[_editableItems[i]
@@ -3093,28 +3070,51 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (_isEditing) {
         // Save original items
         _previousEditableItems =
-            List<Map<String, dynamic>>.from(widget.order['items']);
-        // Make a copy for editing
-        _editableItems = List<Map<String, dynamic>>.from(widget.order['items']);
-        // Clear history when starting new edit session
+            List<Map<String, dynamic>>.from(widget.order['items'])
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList();
+        // Make a deep copy for editing
+        _editableItems = List<Map<String, dynamic>>.from(widget.order['items'])
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        // Initialize edit history with the current state
+        _editHistory = [
+          _editableItems.map((item) => Map<String, dynamic>.from(item)).toList()
+        ];
+        debugPrint(
+            'Edit mode enabled, initial state: ${_editableItems.map((item) => "${item['name']}: ${item['quantity']}").toList()}');
+      } else {
+        // Clear edit history and reset editable items when exiting edit mode
         _editHistory = [];
+        _editableItems = [];
+        _previousEditableItems = [];
       }
     });
   }
 
   void _saveEditState() {
-    // Save current state to history before making changes
-    _editHistory.add(List<Map<String, dynamic>>.from(_editableItems));
-    // Keep only last 10 states to prevent memory issues
+    // Create a deep copy of the current state
+    final currentState =
+        _editableItems.map((item) => Map<String, dynamic>.from(item)).toList();
+    _editHistory.add(currentState);
+    // Keep only the last 10 states to prevent memory issues
     if (_editHistory.length > 10) {
       _editHistory.removeAt(0);
     }
+    debugPrint(
+        'Saved state to history: ${currentState.map((item) => "${item['name']}: ${item['quantity']}").toList()}');
   }
 
   void _undoLastChange() {
-    if (_editHistory.isNotEmpty) {
+    if (_editHistory.length > 1) {
       setState(() {
-        _editableItems = _editHistory.removeLast();
+        _editHistory.removeLast(); // Remove the current state
+        // Create a deep copy of the previous state
+        _editableItems = _editHistory.last
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        debugPrint(
+            'Restored state: ${_editableItems.map((item) => "${item['name']}: ${item['quantity']}").toList()}');
       });
     } else {
       Fluttertoast.showToast(
@@ -3128,8 +3128,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   void _discardChanges() {
     setState(() {
-      _editableItems = List<Map<String, dynamic>>.from(_previousEditableItems);
-      _editHistory.clear();
+      // Restore original items
+      _editableItems = _previousEditableItems
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      // Reset edit history to initial state
+      _editHistory = [List<Map<String, dynamic>>.from(_editableItems)];
+      _isEditing = false; // Exit edit mode
     });
   }
 
@@ -3137,12 +3142,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final isLastItem = _editableItems.length == 1;
 
     if (!isLastItem) {
-      _saveEditState(); // Save state before change
-
       setState(() {
         _editableItems.removeAt(index);
-        // Create a new list to force rebuild
-        _editableItems = List<Map<String, dynamic>>.from(_editableItems);
+        debugPrint('Deleted item at index $index');
+        _saveEditState(); // Save state AFTER change
       });
       return;
     }
@@ -3188,8 +3191,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  void _increaseQuantity(int index) {
+    final itemCode = _editableItems[index]['item_code'];
+    final availableStock = _itemStockQuantities[itemCode] ?? 999;
+    final currentQuantity = _editableItems[index]['quantity'] as num;
+
+    if (currentQuantity >= availableStock) {
+      Fluttertoast.showToast(
+        msg: "Cannot add more than available stock ($availableStock)",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    setState(() {
+      _editableItems[index] = {
+        ..._editableItems[index],
+        'quantity': currentQuantity + 1,
+      };
+      debugPrint(
+          'Increased quantity for ${itemCode} to ${currentQuantity + 1}');
+      _saveEditState(); // Save state AFTER change
+    });
+  }
+
   void _decreaseQuantity(int index) {
-    if (_editableItems[index]['quantity'] <= 1) {
+    final currentQuantity = _editableItems[index]['quantity'] as num;
+
+    if (currentQuantity <= 1) {
       Fluttertoast.showToast(
         msg: "Item quantity cannot be 0",
         gravity: ToastGravity.BOTTOM,
@@ -3198,10 +3229,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
       return;
     }
-    _saveEditState(); // Save state before change
 
     setState(() {
-      _editableItems[index]['quantity'] -= 1;
+      _editableItems[index] = {
+        ..._editableItems[index],
+        'quantity': currentQuantity - 1,
+      };
+      debugPrint(
+          'Decreased quantity for ${_editableItems[index]['item_code']} to ${currentQuantity - 1}');
+      _saveEditState(); // Save state AFTER change
     });
   }
 
