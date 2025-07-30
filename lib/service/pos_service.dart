@@ -358,6 +358,149 @@ class PosService {
     }
     return result;
   }
+
+// Variant Group Methods
+  Future<Map<String, dynamic>> getVariantGroups() async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.get_variant_groups',
+    );
+  }
+
+  Future<Map<String, dynamic>> getVariantGroup(String variantGroup) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.get_variant_group?variant_group=$variantGroup',
+    );
+  }
+
+  Future<Map<String, dynamic>> createVariantGroup({
+    required String title,
+    required List<Map<String, dynamic>> variantInfoTable,
+    int requiredNo = 1,
+    int optionRequiredNo = 1,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.create_variant_group',
+      method: 'POST',
+      body: {
+        'title': title,
+        'variant_info_table': variantInfoTable,
+        'required': requiredNo,
+        'option_required_no': optionRequiredNo,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> updateVariantGroup({
+    required String name,
+    required List<Map<String, dynamic>> variantInfoTable,
+    required int requiredNo,
+    required int optionRequiredNo,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.update_variant_group',
+      method: 'POST',
+      body: {
+        'name': name,
+        'variant_info_table': variantInfoTable,
+        'required': requiredNo,
+        'option_required_no': optionRequiredNo,
+      },
+    );
+  }
+
+// Item Methods
+  Future<Map<String, dynamic>> getItem(String itemCode) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.get_item?item_code=$itemCode',
+    );
+  }
+
+  Future<Map<String, dynamic>> createItem({
+    required String itemCode,
+    required String itemName,
+    required String itemGroup,
+    required List<Map<String, dynamic>> variantGroupTable,
+    String? description,
+    String? imageUrl,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.create_item',
+      method: 'POST',
+      body: {
+        'item_code': itemCode,
+        'item_name': itemName,
+        'item_group': itemGroup,
+        'variant_group_table': variantGroupTable,
+        if (description != null) 'description': description,
+        if (imageUrl != null) 'image_url': imageUrl,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> updateItem({
+    required String itemCode,
+    String? itemName,
+    String? itemGroup,
+    List<Map<String, dynamic>>? variantGroupTable,
+    int? disabled,
+    String? description,
+    String? imageUrl,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.update_item',
+      method: 'POST',
+      body: {
+        'item_code': itemCode,
+        if (itemName != null) 'item_name': itemName,
+        if (itemGroup != null) 'item_group': itemGroup,
+        if (variantGroupTable != null) 'variant_group_table': variantGroupTable,
+        if (disabled != null) 'disabled': disabled,
+        if (description != null) 'description': description,
+        if (imageUrl != null) 'image_url': imageUrl,
+      },
+    );
+  }
+
+// Item Group Methods (some may already exist)
+  Future<Map<String, dynamic>> getItemGroup(String itemGroup) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.get_item_group?item_group=$itemGroup',
+    );
+  }
+
+  Future<Map<String, dynamic>> createItemGroup({
+    required String itemGroupName,
+    String? parentItemGroup,
+    int isGroup = 0,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.create_item_group',
+      method: 'POST',
+      body: {
+        'item_group_name': itemGroupName,
+        if (parentItemGroup != null) 'parent_item_group': parentItemGroup,
+        'is_group': isGroup,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> updateItemGroup({
+    required String name,
+    required String itemGroupName,
+    String? parentItemGroup,
+    int? isGroup,
+  }) async {
+    return _makeRequest(
+      endpoint: 'shiok_pos.api.update_item_group',
+      method: 'POST',
+      body: {
+        'name': name,
+        'item_group_name': itemGroupName,
+        if (parentItemGroup != null) 'parent_item_group': parentItemGroup,
+        if (isGroup != null) 'is_group': isGroup,
+      },
+    );
+  }
 }
 
 class OrderMapper {

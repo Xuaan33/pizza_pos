@@ -941,6 +941,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     if (items[i]['custom_variant_info'] != null)
                       ..._buildVariantText(items[i]),
+                      if (items[i]['custom_serve_later'] == true ||
+                        (items[i]['custom_serve_later'] is num &&
+                            items[i]['custom_serve_later'] == 1))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '● Serve Later',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (items[i]['custom_item_remarks'] != null &&
+                        items[i]['custom_item_remarks'].toString().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Remarks: ${items[i]['custom_item_remarks']}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    
                     if ((items[i]['discount_amount'] ?? 0) > 0)
                       Text(
                         'Discount: -RM${(items[i]['discount_amount'] as num).toStringAsFixed(2)}',

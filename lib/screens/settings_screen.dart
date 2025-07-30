@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
-import 'package:shiok_pos_android_app/providers/auth_provider.dart';
-import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
-import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
+import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
+import 'package:shiok_pos_android_app/components/variant_group.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -18,6 +20,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  int _selectedIndex = 0;
   bool _isPosConnected = false;
   bool _isTesting = false;
   bool _isSaving = false; // Add this for save button loading state
@@ -25,11 +28,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       TextEditingController(text: '192.168.');
   final TextEditingController _portController =
       TextEditingController(text: '8800');
+  List<VariantGroup> variantGroups = [];
+  bool isLoading = true;
+
+  static const List<String> _sections = [
+    'POS Opening & Closing',
+    'POS Card Terminal',
+    'Item Group',
+    'Item',
+    'Variant',
+    'Stock',
+    'Finished Goods',
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadSavedConfig(); // Load saved config when widget initializes
+    _loadVariantGroups();
   }
 
   @override
@@ -37,6 +53,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _ipController.dispose();
     _portController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadVariantGroups() async {
+    try {
+      final response = await PosService().getVariantGroups();
+      if (response['success'] == true) {
+        setState(() {
+          variantGroups = (response['message'] as List)
+              .map((json) => VariantGroup.fromJson(json))
+              .toList();
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading variant groups: $e')),
+      );
+    }
   }
 
   Future<void> _loadSavedConfig() async {
@@ -95,47 +130,854 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final authState = ref.watch(authProvider);
 
     return authState.when(
-        initial: () => const Center(child: CircularProgressIndicator()),
-        unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
-          return Container(
-            color: Colors.grey[100],
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildTopSection(),
-                const SizedBox(height: 30),
-                Row(
+      initial: () => const Center(child: CircularProgressIndicator()),
+      unauthenticated: () => const Center(child: Text('Unauthorized')),
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+      ) {
+        return Scaffold(
+          body: Row(
+            children: [
+              // Navigation Drawer
+              Container(
+                width: 250,
+                color: Colors.grey[100],
+                child: ListView.builder(
+                  itemCount: _sections.length,
+                  itemBuilder: (context, index) {
+                    return ListTile(
+                      title: Text(_sections[index]),
+                      selected: _selectedIndex == index,
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = index;
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              // Main Content
+              Expanded(
+                child: Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(20),
+                  child: _buildSectionContent(_selectedIndex, hasOpening),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionContent(int index, bool hasOpening) {
+    switch (index) {
+      case 0:
+        return _buildPosOpeningClosingSection(hasOpening);
+      case 1:
+        return _buildPosTerminalSection();
+      case 2:
+        return _buildItemGroupSection();
+      case 3:
+        return _buildItemSection();
+      case 4:
+        return _buildVariantSection();
+      case 5:
+        return _buildStockSection();
+      case 6:
+        return _buildFinishedGoodsSection();
+      default:
+        return const Center(child: Text('Select a section'));
+    }
+  }
+
+  Widget _buildPosOpeningClosingSection(bool hasOpening) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'POS Opening & Closing',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 30),
+        Row(
+          children: [
+            Expanded(
+              child: _buildOpeningEntryButton(hasOpening),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildClosingEntryButton(hasOpening),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPosTerminalSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'POS Terminal Connection',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        _buildConnectionStatusIndicator(),
+        const SizedBox(height: 20),
+        _buildConnectionForm(),
+        const SizedBox(height: 20),
+        _buildTestButton(),
+      ],
+    );
+  }
+
+  Widget _buildItemGroupSection() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Item Group Management',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 20),
+        Text('Item group management will be shown here'),
+        // You can move your existing item group logic here
+      ],
+    );
+  }
+
+  Widget _buildItemSection() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Item Management',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 20),
+        Text('Item management will be shown here'),
+        // You can move your existing item management logic here
+      ],
+    );
+  }
+
+  Widget _buildVariantSection() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with Add Record button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Variants',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              ElevatedButton(
+                onPressed: _showCreateVariantGroupDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(
+                  'Add Record',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Variant Groups List
+          if (isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (variantGroups.isEmpty)
+            const Center(
+              child: Text('No variant groups found'),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: variantGroups.length,
+              itemBuilder: (context, index) {
+                final group = variantGroups[index];
+                return VariantGroupCard(
+                  variantGroup: group,
+                  onEdit: () => _showEditVariantGroupDialog(group),
+                  onDelete: () => _deleteVariantGroup(group.variantGroup),
+                  onAddVariant: () => _showCreateVariantDialog(group),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateVariantGroupDialog() {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    bool isRequired = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text(
+            'Create Variant Group',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _buildOpeningEntryButton(hasOpening),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Variant Group Name *',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                    const SizedBox(width: 16), // spacing between buttons
-                    Expanded(
-                      child: _buildClosingEntryButton(hasOpening),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Text(
+                          'Required?',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 16),
+                        Switch(
+                          value: isRequired,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              isRequired = value;
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 30),
-                _buildPosConnectionSection(),
-              ],
+              ),
             ),
-          );
-        });
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Variant Group Name is required')),
+                  );
+                  return;
+                }
+
+                await _createVariantGroup(
+                  nameController.text.trim(),
+                  isRequired,
+                );
+                Navigator.pop(context);
+              },
+              child: Text(
+                'Save',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  Widget _buildTopSection() {
-    return Row(
-      children: [
-        const Text(
-          'System Settings',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.bold,
+  void _showCreateVariantDialog(VariantGroup group) {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final priceController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          'Add Variant to ${group.variantGroup}',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.6,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Variant Name *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: priceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Additional Cost',
+                      border: OutlineInputBorder(),
+                      prefixText: 'RM ',
+                    ),
+                    keyboardType:
+                        TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Variant Name is required')),
+                );
+                return;
+              }
+
+              await _addVariantToGroup(
+                group,
+                nameController.text.trim(),
+                double.tryParse(priceController.text) ?? 0.0,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _createVariantGroup(String title, bool isRequired) async {
+    try {
+      final response = await PosService().createVariantGroup(
+        title: title,
+        variantInfoTable: [], // Start with empty variants
+        requiredNo: isRequired ? 1 : 0,
+        optionRequiredNo: 1,
+      );
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Variant group created successfully')),
+        );
+        _loadVariantGroups(); // Reload the list
+      } else {
+        throw Exception(
+            response['message'] ?? 'Failed to create variant group');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _addVariantToGroup(
+      VariantGroup group, String variantName, double additionalCost) async {
+    try {
+      // Create updated variant info table
+      final updatedVariants = List<Map<String, dynamic>>.from(
+        group.options.map((option) => {
+              'option': option.option,
+              'additional_cost': option.additionalCost,
+            }),
+      );
+
+      // Add new variant
+      updatedVariants.add({
+        'option': variantName,
+        'additional_cost': additionalCost,
+      });
+
+      final response = await PosService().updateVariantGroup(
+        name: group.variantGroup,
+        variantInfoTable: updatedVariants,
+        requiredNo: group.required,
+        optionRequiredNo: group.optionRequiredNo,
+      );
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Variant added successfully')),
+        );
+        _loadVariantGroups(); // Reload the list
+      } else {
+        throw Exception(response['message'] ?? 'Failed to add variant');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  void _showEditVariantGroupDialog(VariantGroup group) {
+    final nameController = TextEditingController(text: group.variantGroup);
+    final descriptionController =
+        TextEditingController(); // Fill if available in model
+    bool isRequired = group.required == 1;
+    int optionRequiredNo = group.optionRequiredNo;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text(
+            'Edit Variant Group',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Variant Group Name *',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descriptionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Text('Required?'),
+                        const SizedBox(width: 16),
+                        Switch(
+                          value: isRequired,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              isRequired = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Text('Option Required Number:'),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 80,
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            controller: TextEditingController(
+                              text: optionRequiredNo.toString(),
+                            ),
+                            onChanged: (value) {
+                              optionRequiredNo = int.tryParse(value) ?? 1;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Current Variants:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ListView.builder(
+                        itemCount: group.options.length,
+                        itemBuilder: (context, index) {
+                          final option = group.options[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text(option.option),
+                            subtitle: Text(
+                              option.additionalCost > 0
+                                  ? 'Additional Cost: RM ${option.additionalCost.toStringAsFixed(2)}'
+                                  : 'Free',
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.edit, size: 16),
+                              onPressed: () {
+                                _showEditVariantDialog(group, option, index);
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Variant Group Name is required'),
+                    ),
+                  );
+                  return;
+                }
+
+                await _updateVariantGroup(
+                  group,
+                  nameController.text.trim(),
+                  isRequired,
+                  optionRequiredNo,
+                );
+                Navigator.pop(context);
+              },
+              child: Text(
+                'Update',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditVariantDialog(
+      VariantGroup group, VariantOption option, int optionIndex) {
+    final nameController = TextEditingController(text: option.option);
+    final priceController =
+        TextEditingController(text: option.additionalCost.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Variant'),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Variant Name *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Additional Cost',
+                    border: OutlineInputBorder(),
+                    prefixText: 'RM ',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _deleteVariantFromGroup(group, optionIndex);
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Variant Name is required')),
+                );
+                return;
+              }
+
+              await _updateVariantInGroup(
+                group,
+                optionIndex,
+                nameController.text.trim(),
+                double.tryParse(priceController.text) ?? 0.0,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateVariantGroup(
+    VariantGroup group,
+    String newTitle,
+    bool isRequired,
+    int optionRequiredNo,
+  ) async {
+    try {
+      final response = await PosService().updateVariantGroup(
+        name: group.variantGroup, // Use original name for identification
+        variantInfoTable: group.options
+            .map((option) => {
+                  'option': option.option,
+                  'additional_cost': option.additionalCost,
+                })
+            .toList(),
+        requiredNo: isRequired ? 1 : 0,
+        optionRequiredNo: optionRequiredNo,
+      );
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Variant group updated successfully')),
+        );
+        _loadVariantGroups(); // Reload the list
+      } else {
+        throw Exception(
+            response['message'] ?? 'Failed to update variant group');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _updateVariantInGroup(
+    VariantGroup group,
+    int optionIndex,
+    String newVariantName,
+    double newAdditionalCost,
+  ) async {
+    try {
+      // Create updated variant info table
+      final updatedVariants = List<Map<String, dynamic>>.from(
+        group.options.asMap().entries.map((entry) => {
+              'option': entry.key == optionIndex
+                  ? newVariantName
+                  : entry.value.option,
+              'additional_cost': entry.key == optionIndex
+                  ? newAdditionalCost
+                  : entry.value.additionalCost,
+            }),
+      );
+
+      final response = await PosService().updateVariantGroup(
+        name: group.variantGroup,
+        variantInfoTable: updatedVariants,
+        requiredNo: group.required,
+        optionRequiredNo: group.optionRequiredNo,
+      );
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Variant updated successfully')),
+        );
+        _loadVariantGroups(); // Reload the list
+      } else {
+        throw Exception(response['message'] ?? 'Failed to update variant');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _deleteVariantGroup(String groupName) async {
+    // Show confirmation dialog first
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: Text(
+            'Are you sure you want to delete the variant group "$groupName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // Implement delete logic here - you might need to add a delete API method
+      // For now, just show a message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Delete functionality to be implemented')),
+      );
+    }
+  }
+
+  Future<void> _deleteVariantFromGroup(
+      VariantGroup group, int optionIndex) async {
+    try {
+      // Create updated variant info table without the deleted variant
+      final updatedVariants = group.options
+          .asMap()
+          .entries
+          .where((entry) => entry.key != optionIndex)
+          .map((entry) => {
+                'option': entry.value.option,
+                'additional_cost': entry.value.additionalCost,
+              })
+          .toList();
+
+      final response = await PosService().updateVariantGroup(
+        name: group.variantGroup,
+        variantInfoTable: updatedVariants,
+        requiredNo: group.required,
+        optionRequiredNo: group.optionRequiredNo,
+      );
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Variant deleted successfully')),
+        );
+        _loadVariantGroups(); // Reload the list
+      } else {
+        throw Exception(response['message'] ?? 'Failed to delete variant');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Widget _buildStockSection() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Stock Management',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 20),
+        Text('Stock management will be shown here'),
+      ],
+    );
+  }
+
+  Widget _buildFinishedGoodsSection() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Finished Goods Management',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 20),
+        Text('Finished goods management will be shown here'),
       ],
     );
   }
@@ -148,8 +990,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: ElevatedButton(
         onPressed: isDisabled ? null : () => _showOpeningEntryDialog(),
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-              isDisabled ? Colors.grey[400] : Colors.green,
+          backgroundColor: isDisabled ? Colors.grey[400] : Colors.green,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
@@ -192,7 +1033,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         child: Text(
           isDisabled ? 'No Opening Entry' : 'Create Closing Entry',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -230,24 +1071,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     }
-  }
-
-  Widget _buildPosConnectionSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'POS Terminal Connection',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
-        _buildConnectionStatusIndicator(),
-        const SizedBox(height: 20),
-        _buildConnectionForm(),
-        const SizedBox(height: 20),
-        _buildTestButton(),
-      ],
-    );
   }
 
   Widget _buildConnectionStatusIndicator() {

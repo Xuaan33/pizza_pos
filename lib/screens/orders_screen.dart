@@ -462,19 +462,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       ),
                     ),
                     // Remarks if available
-                    if (order['custom_item_remarks'] != null &&
-                        order['custom_item_remarks'].toString().isNotEmpty &&
-                        order['custom_item_remarks'].toString() != 'No remarks')
-                      Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Remarks: ${order['custom_item_remarks']}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                    // if (order['custom_item_remarks'] != null &&
+                    //     order['custom_item_remarks'].toString().isNotEmpty &&
+                    //     order['custom_item_remarks'].toString() != 'No remarks')
+                    //   Padding(
+                    //     padding: EdgeInsets.only(top: 8),
+                    //     child: Text(
+                    //       'Remarks: ${order['custom_item_remarks']}',
+                    //       style: TextStyle(
+                    //         fontSize: 14,
+                    //         fontWeight: FontWeight.bold,
+                    //       ),
+                    //     ),
+                    //   ),
                   ],
                 ),
               ),
@@ -536,6 +536,41 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                                           if (item['custom_variant_info'] !=
                                               null)
                                             ..._buildVariantText(item),
+                                          if (item['custom_serve_later'] ==
+                                                  true ||
+                                              (item['custom_serve_later']
+                                                      is num &&
+                                                  item['custom_serve_later'] ==
+                                                      1))
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                '● Serve Later',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue[700],
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          if (item['custom_item_remarks'] !=
+                                                  null &&
+                                              item['custom_item_remarks']
+                                                  .toString()
+                                                  .isNotEmpty)
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                'Remarks: ${item['custom_item_remarks']}',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.orange[700],
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ],
