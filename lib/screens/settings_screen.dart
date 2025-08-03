@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
+import 'package:shiok_pos_android_app/components/item.dart';
+import 'package:shiok_pos_android_app/components/item_group.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/variant_group.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -68,8 +70,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading variant groups: $e')),
+      Fluttertoast.showToast(
+        msg: 'Error loading variant groups: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }
@@ -247,34 +252,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildItemGroupSection() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Item Group Management',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        SizedBox(height: 20),
-        Text('Item group management will be shown here'),
-        // You can move your existing item group logic here
-      ],
+    return SingleChildScrollView(
+      child: Container(
+        height: MediaQuery.of(context).size.height - 200,
+        child: ItemGroupManagement(),
+      ),
     );
   }
 
   Widget _buildItemSection() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Item Management',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        SizedBox(height: 20),
-        Text('Item management will be shown here'),
-        // You can move your existing item management logic here
-      ],
-    );
-  }
+  return SingleChildScrollView(
+    child: Container(
+      height: MediaQuery.of(context).size.height - 200,
+      child: ItemManagement(),
+    ),
+  );
+}
 
   Widget _buildVariantSection() {
     return SingleChildScrollView(
@@ -286,7 +279,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Variants',
+                'Variant Groups',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               ElevatedButton(
@@ -295,8 +288,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
                 ),
-                child: Text(
-                  'Add Record',
+                child: const Text(
+                  'Add Variant Group',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -308,9 +301,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           if (isLoading)
             const Center(child: CircularProgressIndicator())
           else if (variantGroups.isEmpty)
-            const Center(
-              child: Text('No variant groups found'),
-            )
+            const Center(child: Text('No variant groups found'))
           else
             ListView.builder(
               shrinkWrap: true,
@@ -321,8 +312,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 return VariantGroupCard(
                   variantGroup: group,
                   onEdit: () => _showEditVariantGroupDialog(group),
-                  onDelete: () => _deleteVariantGroup(group.variantGroup),
-                  onAddVariant: () => _showCreateVariantDialog(group),
+                  onStatusToggle: (value) =>
+                      _toggleVariantGroupStatus(group, value),
                 );
               },
             ),
@@ -333,7 +324,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _showCreateVariantGroupDialog() {
     final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
     bool isRequired = false;
 
     showDialog(
@@ -341,64 +331,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: Colors.white,
-          title: Text(
+          title: const Text(
             'Create Variant Group',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
             width: 400,
-            child: SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Variant Group Name *',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                Row(
                   children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Variant Group Name *',
-                        border: OutlineInputBorder(),
-                      ),
+                    const Text(
+                      'Required?',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
-                          'Required?',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 16),
-                        Switch(
-                          value: isRequired,
-                          onChanged: (value) {
-                            setDialogState(() {
-                              isRequired = value;
-                            });
-                          },
-                        ),
-                      ],
+                    const SizedBox(width: 16),
+                    Switch(
+                      value: isRequired,
+                      onChanged: (value) =>
+                          setDialogState(() => isRequired = value),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
+              child: const Text(
                 'Cancel',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
@@ -406,21 +376,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Variant Group Name is required')),
+                  Fluttertoast.showToast(
+                    msg: 'Variant Group Name is required',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
                   );
                   return;
                 }
-
                 await _createVariantGroup(
-                  nameController.text.trim(),
-                  isRequired,
-                );
+                    nameController.text.trim(), isRequired);
                 Navigator.pop(context);
               },
-              child: Text(
-                'Save',
+              child: const Text(
+                'Create',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -494,8 +463,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Variant Name is required')),
+                Fluttertoast.showToast(
+                  msg: 'Variant Name is required',
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
                 );
                 return;
               }
@@ -516,26 +488,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _createVariantGroup(String title, bool isRequired) async {
     try {
+      setState(() => isLoading = true);
       final response = await PosService().createVariantGroup(
         title: title,
-        variantInfoTable: [], // Start with empty variants
+        variantInfoTable: [],
         requiredNo: isRequired ? 1 : 0,
         optionRequiredNo: 1,
       );
 
       if (response['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Variant group created successfully')),
+        _loadVariantGroups();
+        Fluttertoast.showToast(
+          msg: 'Variant group created successfully',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
         );
-        _loadVariantGroups(); // Reload the list
       } else {
         throw Exception(
             response['message'] ?? 'Failed to create variant group');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      Fluttertoast.showToast(
+        msg: 'Error: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -564,16 +545,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (response['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Variant added successfully')),
+        Fluttertoast.showToast(
+          msg: 'Variant added successfully',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
         );
         _loadVariantGroups(); // Reload the list
       } else {
         throw Exception(response['message'] ?? 'Failed to add variant');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      Fluttertoast.showToast(
+        msg: 'Error: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }
@@ -708,10 +695,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Variant Group Name is required'),
-                    ),
+                  Fluttertoast.showToast(
+                    msg: "Variant Group Name is required",
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
                   );
                   return;
                 }
@@ -790,8 +778,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Variant Name is required')),
+                Fluttertoast.showToast(
+                  msg: "Variant Name is required",
+                  toastLength: Toast.LENGTH_LONG,
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
                 );
                 return;
               }
@@ -831,8 +823,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (response['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Variant group updated successfully')),
+        Fluttertoast.showToast(
+          msg: "Variant group updated successfully",
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
         );
         _loadVariantGroups(); // Reload the list
       } else {
@@ -840,9 +836,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             response['message'] ?? 'Failed to update variant group');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      Fluttertoast.showToast(
+        msg: "Error: $e",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
+    }
+  }
+
+  Future<void> _toggleVariantGroupStatus(
+      VariantGroup group, bool isActive) async {
+    try {
+      setState(() => isLoading = true);
+      await PosService().disableVariantGroup(
+        variantGroup: group.variantGroup,
+        disabled: isActive ? 0 : 1,
+      );
+      _loadVariantGroups(); // Refresh the list
+      Fluttertoast.showToast(
+        msg:
+            "Variant group ${isActive ? 'activated' : 'deactivated'} successfully",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to update status: $e",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -873,47 +903,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (response['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Variant updated successfully')),
+        Fluttertoast.showToast(
+          msg: 'Variant updated successfully',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
         );
         _loadVariantGroups(); // Reload the list
       } else {
         throw Exception(response['message'] ?? 'Failed to update variant');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
-
-  Future<void> _deleteVariantGroup(String groupName) async {
-    // Show confirmation dialog first
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: Text(
-            'Are you sure you want to delete the variant group "$groupName"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      // Implement delete logic here - you might need to add a delete API method
-      // For now, just show a message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delete functionality to be implemented')),
+      Fluttertoast.showToast(
+        msg: 'Error: $e',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }
@@ -940,16 +947,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (response['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Variant deleted successfully')),
+        Fluttertoast.showToast(
+          msg: 'Variant deleted successfully',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
         );
         _loadVariantGroups(); // Reload the list
       } else {
         throw Exception(response['message'] ?? 'Failed to delete variant');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      Fluttertoast.showToast(
+        msg: 'Error: $e',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
       );
     }
   }

@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class VariantGroupCard extends StatefulWidget {
   final VariantGroup variantGroup;
   final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onAddVariant;
+  final Function(bool) onStatusToggle;
 
   const VariantGroupCard({
     Key? key,
     required this.variantGroup,
     required this.onEdit,
-    required this.onDelete,
-    required this.onAddVariant,
+    required this.onStatusToggle,
   }) : super(key: key);
 
   @override
@@ -20,6 +19,43 @@ class VariantGroupCard extends StatefulWidget {
 
 class _VariantGroupCardState extends State<VariantGroupCard> {
   bool isExpanded = false;
+  bool isActive = true;
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    isActive = widget.variantGroup.disabled == 0;
+  }
+
+  Future<void> _toggleActiveStatus(bool value) async {
+    if (!mounted) return; // Prevent updates if widget is disposed
+
+    try {
+      await widget.onStatusToggle(value);
+      setState(() => isLoading = true); // Show loading state
+
+      if (mounted) {
+        setState(() {
+          isActive = value;
+        });
+      }
+      Fluttertoast.showToast(
+        msg:
+            '${widget.variantGroup.variantGroup} ${value ? 'activated' : 'deactivated'}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: value ? Colors.green : Colors.orange,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Failed to update status: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,13 +68,17 @@ class _VariantGroupCardState extends State<VariantGroupCard> {
               isExpanded
                   ? Icons.keyboard_arrow_down
                   : Icons.keyboard_arrow_right,
+              color: isActive ? Colors.black : Colors.grey,
             ),
             title: Row(
               children: [
                 Flexible(
                   child: Text(
                     widget.variantGroup.variantGroup,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isActive ? Colors.black : Colors.grey,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -57,33 +97,11 @@ class _VariantGroupCardState extends State<VariantGroupCard> {
                   ),
               ],
             ),
-            subtitle: Text('${widget.variantGroup.options.length} options'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Switch(
-                  value: true, // Assuming all groups are active by default
-                  onChanged: (value) {
-                    // Handle active/inactive toggle
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.info_outline),
-                  onPressed: () {
-                    // Show info dialog
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: widget.onEdit,
-                ),
-              ],
+            subtitle: Text(
+              '${widget.variantGroup.options.length} options',
+              style: TextStyle(color: isActive ? Colors.black54 : Colors.grey),
             ),
-            onTap: () {
-              setState(() {
-                isExpanded = !isExpanded;
-              });
-            },
+            onTap: () => setState(() => isExpanded = !isExpanded),
           ),
           if (isExpanded)
             Container(
@@ -94,55 +112,55 @@ class _VariantGroupCardState extends State<VariantGroupCard> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Variants:',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      ElevatedButton.icon(
-                        onPressed: widget.onAddVariant,
-                        icon: const Icon(Icons.add, size: 16),
-                        label: Text(
-                          'Add Variant',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: widget.onEdit,
+                            icon: const Icon(Icons.edit, size: 16),
+                            label: const Text(
+                              'Edit',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  ...widget.variantGroup.options
-                      .map(
-                        (option) => Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(option.option),
-                              Text(
-                                option.additionalCost > 0
-                                    ? '+RM ${option.additionalCost.toStringAsFixed(2)}'
-                                    : 'Free',
-                                style: TextStyle(
-                                  color: option.additionalCost > 0
-                                      ? Colors.green
-                                      : Colors.grey,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
+                  ...widget.variantGroup.options.map((option) => Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                      )
-                      .toList(),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(option.option),
+                            Text(
+                              option.additionalCost > 0
+                                  ? '+RM ${option.additionalCost.toStringAsFixed(2)}'
+                                  : 'Free',
+                              style: TextStyle(
+                                color: option.additionalCost > 0
+                                    ? Colors.green
+                                    : Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
                 ],
               ),
             ),
@@ -158,12 +176,14 @@ class VariantGroup {
   final int required;
   final int optionRequiredNo;
   final List<VariantOption> options;
+  final int disabled; // Add disabled status
 
   VariantGroup({
     required this.variantGroup,
     required this.required,
     required this.optionRequiredNo,
     required this.options,
+    this.disabled = 0,
   });
 
   factory VariantGroup.fromJson(Map<String, dynamic> json) {
@@ -171,6 +191,7 @@ class VariantGroup {
       variantGroup: json['variant_group'] as String,
       required: json['required'] as int,
       optionRequiredNo: json['option_required_no'] as int,
+      disabled: json['disabled'] as int? ?? 0,
       options: (json['options'] as List)
           .map((option) => VariantOption.fromJson(option))
           .toList(),

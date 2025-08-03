@@ -106,6 +106,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _refreshOrders() async {
+    if (!mounted) return; // Add this check at the start
+
     setState(() => _isOrdersLoading = true);
     try {
       final authState = ref.read(authProvider);
@@ -238,10 +240,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               invoice['custom_fiuu_invoice_number']
                                       ?.toString() ??
                                   '000000',
-                                  'total_taxes_and_charges':(invoice['total_taxes_and_charges'] as num?)
+                          'total_taxes_and_charges':
+                              (invoice['total_taxes_and_charges'] as num?)
                                       ?.toDouble() ??
                                   0.0,
-                          'discount_amount': 
+                          'discount_amount':
                               (invoice['discount_amount'] as num?)?.toDouble(),
                         };
                       } catch (e) {

@@ -51,6 +51,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _initializeOrderItems() {
+    if (!mounted) return;
+
     if (widget.existingOrder != null &&
         widget.existingOrder!['items'] != null) {
       currentOrderItems = (widget.existingOrder!['items'] as List).map((item) {
@@ -120,21 +122,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadItemGroups() async {
+    if (!mounted) return;
+
     try {
       final posService = PosService();
       final response = await posService.getItemGroups();
 
       if (response['success'] == true) {
-        setState(() {
-          itemGroups = List<Map<String, dynamic>>.from(
-              response['message']['item_groups']);
-          _isLoadingItemGroups = false;
-        });
+        if (mounted) {
+          setState(() {
+            itemGroups = List<Map<String, dynamic>>.from(
+                response['message']['item_groups']);
+            _isLoadingItemGroups = false;
+          });
+        }
       } else {
         throw Exception('Failed to load item groups');
       }
     } catch (e) {
-      setState(() => _isLoadingItemGroups = false);
+      if (mounted) {
+        setState(() => _isLoadingItemGroups = false);
+      }
       Fluttertoast.showToast(
         msg: 'Error loading item groups: $e',
         gravity: ToastGravity.BOTTOM,
@@ -145,24 +153,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadAvailableItems() async {
+    if (!mounted) return;
+
     try {
       final posService = PosService();
       final response = await posService.getAvailableItems();
       print(response['message']['items']);
 
       if (response['success'] == true) {
-        setState(() {
-          availableItems =
-              List<Map<String, dynamic>>.from(response['message']['items']);
-          _isLoadingItems = false;
-        });
+        if (mounted) {
+          setState(() {
+            availableItems =
+                List<Map<String, dynamic>>.from(response['message']['items']);
+            _isLoadingItems = false;
+          });
+        }
         // Check stock after items are loaded
         _checkStockForItems();
       } else {
         throw Exception('Failed to load available items');
       }
     } catch (e) {
-      setState(() => _isLoadingItems = false);
+      if (mounted) {
+        setState(() => _isLoadingItems = false);
+      }
       Fluttertoast.showToast(
         msg: 'Error loading available items: $e',
         gravity: ToastGravity.BOTTOM,
@@ -192,9 +206,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _checkStockForItems() async {
+    if (!mounted) return;
     if (_isLoadingStock) return;
 
-    setState(() => _isLoadingStock = true);
+    if (mounted) {
+      setState(() => _isLoadingStock = true);
+    }
 
     final authState = ref.read(authProvider);
     await authState.whenOrNull(
@@ -224,13 +241,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             }
           }
 
-          setState(() {
-            _itemStockQuantities = newStockQuantities;
-          });
+          if (mounted) {
+            setState(() {
+              _itemStockQuantities = newStockQuantities;
+            });
+          }
         } catch (e) {
           debugPrint('Error checking stock: $e');
         } finally {
-          setState(() => _isLoadingStock = false);
+          if (mounted) {
+            setState(() => _isLoadingStock = false);
+          }
         }
       },
     );

@@ -1,0 +1,661 @@
+import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/service/pos_service.dart';
+
+class ItemGroupManagement extends StatefulWidget {
+  const ItemGroupManagement({super.key});
+
+  @override
+  State<ItemGroupManagement> createState() => _ItemGroupManagementState();
+}
+
+class _ItemGroupManagementState extends State<ItemGroupManagement> {
+  List<ItemGroup> itemGroups = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItemGroups();
+  }
+
+  Future<void> _loadItemGroups() async {
+    try {
+      setState(() => isLoading = true);
+      final response = await PosService().getItemGroups();
+
+      if (response['success'] == true) {
+        final List<dynamic> groupsData = response['message']['item_groups'];
+        setState(() {
+          itemGroups = groupsData
+              .map((group) => ItemGroup.fromJson(group))
+              .where((group) =>
+                  group.name != 'All' && group.name != 'All Item Groups')
+              .toList();
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+      _showErrorToast('Failed to load item groups: $e');
+    }
+  }
+
+  void _showCreateItemGroupDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => CreateItemGroupDialog(
+        itemGroups: itemGroups,
+        onSave: _loadItemGroups,
+      ),
+    );
+  }
+
+  void _showEditItemGroupDialog(ItemGroup group) {
+    showDialog(
+      context: context,
+      builder: (context) => EditItemGroupDialog(
+        itemGroup: group,
+        itemGroups: itemGroups,
+        posService: PosService(),
+        onSave: () {
+          _loadItemGroups();
+        },
+      ),
+    );
+  }
+
+  Future<void> _toggleItemGroupStatus(ItemGroup group, bool isActive) async {
+    try {
+      setState(() => isLoading = true);
+      await PosService().disableItemGroup(
+        itemGroup: group.name,
+        disabled: isActive ? 0 : 1,
+      );
+      await _loadItemGroups(); // Refresh the list
+      _showSuccessToast(
+          'Item group ${isActive ? 'activated' : 'deactivated'} successfully');
+    } catch (e) {
+      _showErrorToast('Failed to update status: $e');
+      debugPrint("Update error: $e");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _showErrorToast(String message) {
+    Fluttertoast.showToast(
+      msg: message,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+  }
+
+  void _showSuccessToast(String message) {
+    Fluttertoast.showToast(
+      msg: message,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.green,
+      textColor: Colors.white,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with Add Record button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Item Groups',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              ElevatedButton(
+                onPressed: _showCreateItemGroupDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text(
+                  'Add Item Group',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Item Groups List
+          if (isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (itemGroups.isEmpty)
+            const Center(child: Text('No item groups found'))
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: itemGroups.length,
+              itemBuilder: (context, index) {
+                final group = itemGroups[index];
+                return ItemGroupCard(
+                  itemGroup: group,
+                  onEdit: () => _showEditItemGroupDialog(group),
+                  onStatusToggle: (value) =>
+                      _toggleItemGroupStatus(group, value),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class ItemGroupCard extends StatefulWidget {
+  final ItemGroup itemGroup;
+  final VoidCallback onEdit;
+  final Function(bool) onStatusToggle;
+
+  const ItemGroupCard({
+    super.key,
+    required this.itemGroup,
+    required this.onEdit,
+    required this.onStatusToggle,
+  });
+
+  @override
+  State<ItemGroupCard> createState() => _ItemGroupCardState();
+}
+
+class _ItemGroupCardState extends State<ItemGroupCard> {
+  bool isExpanded = false;
+  bool isActive = true; // Track active status
+  bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    isActive = widget.itemGroup.disabled == 0;
+  }
+
+  Future<void> _toggleActiveStatus(bool value) async {
+    if (!mounted) return; // Prevent updates if widget is disposed
+
+    setState(() => isLoading = true); // Show loading state
+    try {
+      await widget.onStatusToggle(value);
+
+      if (mounted) {
+        setState(() {
+          isActive = value;
+        });
+      }
+
+      Fluttertoast.showToast(
+        msg: '${widget.itemGroup.name} ${value ? 'activated' : 'deactivated'}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: value ? Colors.green : Colors.orange,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Failed to update status: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      debugPrint("Update error: $e");
+    } finally {
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(
+              isExpanded
+                  ? Icons.keyboard_arrow_down
+                  : Icons.keyboard_arrow_right,
+            ),
+            title: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    widget.itemGroup.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isActive ? Colors.black : Colors.grey,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color:
+                        isActive ? Colors.green.shade100 : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isActive ? 'Active' : 'Inactive',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isActive ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Text('Group: ${widget.itemGroup.value}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Switch(
+                  value: isActive,
+                  onChanged: (value) => _toggleActiveStatus(value),
+                  activeColor: Colors.green,
+                  inactiveThumbColor: Colors.grey,
+                ),
+              ],
+            ),
+            onTap: () {
+              setState(() {
+                isExpanded = !isExpanded;
+              });
+            },
+          ),
+          if (isExpanded)
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Group Details:',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: widget.onEdit,
+                            icon: const Icon(Icons.edit, size: 16),
+                            label: const Text(
+                              'Edit',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDetailRow('Name:', widget.itemGroup.name),
+                        const SizedBox(height: 8),
+                        _buildDetailRow('Value:', widget.itemGroup.value),
+                        const SizedBox(height: 8),
+                        _buildDetailRow(
+                            'Status:', isActive ? 'Active' : 'Inactive'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Dialog for creating new item group
+class CreateItemGroupDialog extends StatefulWidget {
+  final List<ItemGroup> itemGroups;
+  final VoidCallback onSave;
+
+  const CreateItemGroupDialog({
+    super.key,
+    required this.itemGroups,
+    required this.onSave,
+  });
+
+  @override
+  State<CreateItemGroupDialog> createState() => _CreateItemGroupDialogState();
+}
+
+class _CreateItemGroupDialogState extends State<CreateItemGroupDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  String? _selectedParentGroup;
+  bool _isLoading = false;
+
+  Future<void> _saveItemGroup() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await PosService().createItemGroup(
+        itemGroupName: _nameController.text,
+        parentItemGroup: _selectedParentGroup,
+      );
+
+      if (response['success'] == true) {
+        widget.onSave();
+        Navigator.pop(context);
+        Fluttertoast.showToast(
+          msg: 'Item group created successfully',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        throw Exception('Failed to create item group');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text(
+        'Create Item Group',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Group Name *',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) =>
+                  value?.isEmpty ?? true ? 'Please enter a group name' : null,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedParentGroup,
+              decoration: const InputDecoration(
+                labelText: 'Parent Group (Optional)',
+                border: OutlineInputBorder(),
+              ),
+              items: widget.itemGroups.map((group) {
+                return DropdownMenuItem<String>(
+                  value: group.name,
+                  child: Text(group.name),
+                );
+              }).toList(),
+              onChanged: (value) =>
+                  setState(() => _selectedParentGroup = value),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _saveItemGroup,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text(
+                  'Save',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+}
+
+// Dialog for editing item group
+class EditItemGroupDialog extends StatefulWidget {
+  final ItemGroup itemGroup;
+  final List<ItemGroup> itemGroups;
+  final dynamic posService;
+  final VoidCallback onSave;
+
+  const EditItemGroupDialog({
+    super.key,
+    required this.itemGroup,
+    required this.itemGroups,
+    required this.posService,
+    required this.onSave,
+  });
+
+  @override
+  State<EditItemGroupDialog> createState() => _EditItemGroupDialogState();
+}
+
+class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  String? _selectedParentGroup;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.itemGroup.name);
+  }
+
+  Future<void> _updateItemGroup() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await widget.posService.updateItemGroup(
+        name: widget.itemGroup.name,
+        itemGroupName: _nameController.text,
+        parentItemGroup: _selectedParentGroup,
+      );
+
+      if (response['success'] == true) {
+        widget.onSave();
+        Navigator.pop(context);
+        Fluttertoast.showToast(
+          msg: 'Item group updated successfully',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        throw Exception('Failed to update item group');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Item Group'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Group Name *',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter a group name';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedParentGroup,
+              decoration: const InputDecoration(
+                labelText: 'Parent Group (Optional)',
+                border: OutlineInputBorder(),
+              ),
+              items: widget.itemGroups
+                  .where((group) => group.name != widget.itemGroup.name)
+                  .map((group) {
+                return DropdownMenuItem<String>(
+                  value: group.name,
+                  child: Text(group.name),
+                );
+              }).toList(),
+              onChanged: (value) =>
+                  setState(() => _selectedParentGroup = value),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _updateItemGroup,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Update'),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+}
+
+// Update your ItemGroup model
+class ItemGroup {
+  final String name;
+  final String value;
+  final int disabled;
+  final List<Map<String, dynamic>> variantGroups; // Add variant groups support
+
+  ItemGroup({
+    required this.name,
+    required this.value,
+    required this.disabled,
+    this.variantGroups = const [],
+  });
+
+  factory ItemGroup.fromJson(Map<String, dynamic> json) {
+    return ItemGroup(
+      name: json['name'] ?? '',
+      value: json['value'] ?? '',
+      disabled: json['disabled'] ?? 0,
+      variantGroups:
+          (json['variant_groups'] as List?)?.cast<Map<String, dynamic>>() ?? [],
+    );
+  }
+}

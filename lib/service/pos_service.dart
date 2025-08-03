@@ -416,27 +416,28 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> createItem({
-    required String itemCode,
-    required String itemName,
-    required String itemGroup,
-    required List<Map<String, dynamic>> variantGroupTable,
-    String? description,
-    String? imageUrl,
-  }) async {
-    return makeRequest(
-      endpoint: 'shiok_pos.api.create_item',
-      method: 'POST',
-      body: {
-        'item_code': itemCode,
-        'item_name': itemName,
-        'item_group': itemGroup,
-        'variant_group_table': variantGroupTable,
-        if (description != null) 'description': description,
-        if (imageUrl != null) 'image_url': imageUrl,
-      },
-    );
-  }
-
+  required String itemCode,
+  required String itemName,
+  required String itemGroup,
+  required List<Map<String, dynamic>> variantGroupTable,
+  String? description,
+  String? imageUrl,
+  int isPosItem = 0, // Add this parameter with default value
+}) async {
+  return makeRequest(
+    endpoint: 'shiok_pos.api.create_item',
+    method: 'POST',
+    body: {
+      'item_code': itemCode,
+      'item_name': itemName,
+      'item_group': itemGroup,
+      'variant_group_table': variantGroupTable,
+      if (description != null) 'description': description,
+      if (imageUrl != null) 'image_url': imageUrl,
+      'is_pos_item': isPosItem, // Add this field
+    },
+  );
+}
   Future<Map<String, dynamic>> updateItem({
     required String itemCode,
     String? itemName,
@@ -498,6 +499,52 @@ class PosService {
         'item_group_name': itemGroupName,
         if (parentItemGroup != null) 'parent_item_group': parentItemGroup,
         if (isGroup != null) 'is_group': isGroup,
+      },
+    );
+  }
+
+  // Add these methods to your PosService class
+
+// Item Group Methods
+  Future<Map<String, dynamic>> disableItemGroup({
+    required String itemGroup,
+    required int disabled,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.disable_item_group',
+      method: 'POST',
+      body: {
+        'item_group': itemGroup,
+        'disabled': disabled,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> updateItemGroupVariantGroupTable({
+    required String itemGroup,
+    required List<Map<String, dynamic>> variantGroupTable,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.update_item_group_variant_group_table',
+      method: 'POST',
+      body: {
+        'item_group': itemGroup,
+        'variant_group_table': variantGroupTable,
+      },
+    );
+  }
+
+// Variant Group Methods
+  Future<Map<String, dynamic>> disableVariantGroup({
+    required String variantGroup,
+    required int disabled,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.disable_variant_group',
+      method: 'POST',
+      body: {
+        'variant_group': variantGroup,
+        'disabled': disabled,
       },
     );
   }
