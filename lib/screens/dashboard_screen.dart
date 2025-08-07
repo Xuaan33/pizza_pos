@@ -278,7 +278,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final delivery = _convertToDouble(monthData['Delivery']);
       final totalRevenue = dineIn + takeAway + delivery;
 
-      return <String, dynamic>{'month': monthName, 'revenue': totalRevenue};
+      return <String, dynamic>{
+        'month': monthName,
+        'revenue': totalRevenue,
+        'dineIn': dineIn,
+        'takeAway': takeAway,
+        'delivery': delivery,
+      };
     }).toList();
 
     return Container(
@@ -310,6 +316,109 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             height: 200,
             child: SfCartesianChart(
               primaryXAxis: CategoryAxis(),
+              tooltipBehavior: TooltipBehavior(
+                enable: true,
+                canShowMarker: true,
+                activationMode: ActivationMode.singleTap, // Show on tap
+                // Customize the tooltip appearance
+                builder: (data, point, series, pointIndex, seriesIndex) {
+                  final item = chartData[pointIndex];
+                  return Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${item['month']}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text('Total: RM ${item['revenue'].toStringAsFixed(2)}'),
+                        if (item['dineIn'] > 0)
+                          Text(
+                              'Dine In: RM ${item['dineIn'].toStringAsFixed(2)}'),
+                        if (item['takeAway'] > 0)
+                          Text(
+                              'Take Away: RM ${item['takeAway'].toStringAsFixed(2)}'),
+                        if (item['delivery'] > 0)
+                          Text(
+                              'Delivery: RM ${item['delivery'].toStringAsFixed(2)}'),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              trackballBehavior: TrackballBehavior(
+                enable: true,
+                activationMode: ActivationMode.longPress, // Show on long press
+                tooltipDisplayMode: TrackballDisplayMode.groupAllPoints,
+                tooltipSettings: const InteractiveTooltip(
+                  format: 'point.x : point.y',
+                ),
+                // Option 1: Use a simpler approach without accessing chartPointInfo
+                builder: (BuildContext context, TrackballDetails details) {
+                  // Try using the point index from details directly
+                  if (details.pointIndex != null &&
+                      details.pointIndex! < chartData.length) {
+                    final item = chartData[details.pointIndex!];
+                    return Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${item['month']}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                              'Total: RM ${item['revenue'].toStringAsFixed(2)}'),
+                          if (item['dineIn'] > 0)
+                            Text(
+                                'Dine In: RM ${item['dineIn'].toStringAsFixed(2)}'),
+                          if (item['takeAway'] > 0)
+                            Text(
+                                'Take Away: RM ${item['takeAway'].toStringAsFixed(2)}'),
+                          if (item['delivery'] > 0)
+                            Text(
+                                'Delivery: RM ${item['delivery'].toStringAsFixed(2)}'),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
               series: <ColumnSeries<Map<String, dynamic>, String>>[
                 ColumnSeries<Map<String, dynamic>, String>(
                   dataSource: chartData,
@@ -317,6 +426,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   yValueMapper: (data, _) => data['revenue'] as double,
                   color: const Color(0xFFE732A0),
                   borderRadius: BorderRadius.circular(5),
+                  name: 'Revenue',
+                  // Enable data labels if you want them always visible
+                  dataLabelSettings: const DataLabelSettings(
+                    isVisible:
+                        false, // Set to true if you want labels always shown
+                  ),
                 ),
               ],
             ),
@@ -363,18 +478,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           SizedBox(
             height: 200,
             child: SfCircularChart(
+              legend: Legend(
+                isVisible: true,
+                position: LegendPosition.bottom,
+                overflowMode: LegendItemOverflowMode.wrap,
+              ),
               series: <DoughnutSeries<Map<String, dynamic>, String>>[
                 DoughnutSeries<Map<String, dynamic>, String>(
                   dataSource: chartData,
                   xValueMapper: (data, _) => data['time'] as String,
                   yValueMapper: (data, _) => data['count'] as int,
-                  dataLabelSettings: const DataLabelSettings(isVisible: true),
+                  dataLabelSettings: const DataLabelSettings(
+                    isVisible: true,
+                    labelPosition: ChartDataLabelPosition.inside,
+                  ),
                   radius: '70%',
                   innerRadius: '60%',
+                  // Add legend text mapping
+                  pointColorMapper: (data, _) {
+                    // You can customize colors here if needed
+                    return null; // Let the chart auto-assign colors
+                  },
+                  name: 'Time Periods', // This will be shown in the legend
                 ),
               ],
             ),
           ),
+          // Additional legend information if needed
+          if (chartData.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                'Showing data for ${DateFormat('MMM yyyy').format(DateTime.now())}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -395,57 +536,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Popular Items',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+      constraints: BoxConstraints(
+        minHeight: 290, // Set a minimum height
+        maxHeight: 290, // Set a maximum height (same as min to make it fixed)
+      ),
+      child: SingleChildScrollView(
+        // Add scrolling for overflow content
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Popular Items',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          ...topItems
-              .take(5)
-              .map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            image: item['image'] != null
-                                ? DecorationImage(
-                                    image: NetworkImage(
-                                        '$baseImageUrl${item['image'] as String}'),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
+            const SizedBox(height: 10),
+            ...topItems
+                .take(5)
+                .map((item) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                              image: item['image'] != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(
+                                          '$baseImageUrl${item['image'] as String}'),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            item['item_code'] as String? ?? 'Unknown Item',
-                            style: const TextStyle(fontSize: 14),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item['item_code'] as String? ?? 'Unknown Item',
+                              style: const TextStyle(fontSize: 14),
+                            ),
                           ),
-                        ),
-                        Text(
-                          '${_convertToInt(item['total_qty_sold'])} sold',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                          Text(
+                            '${_convertToInt(item['total_qty_sold'])} sold',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ))
-              .toList(),
-        ],
+                        ],
+                      ),
+                    ))
+                .toList(),
+          ],
+        ),
       ),
     );
   }

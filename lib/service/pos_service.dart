@@ -416,28 +416,31 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> createItem({
-  required String itemCode,
-  required String itemName,
-  required String itemGroup,
-  required List<Map<String, dynamic>> variantGroupTable,
-  String? description,
-  String? imageUrl,
-  int isPosItem = 0, // Add this parameter with default value
-}) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.create_item',
-    method: 'POST',
-    body: {
-      'item_code': itemCode,
-      'item_name': itemName,
-      'item_group': itemGroup,
-      'variant_group_table': variantGroupTable,
-      if (description != null) 'description': description,
-      if (imageUrl != null) 'image_url': imageUrl,
-      'is_pos_item': isPosItem, // Add this field
-    },
-  );
-}
+    required String itemCode,
+    required String itemName,
+    required String itemGroup,
+    required List<Map<String, dynamic>> variantGroupTable,
+    String? description,
+    String? imageUrl,
+    int isPosItem = 1, // Default to 1 for Finished Goods
+    int disabled = 0,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.create_item',
+      method: 'POST',
+      body: {
+        'item_code': itemCode,
+        'item_name': itemName,
+        'item_group': itemGroup,
+        'variant_group_table': variantGroupTable,
+        if (description != null) 'description': description,
+        if (imageUrl != null) 'image_url': imageUrl,
+        'is_pos_item': isPosItem,
+        'disabled': disabled,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> updateItem({
     required String itemCode,
     String? itemName,
@@ -446,6 +449,7 @@ class PosService {
     int? disabled,
     String? description,
     String? imageUrl,
+    int? isPosItem,
   }) async {
     return makeRequest(
       endpoint: 'shiok_pos.api.update_item',
@@ -458,6 +462,7 @@ class PosService {
         if (disabled != null) 'disabled': disabled,
         if (description != null) 'description': description,
         if (imageUrl != null) 'image_url': imageUrl,
+        if (isPosItem != null) 'is_pos_item': isPosItem,
       },
     );
   }

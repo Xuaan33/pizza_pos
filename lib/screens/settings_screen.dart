@@ -261,13 +261,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildItemSection() {
-  return SingleChildScrollView(
-    child: Container(
-      height: MediaQuery.of(context).size.height - 200,
-      child: ItemManagement(),
-    ),
-  );
-}
+    return SingleChildScrollView(
+      child: Container(
+        height: MediaQuery.of(context).size.height - 200,
+        child: ItemManagement(),
+      ),
+    );
+  }
 
   Widget _buildVariantSection() {
     return SingleChildScrollView(
@@ -811,7 +811,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   ) async {
     try {
       final response = await PosService().updateVariantGroup(
-        name: group.variantGroup, // Use original name for identification
+        name: group.variantGroup,
         variantInfoTable: group.options
             .map((option) => {
                   'option': option.option,
@@ -823,14 +823,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       if (response['success'] == true) {
+        _loadVariantGroups();
         Fluttertoast.showToast(
           msg: "Variant group updated successfully",
-          toastLength: Toast.LENGTH_LONG,
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.green,
           textColor: Colors.white,
         );
-        _loadVariantGroups(); // Reload the list
       } else {
         throw Exception(
             response['message'] ?? 'Failed to update variant group');
@@ -838,7 +837,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (e) {
       Fluttertoast.showToast(
         msg: "Error: $e",
-        toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,

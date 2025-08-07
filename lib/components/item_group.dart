@@ -381,7 +381,9 @@ class _CreateItemGroupDialogState extends State<CreateItemGroupDialog> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   String? _selectedParentGroup;
+  bool _isGroup = false;
   bool _isLoading = false;
+  bool _itemGroupExpanded = false;
 
   Future<void> _saveItemGroup() async {
     if (!_formKey.currentState!.validate()) return;
@@ -392,6 +394,7 @@ class _CreateItemGroupDialogState extends State<CreateItemGroupDialog> {
       final response = await PosService().createItemGroup(
         itemGroupName: _nameController.text,
         parentItemGroup: _selectedParentGroup,
+        isGroup: _isGroup ? 1 : 0,
       );
 
       if (response['success'] == true) {
@@ -426,37 +429,127 @@ class _CreateItemGroupDialogState extends State<CreateItemGroupDialog> {
         'Create Item Group',
         style: TextStyle(fontWeight: FontWeight.bold),
       ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Group Name *',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) =>
-                  value?.isEmpty ?? true ? 'Please enter a group name' : null,
+      content: SizedBox(
+        width: 600,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Group Name *',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true
+                      ? 'Please enter a group name'
+                      : null,
+                ),
+                const SizedBox(height: 16),
+
+                // Parent Group selection
+                const Text(
+                  'Parent Group (Optional)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    children: [
+                      // Header with selected item and dropdown arrow
+                      InkWell(
+                        onTap: () => setState(
+                            () => _itemGroupExpanded = !_itemGroupExpanded),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _selectedParentGroup == null
+                                    ? const Text(
+                                        'Select Parent Group',
+                                        style: TextStyle(color: Colors.grey),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: Colors.blue.shade300),
+                                        ),
+                                        child: Text(
+                                          _selectedParentGroup!,
+                                          style: TextStyle(
+                                            color: Colors.blue.shade700,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                              Icon(
+                                _itemGroupExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: Colors.grey,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Expandable content
+                      if (_itemGroupExpanded)
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                                top: BorderSide(color: Colors.grey.shade300)),
+                          ),
+                          child: Column(
+                            children: [
+                              for (final group in widget.itemGroups)
+                                RadioListTile<String>(
+                                  title: Text(group.name),
+                                  value: group.name,
+                                  groupValue: _selectedParentGroup,
+                                  onChanged: (String? value) {
+                                    setState(() {
+                                      _selectedParentGroup = value;
+                                      _itemGroupExpanded = false;
+                                    });
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Is Group toggle
+                Row(
+                  children: [
+                    const Text('Is Group?'),
+                    const SizedBox(width: 16),
+                    Switch(
+                      value: _isGroup,
+                      onChanged: (value) => setState(() => _isGroup = value),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _selectedParentGroup,
-              decoration: const InputDecoration(
-                labelText: 'Parent Group (Optional)',
-                border: OutlineInputBorder(),
-              ),
-              items: widget.itemGroups.map((group) {
-                return DropdownMenuItem<String>(
-                  value: group.name,
-                  child: Text(group.name),
-                );
-              }).toList(),
-              onChanged: (value) =>
-                  setState(() => _selectedParentGroup = value),
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -518,12 +611,16 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   String? _selectedParentGroup;
+  bool _isGroup = false;
   bool _isLoading = false;
+  bool _itemGroupExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.itemGroup.name);
+    _isGroup = widget.itemGroup.value ==
+        widget.itemGroup.name; // Assuming value indicates is_group
   }
 
   Future<void> _updateItemGroup() async {
@@ -536,6 +633,8 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
         name: widget.itemGroup.name,
         itemGroupName: _nameController.text,
         parentItemGroup: _selectedParentGroup,
+        isGroup: _isGroup ? 1 : 0,
+        disabled: widget.itemGroup.disabled,
       );
 
       if (response['success'] == true) {
@@ -565,50 +664,146 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Edit Item Group'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Group Name *',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a group name';
-                }
-                return null;
-              },
+      title: const Text(
+        'Edit Item Group',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      content: SizedBox(
+        width: 600,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Group Name *',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a group name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Parent Group selection
+                const Text(
+                  'Parent Group (Optional)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    children: [
+                      // Header with selected item and dropdown arrow
+                      InkWell(
+                        onTap: () => setState(
+                            () => _itemGroupExpanded = !_itemGroupExpanded),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _selectedParentGroup == null
+                                    ? const Text(
+                                        'Select Parent Group',
+                                        style: TextStyle(color: Colors.grey),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: Colors.blue.shade300),
+                                        ),
+                                        child: Text(
+                                          _selectedParentGroup!,
+                                          style: TextStyle(
+                                            color: Colors.blue.shade700,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                              Icon(
+                                _itemGroupExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: Colors.grey,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Expandable content
+                      if (_itemGroupExpanded)
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                                top: BorderSide(color: Colors.grey.shade300)),
+                          ),
+                          child: Column(
+                            children: [
+                              for (final group in widget.itemGroups)
+                                if (group.name !=
+                                    widget.itemGroup
+                                        .name) // Exclude current group
+                                  RadioListTile<String>(
+                                    title: Text(group.name),
+                                    value: group.name,
+                                    groupValue: _selectedParentGroup,
+                                    onChanged: (String? value) {
+                                      setState(() {
+                                        _selectedParentGroup = value;
+                                        _itemGroupExpanded = false;
+                                      });
+                                    },
+                                  ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Is Group toggle
+                Row(
+                  children: [
+                    const Text('Is Group?'),
+                    const SizedBox(width: 16),
+                    Switch(
+                      value: _isGroup,
+                      onChanged: (value) => setState(() => _isGroup = value),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _selectedParentGroup,
-              decoration: const InputDecoration(
-                labelText: 'Parent Group (Optional)',
-                border: OutlineInputBorder(),
-              ),
-              items: widget.itemGroups
-                  .where((group) => group.name != widget.itemGroup.name)
-                  .map((group) {
-                return DropdownMenuItem<String>(
-                  value: group.name,
-                  child: Text(group.name),
-                );
-              }).toList(),
-              onChanged: (value) =>
-                  setState(() => _selectedParentGroup = value),
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _updateItemGroup,
@@ -622,7 +817,10 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Update'),
+              : const Text(
+                  'Update',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
         ),
       ],
     );
@@ -652,10 +850,11 @@ class ItemGroup {
   factory ItemGroup.fromJson(Map<String, dynamic> json) {
     return ItemGroup(
       name: json['name'] ?? '',
-      value: json['value'] ?? '',
+      value: json['item_group_name'] ?? json['value'] ?? '',
       disabled: json['disabled'] ?? 0,
-      variantGroups:
-          (json['variant_groups'] as List?)?.cast<Map<String, dynamic>>() ?? [],
+      variantGroups: (json['custom_variant_group_table'] as List?)
+              ?.cast<Map<String, dynamic>>() ??
+          [],
     );
   }
 }
