@@ -16,11 +16,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   late Future<Map<String, dynamic>> _dashboardData;
   late String _posProfile;
   String baseImageUrl = 'http://shiokpos.byondwave.com';
+  String _selectedTimeRange = 'Daily'; // 'Daily', 'Weekly', 'Monthly', 'Custom'
+  DateTimeRange? _customDateRange;
+  DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _dashboardData = _loadDashboardData();
+    _loadData();
+  }
+
+  void _loadData() {
+    setState(() {
+      _dashboardData = _loadDashboardData();
+    });
   }
 
   Future<Map<String, dynamic>> _loadDashboardData() async {
@@ -29,19 +38,43 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
           posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
         _posProfile = posProfile;
-        final today = DateTime.now();
-        final firstDayOfMonth = DateTime(today.year, today.month, 1);
         final dateFormat = DateFormat('yyyy-MM-dd');
+
+        // Calculate dates based on selected time range
+        DateTime fromDate;
+        DateTime toDate = _selectedDate;
+
+        switch (_selectedTimeRange) {
+          case 'Daily':
+            fromDate = toDate;
+            break;
+          case 'Weekly':
+            fromDate = toDate.subtract(Duration(days: toDate.weekday - 1));
+            break;
+          case 'Monthly':
+            fromDate = DateTime(toDate.year, toDate.month, 1);
+            break;
+          case 'Custom':
+            if (_customDateRange != null) {
+              fromDate = _customDateRange!.start;
+              toDate = _customDateRange!.end;
+            } else {
+              fromDate = toDate;
+            }
+            break;
+          default:
+            fromDate = toDate;
+        }
 
         // Fetch all data concurrently
         final results = await Future.wait([
           PosService().makeRequest(
             endpoint:
-                'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(firstDayOfMonth)}&to_date=${dateFormat.format(today)}',
+                'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
           PosService().makeRequest(
             endpoint:
-                'shiok_pos.api.get_total_customer?pos_profile=$posProfile&from_date=${dateFormat.format(firstDayOfMonth)}&to_date=${dateFormat.format(today)}',
+                'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
           PosService().getTodayInfo(),
           PosService().makeRequest(
@@ -49,29 +82,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           PosService().makeRequest(
             endpoint:
-                'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(firstDayOfMonth)}&to_date=${dateFormat.format(today)}',
+                'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
           PosService().makeRequest(
             endpoint:
-                'shiok_pos.api.get_top_five_items?pos_profile=$posProfile&from_date=${dateFormat.format(firstDayOfMonth)}&to_date=${dateFormat.format(today)}',
+                'shiok_pos.api.get_top_five_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
         ]);
+
+        final peakTimes = _convertListToProperType(results[1]['message']);
+        final totalOrders = peakTimes.fold(0, (sum, timeData) {
+          return sum + _convertToInt(timeData['invoice_count']);
+        });
+
+        // After getting peakTimes data
+        print('Peak times data: $peakTimes');
+        print('Calculated total orders: $totalOrders');
 
         // Convert to proper types
         return <String, dynamic>{
           'totalSales': _convertToDouble(results[0]['message']),
-          'totalCustomers': _convertToInt(results[1]['message']),
+          'totalOrders': totalOrders,
           'todayInfo': _convertMapToStringDynamic(results[2]['message']),
           'revenueData': _convertListToProperType(results[3]['message']),
           'peakTimes': _convertListToProperType(results[4]['message']),
           'topItems': _convertListToProperType(results[5]['message']),
+          'fromDate': fromDate,
+          'toDate': toDate,
         };
       },
       orElse: () => Future.value(<String, dynamic>{}),
     );
   }
 
-  // Helper methods to convert types
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+        _loadData();
+      });
+    }
+  }
+
+  Future<void> _selectDateRange(BuildContext context) async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      initialDateRange: _customDateRange ??
+          DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 7)),
+            end: DateTime.now(),
+          ),
+    );
+    if (picked != null) {
+      setState(() {
+        _customDateRange = picked;
+        _selectedTimeRange = 'Custom';
+        _loadData();
+      });
+    }
+  }
+
+  // Helper methods to convert types (keep existing ones)
   double _convertToDouble(dynamic value) {
     if (value is double) return value;
     if (value is int) return value.toDouble();
@@ -127,7 +206,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
             final data = snapshot.data ?? <String, dynamic>{};
             final totalSales = data['totalSales'] as double? ?? 0.0;
-            final totalCustomers = data['totalCustomers'] as int? ?? 0;
+            final totalOrders = data['totalOrders'] as int? ?? 0;
             final todayInfo = data['todayInfo'] as Map<String, dynamic>? ??
                 <String, dynamic>{};
             final revenueData =
@@ -138,6 +217,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     <Map<String, dynamic>>[];
             final topItems = data['topItems'] as List<Map<String, dynamic>>? ??
                 <Map<String, dynamic>>[];
+            final fromDate = data['fromDate'] as DateTime? ?? DateTime.now();
+            final toDate = data['toDate'] as DateTime? ?? DateTime.now();
 
             return Container(
               color: Colors.grey[100],
@@ -147,9 +228,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 10),
-                    _buildTopSection(),
+                    _buildTopSection(fromDate, toDate),
                     const SizedBox(height: 20),
-                    _buildSummaryCards(totalSales, totalCustomers, todayInfo),
+                    _buildSummaryCards(totalSales, totalOrders, todayInfo),
                     const SizedBox(height: 30),
                     _buildRevenueChart(revenueData),
                     const SizedBox(height: 30),
@@ -171,25 +252,84 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildTopSection() {
-    return const Row(
+  Widget _buildTopSection(DateTime fromDate, DateTime toDate) {
+    String dateRangeText;
+    if (_selectedTimeRange == 'Custom') {
+      dateRangeText =
+          '${DateFormat('dd MMM yyyy').format(fromDate)} - ${DateFormat('dd MMM yyyy').format(toDate)}';
+    } else {
+      dateRangeText = _selectedTimeRange == 'Daily'
+          ? DateFormat('dd MMM yyyy').format(fromDate)
+          : '${DateFormat('dd MMM yyyy').format(fromDate)} - ${DateFormat('dd MMM yyyy').format(toDate)}';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Dashboard',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            DropdownButton<String>(
+              value: _selectedTimeRange,
+              style: const TextStyle(
+                // Add this style to make dropdown text bold
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+              dropdownColor: Colors.white,
+              items:
+                  ['Daily', 'Weekly', 'Monthly', 'Custom'].map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedTimeRange = newValue;
+                    if (newValue != 'Custom') {
+                      _loadData();
+                    } else {
+                      _selectDateRange(context);
+                    }
+                  });
+                }
+              },
+            ),
+            const SizedBox(width: 10),
+            if (_selectedTimeRange != 'Custom')
+              IconButton(
+                icon: const Icon(Icons.calendar_today, size: 20),
+                onPressed: () => _selectDate(context),
+              ),
+            const Spacer(),
+            Text(
+              dateRangeText,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ],
     );
   }
 
   Widget _buildSummaryCards(
-      double totalSales, int totalCustomers, Map<String, dynamic> todayInfo) {
+      double totalSales, int totalOrders, Map<String, dynamic> todayInfo) {
     final totalRevenue = _convertToDouble(todayInfo['total_revenue']);
     final totalCost = _convertToDouble(todayInfo['total_cost']);
     final profit = totalRevenue - totalCost;
+    final averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0.0;
 
     return Row(
       children: [
@@ -200,16 +340,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         const SizedBox(width: 15),
         _buildSummaryCard(
-          title: 'Total Customers',
-          value: NumberFormat.decimalPattern().format(totalCustomers),
-          icon: Icons.people,
+          title: 'Total Orders',
+          value: '${totalOrders}',
+          icon: Icons.receipt,
         ),
         const SizedBox(width: 15),
         _buildSummaryCard(
-          title: 'Total Profit',
-          value: 'RM ${profit.toStringAsFixed(2)}',
-          icon: Icons.trending_up,
-          isProfit: profit >= 0,
+          title: 'Avg Order Value',
+          value: 'RM ${averageOrderValue.toStringAsFixed(2)}',
+          icon: Icons.calculate,
         ),
       ],
     );
@@ -280,12 +419,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       return <String, dynamic>{
         'month': monthName,
+        'monthDate': DateTime.parse('${monthData['month']}-01'),
         'revenue': totalRevenue,
         'dineIn': dineIn,
         'takeAway': takeAway,
         'delivery': delivery,
       };
     }).toList();
+
+    // Sort by date to ensure proper order
+    chartData.sort((a, b) =>
+        (a['monthDate'] as DateTime).compareTo(b['monthDate'] as DateTime));
+
+    // Find current month index or closest to current date
+    final currentDate = DateTime.now();
+    int currentMonthIndex = chartData.indexWhere((data) {
+      final monthDate = data['monthDate'] as DateTime;
+      return monthDate.year == currentDate.year &&
+          monthDate.month == currentDate.month;
+    });
+
+    // If current month not found, find the closest month
+    if (currentMonthIndex == -1) {
+      int closestIndex = 0;
+      int minDifference = (chartData[0]['monthDate'] as DateTime)
+          .difference(currentDate)
+          .inDays
+          .abs();
+
+      for (int i = 1; i < chartData.length; i++) {
+        int difference = (chartData[i]['monthDate'] as DateTime)
+            .difference(currentDate)
+            .inDays
+            .abs();
+        if (difference < minDifference) {
+          minDifference = difference;
+          closestIndex = i;
+        }
+      }
+      currentMonthIndex = closestIndex;
+    }
+
+    // Calculate initial visible range (latest 3 months)
+    int startIndex = (chartData.length - 3).clamp(0, chartData.length - 3);
+    int endIndex = chartData.length - 1;
+
+    // Adjust if we don't have enough data
+    if (chartData.length < 3) {
+      startIndex = 0;
+      endIndex = chartData.length - 1;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -315,13 +498,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           SizedBox(
             height: 200,
             child: SfCartesianChart(
-              primaryXAxis: CategoryAxis(),
+              primaryXAxis: CategoryAxis(
+                // Show all data but allow scrolling
+                autoScrollingDelta: 3, // Show 3 months at a time
+                autoScrollingMode:
+                    AutoScrollingMode.end, // Start from the end (latest months)
+              ),
+              primaryYAxis: NumericAxis(
+                  // Dynamic Y-axis
+                  ),
+              // Enable zooming and panning
+              zoomPanBehavior: ZoomPanBehavior(
+                enablePinching: true,
+                enablePanning: true,
+                enableDoubleTapZooming: true,
+                enableMouseWheelZooming: true,
+                enableSelectionZooming: false,
+                zoomMode: ZoomMode.x, // Only allow horizontal zooming/panning
+              ),
               tooltipBehavior: TooltipBehavior(
                 enable: true,
                 canShowMarker: true,
-                activationMode: ActivationMode.singleTap, // Show on tap
-                // Customize the tooltip appearance
+                activationMode: ActivationMode.singleTap,
                 builder: (data, point, series, pointIndex, seriesIndex) {
+                  if (pointIndex < 0 || pointIndex >= chartData.length) {
+                    return const SizedBox.shrink();
+                  }
                   final item = chartData[pointIndex];
                   return Container(
                     padding: const EdgeInsets.all(10),
@@ -365,15 +567,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               trackballBehavior: TrackballBehavior(
                 enable: true,
-                activationMode: ActivationMode.longPress, // Show on long press
+                activationMode: ActivationMode.longPress,
                 tooltipDisplayMode: TrackballDisplayMode.groupAllPoints,
-                tooltipSettings: const InteractiveTooltip(
-                  format: 'point.x : point.y',
-                ),
-                // Option 1: Use a simpler approach without accessing chartPointInfo
                 builder: (BuildContext context, TrackballDetails details) {
-                  // Try using the point index from details directly
                   if (details.pointIndex != null &&
+                      details.pointIndex! >= 0 &&
                       details.pointIndex! < chartData.length) {
                     final item = chartData[details.pointIndex!];
                     return Container(
@@ -419,6 +617,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   return const SizedBox.shrink();
                 },
               ),
+              // Load event to set initial visible range
+              onChartTouchInteractionUp: (ChartTouchInteractionArgs args) {
+                // You can add custom logic here if needed
+              },
               series: <ColumnSeries<Map<String, dynamic>, String>>[
                 ColumnSeries<Map<String, dynamic>, String>(
                   dataSource: chartData,
@@ -426,11 +628,48 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   yValueMapper: (data, _) => data['revenue'] as double,
                   color: const Color(0xFFE732A0),
                   borderRadius: BorderRadius.circular(5),
+                  width: 0.2,
                   name: 'Revenue',
-                  // Enable data labels if you want them always visible
                   dataLabelSettings: const DataLabelSettings(
-                    isVisible:
-                        false, // Set to true if you want labels always shown
+                    isVisible: false,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Add instruction text with better styling
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.swipe_left,
+                  size: 16,
+                  color: Colors.grey[500],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Swipe to explore',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.pinch,
+                  size: 16,
+                  color: Colors.grey[500],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Pinch to zoom',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -450,73 +689,80 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       };
     }).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: 315,
+        maxHeight: 315, // fixed height
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Time Count',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 5,
+              offset: const Offset(0, 2),
             ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 200,
-            child: SfCircularChart(
-              legend: Legend(
-                isVisible: true,
-                position: LegendPosition.bottom,
-                overflowMode: LegendItemOverflowMode.wrap,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Time Count',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-              series: <DoughnutSeries<Map<String, dynamic>, String>>[
-                DoughnutSeries<Map<String, dynamic>, String>(
-                  dataSource: chartData,
-                  xValueMapper: (data, _) => data['time'] as String,
-                  yValueMapper: (data, _) => data['count'] as int,
-                  dataLabelSettings: const DataLabelSettings(
-                    isVisible: true,
-                    labelPosition: ChartDataLabelPosition.inside,
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 230,
+              child: SfCircularChart(
+                legend: Legend(
+                  isVisible: true,
+                  position: LegendPosition.bottom,
+                  overflowMode: LegendItemOverflowMode.wrap,
+                ),
+                series: <DoughnutSeries<Map<String, dynamic>, String>>[
+                  DoughnutSeries<Map<String, dynamic>, String>(
+                    dataSource: chartData,
+                    xValueMapper: (data, _) => data['time'] as String,
+                    yValueMapper: (data, _) => data['count'] as int,
+                    dataLabelSettings: const DataLabelSettings(
+                      isVisible: true,
+                      labelPosition: ChartDataLabelPosition.inside,
+                    ),
+                    radius: '110%',
+                    innerRadius: '60%',
+                    // Add legend text mapping
+                    pointColorMapper: (data, _) {
+                      // You can customize colors here if needed
+                      return null; // Let the chart auto-assign colors
+                    },
+                    name: 'Time Periods', // This will be shown in the legend
                   ),
-                  radius: '70%',
-                  innerRadius: '60%',
-                  // Add legend text mapping
-                  pointColorMapper: (data, _) {
-                    // You can customize colors here if needed
-                    return null; // Let the chart auto-assign colors
-                  },
-                  name: 'Time Periods', // This will be shown in the legend
-                ),
-              ],
-            ),
-          ),
-          // Additional legend information if needed
-          if (chartData.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                'Showing data for ${DateFormat('MMM yyyy').format(DateTime.now())}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                ],
               ),
             ),
-        ],
+            // Additional legend information if needed
+            if (chartData.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  'Showing data for ${DateFormat('MMM yyyy').format(DateTime.now())}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -537,8 +783,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
       constraints: BoxConstraints(
-        minHeight: 290, // Set a minimum height
-        maxHeight: 290, // Set a maximum height (same as min to make it fixed)
+        minHeight: 315, // Set a minimum height
+        maxHeight: 315, // Set a maximum height (same as min to make it fixed)
       ),
       child: SingleChildScrollView(
         // Add scrolling for overflow content
@@ -584,9 +830,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           Text(
                             '${_convertToInt(item['total_qty_sold'])} sold',
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),

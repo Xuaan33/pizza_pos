@@ -47,6 +47,7 @@ dependencies:
   path_provider: ^2.1.1
   image: ^4.5.4
   syncfusion_flutter_charts: ^30.1.38
+  scrollable_positioned_list: ^0.3.4
 
 
 
@@ -110,3 +111,5 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/logo-shiokpos.png"
+  adaptive_icon_background: "#00000000"
+  adaptive_icon_foreground: "assets/logo-shiokpos.png"

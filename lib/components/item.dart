@@ -249,10 +249,10 @@ class _ItemCardState extends State<ItemCard> {
                     height: 50,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.fastfood);
+                      return const Icon(Icons.fastfood, size: 50,);
                     },
                   )
-                : const Icon(Icons.fastfood),
+                : const Icon(Icons.fastfood, size: 50,),
             title: Row(
               children: [
                 Flexible(
