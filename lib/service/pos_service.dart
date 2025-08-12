@@ -508,8 +508,6 @@ class PosService {
     );
   }
 
-  // Add these methods to your PosService class
-
 // Item Group Methods
   Future<Map<String, dynamic>> disableItemGroup({
     required String itemGroup,
@@ -550,6 +548,51 @@ class PosService {
       body: {
         'variant_group': variantGroup,
         'disabled': disabled,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> getStockBalanceSummary({
+    required String posProfile,
+    int isPosItem = 1,
+    String? date,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      'is_pos_item': isPosItem.toString(),
+      if (date != null) 'date': date,
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_stock_balance_summary?$queryString',
+    );
+  }
+
+  Future<Map<String, dynamic>> stockInItems({
+    required String posProfile,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.stock_in',
+      method: 'POST',
+      body: {
+        'pos_profile': posProfile,
+        'items': items,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> adjustStock({
+    required String posProfile,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.stock_adjustment',
+      method: 'POST',
+      body: {
+        'pos_profile': posProfile,
+        'items': items,
       },
     );
   }

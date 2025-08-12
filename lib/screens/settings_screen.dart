@@ -5,11 +5,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/item.dart';
 import 'package:shiok_pos_android_app/components/item_group.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
+import 'package:shiok_pos_android_app/components/stock_item_card.dart';
 import 'package:shiok_pos_android_app/components/variant_group.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -22,6 +24,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  static const String baseUrl = 'https://shiokpos.byondwave.com';
   int _selectedIndex = 0;
   bool _isPosConnected = false;
   bool _isTesting = false;
@@ -32,6 +35,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       TextEditingController(text: '8800');
   List<VariantGroup> variantGroups = [];
   bool isLoading = true;
+  List<Map<String, dynamic>> _stockItems = [];
+  bool _isStockLoading = false;
+  DateTime _selectedDate = DateTime.now();
+  TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _selectedItemsForStockIn = [];
+  List<Map<String, dynamic>> _selectedItemsForAdjustment = [];
+  TextEditingController _qtyController = TextEditingController();
+  TextEditingController _costController = TextEditingController();
+  TextEditingController _actualQtyController = TextEditingController();
 
   static const List<String> _sections = [
     'POS Opening & Closing',
@@ -46,12 +58,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
+    _qtyController = TextEditingController();
+    _costController = TextEditingController();
+    _actualQtyController = TextEditingController();
+    _loadStockItems(); // Load stock items when screen initializes
     _loadSavedConfig(); // Load saved config when widget initializes
     _loadVariantGroups();
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
+    _qtyController.dispose();
+    _costController.dispose();
+    _actualQtyController.dispose();
     _ipController.dispose();
     _portController.dispose();
     super.dispose();
@@ -76,6 +97,194 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+    }
+  }
+
+  Future<void> _loadStockItems() async {
+    try {
+      setState(() => _isStockLoading = true);
+      final authState = ref.read(authProvider);
+
+      await authState.when(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+          final response = await PosService().getStockBalanceSummary(
+            posProfile: posProfile,
+            isPosItem: 1,
+            date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+          );
+
+          if (response['success'] == true) {
+            final items =
+                List<Map<String, dynamic>>.from(response['message'] ?? []);
+
+            // Map the API response to the expected format
+            final mappedItems = items.map((item) {
+              String imageUrl = '';
+              if (item['image'] != null &&
+                  item['image'].toString().isNotEmpty) {
+                // Handle both cases where image might already have the base URL or not
+                imageUrl = item['image'].toString().startsWith('http')
+                    ? item['image']
+                    : '$baseUrl${item['image']}';
+              }
+
+              return {
+                'item_code': item['item'] ?? '',
+                'item_name': item['item'] ?? '',
+                'actual_qty': (item['qty'] ?? 0).toDouble(),
+                'reserved_qty': 0.0,
+                'available_qty': (item['qty'] ?? 0).toDouble(),
+                'value': (item['value'] ?? 0).toDouble(),
+                'image': imageUrl, // Now contains full URL
+              };
+            }).toList();
+
+            setState(() {
+              _stockItems = mappedItems;
+            });
+          } else {
+            throw Exception(
+                response['message'] ?? 'Failed to load stock items');
+          }
+        },
+        initial: () => throw Exception('Not authenticated'),
+        unauthenticated: () => throw Exception('Not authenticated'),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error loading stock items: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      setState(() {
+        _stockItems = [];
+      });
+    } finally {
+      setState(() => _isStockLoading = false);
+    }
+  }
+
+  Future<void> _stockInItems(
+    List<Map<String, dynamic>> items,
+    String qtyText,
+    String costText,
+  ) async {
+    if (qtyText.isEmpty || costText.isEmpty) {
+      Fluttertoast.showToast(
+        msg: 'Please enter both quantity and cost',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.orange,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      setState(() => _isStockLoading = true);
+      final authState = ref.read(authProvider);
+
+      await authState.when(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+          final itemsToStockIn = items.map((item) {
+            return {
+              'item_code': item['item_code'],
+              'qty': double.parse(qtyText),
+              'cost': double.parse(costText),
+            };
+          }).toList();
+
+          final response = await PosService().stockInItems(
+            posProfile: posProfile,
+            items: itemsToStockIn,
+          );
+
+          if (response['success'] == true) {
+            Fluttertoast.showToast(
+              msg: 'Stock in successful',
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+            await _loadStockItems(); // Refresh the list
+          } else {
+            throw Exception(response['message'] ?? 'Failed to stock in items');
+          }
+        },
+        initial: () => throw Exception('Not authenticated'),
+        unauthenticated: () => throw Exception('Not authenticated'),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error stocking in items: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isStockLoading = false);
+    }
+  }
+
+  Future<void> _adjustStock(
+    List<Map<String, dynamic>> items,
+    String actualQtyText,
+  ) async {
+    if (actualQtyText.isEmpty) {
+      Fluttertoast.showToast(
+        msg: 'Please enter the new quantity',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.orange,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      setState(() => _isStockLoading = true);
+      final authState = ref.read(authProvider);
+
+      await authState.when(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+          final itemsToAdjust = items.map((item) {
+            return {
+              'item_code': item['item_code'],
+              'actual_qty': double.parse(actualQtyText),
+            };
+          }).toList();
+
+          final response = await PosService().adjustStock(
+            posProfile: posProfile,
+            items: itemsToAdjust,
+          );
+
+          if (response['success'] == true) {
+            Fluttertoast.showToast(
+              msg: 'Stock adjustment successful',
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+            await _loadStockItems(); // Refresh the list
+          } else {
+            throw Exception(response['message'] ?? 'Failed to adjust stock');
+          }
+        },
+        initial: () => throw Exception('Not authenticated'),
+        unauthenticated: () => throw Exception('Not authenticated'),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error adjusting stock: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isStockLoading = false);
     }
   }
 
@@ -968,15 +1177,93 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildStockSection() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Stock Management',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 20),
-        Text('Stock management will be shown here'),
+        const SizedBox(height: 20),
+
+        // Date Picker and Search
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  labelText: 'Search Items',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  // Implement search functionality if needed
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: () async {
+                final DateTime? picked = await showDatePicker(
+                  context: context,
+                  initialDate: _selectedDate,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null && picked != _selectedDate) {
+                  setState(() {
+                    _selectedDate = picked;
+                  });
+                  _loadStockItems();
+                }
+              },
+              child: Text(
+                DateFormat('yyyy-MM-dd').format(_selectedDate),
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: _isStockLoading ? null : _loadStockItems,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Refresh',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Stock Items List
+        Expanded(
+            child: _isStockLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _stockItems.isEmpty
+                    ? const Center(child: Text('No stock items found'))
+                    : ListView.builder(
+                        itemCount: _stockItems.length,
+                        itemBuilder: (context, index) {
+                          final item = _stockItems[index];
+                          return StockItemCard(
+                            itemCode: item['item_code'] ?? '',
+                            itemName: item['item_name'] ?? '',
+                            currentQty: (item['actual_qty'] ?? 0).toDouble(),
+                            reservedQty: (item['reserved_qty'] ?? 0).toDouble(),
+                            availableQty:
+                                (item['available_qty'] ?? 0).toDouble(),
+                            value: (item['value'] ?? 0).toDouble(), // Add this
+                            image: item['image'], // Add this
+                            onStockIn: () => _showStockInDialog([item]),
+                            onAdjustStock: () =>
+                                _showStockAdjustmentDialog([item]),
+                          );
+                        },
+                      )),
       ],
     );
   }
@@ -1183,6 +1470,133 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+      ),
+    );
+  }
+
+  void _showStockInDialog(List<Map<String, dynamic>> items) {
+    final item = items.first;
+    final qtyController = TextEditingController();
+    final costController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Stock In Item',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              item['item_name'] ?? 'Unknown Item',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: qtyController,
+              decoration: const InputDecoration(
+                labelText: 'Quantity',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: costController,
+              decoration: const InputDecoration(
+                labelText: 'Cost per Unit',
+                prefixText: 'RM ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _stockInItems(items, qtyController.text, costController.text);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStockAdjustmentDialog(List<Map<String, dynamic>> items) {
+    final item = items.first;
+    final actualQtyController = TextEditingController(
+      text: (item['actual_qty'] ?? 0).toStringAsFixed(0),
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Adjust Stock',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              item['item_name'] ?? 'Unknown Item',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: actualQtyController,
+              decoration: const InputDecoration(
+                labelText: 'New Actual Quantity',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: false),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _adjustStock(items, actualQtyController.text);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Confirm',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
