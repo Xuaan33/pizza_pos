@@ -1218,9 +1218,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _loadStockItems();
                 }
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.black
+              ),
               child: Text(
                 DateFormat('yyyy-MM-dd').format(_selectedDate),
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
               ),
             ),
             const SizedBox(width: 10),

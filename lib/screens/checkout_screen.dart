@@ -258,16 +258,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
-              items: orderItems
-                  .map((item) => {
-                        'name': item['name'],
-                        'price': item['price'],
-                        'quantity': item['quantity'],
-                      })
-                  .toList(),
+              items: orderItems.map((item) {
+                return {
+                  'name': item['name'] ?? 'Unknown',
+                  'price': (item['price'] is int)
+                      ? (item['price'] as int).toDouble()
+                      : item['price'] as double,
+                  'quantity': (item['quantity'] is int)
+                      ? item['quantity'] as int
+                      : (item['quantity'] as double).toInt(),
+                  'discount_amount': item['discount_amount'] ?? 0.0,
+                  'custom_serve_later': item['custom_serve_later'] ?? false,
+                  'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                  'custom_variant_info':
+                      item['custom_variant_info']?.toString() ?? '',
+                };
+              }).toList(),
               subtotal: _calculateSubtotal(),
-              tax: total_taxes_and_charges,
-              total: _calculateTotal(),
+              tax: _calculateGST(),
+              discount: _discountAmount,
+              rounding: _calculateRounding(),
+              total: widget.order['rounded_total'],
             );
           });
 
@@ -941,7 +952,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     if (items[i]['custom_variant_info'] != null)
                       ..._buildVariantText(items[i]),
-                      if (items[i]['custom_serve_later'] == true ||
+                    if (items[i]['custom_serve_later'] == true ||
                         (items[i]['custom_serve_later'] is num &&
                             items[i]['custom_serve_later'] == 1))
                       Padding(
@@ -955,7 +966,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                         ),
                       ),
-                      if (items[i]['custom_item_remarks'] != null &&
+                    if (items[i]['custom_item_remarks'] != null &&
                         items[i]['custom_item_remarks'].toString().isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
@@ -968,7 +979,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                         ),
                       ),
-                    
                     if ((items[i]['discount_amount'] ?? 0) > 0)
                       Text(
                         'Discount: -RM${(items[i]['discount_amount'] as num).toStringAsFixed(2)}',

@@ -272,25 +272,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
               items: currentOrderItems.map((item) {
-                // Ensure quantity is converted to int for display
-                final quantity = (item['quantity'] is double)
-                    ? (item['quantity'] as double).toInt()
-                    : item['quantity'] as int;
-
-                // Ensure price is properly formatted
-                final price = (item['price'] is int)
-                    ? (item['price'] as int).toDouble()
-                    : item['price'] as double;
-
                 return {
                   'name': item['name'] ?? 'Unknown',
-                  'price': price,
-                  'quantity': quantity,
+                  'price': (item['price'] is int)
+                      ? (item['price'] as int).toDouble()
+                      : item['price'] as double,
+                  'quantity': (item['quantity'] is int)
+                      ? item['quantity'] as int
+                      : (item['quantity'] as double).toInt(),
+                  'discount_amount': item['discount_amount'] ?? 0.0,
+                  'custom_serve_later': item['custom_serve_later'] ?? false,
+                  'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                  'custom_variant_info':
+                      item['custom_variant_info']?.toString() ?? '',
                 };
               }).toList(),
               subtotal: _calculateSubtotal(),
               tax: _calculateGST(),
-              total: _calculateTotal(),
+              discount: 0.00,
+              rounding: _getRoundingDifference(),
+              total: _getRoundedTotal(),
             );
           });
           return FutureBuilder(
