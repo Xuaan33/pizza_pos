@@ -30,11 +30,12 @@
                 android:src="@drawable/splash" />
 
             <!-- Video (70% height) -->
-            <VideoView
-                android:id="@+id/videoView"
+            <ImageView
+                android:id="@+id/videoView"  
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="7" />
+                android:layout_weight="7"
+                android:scaleType="centerCrop" />
         </LinearLayout>
 
         <!-- Order Details Section (40%) -->

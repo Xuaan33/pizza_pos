@@ -45,6 +45,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   TextEditingController _costController = TextEditingController();
   TextEditingController _actualQtyController = TextEditingController();
 
+  // Employee Management
+  List<Map<String, dynamic>> _employees = [];
+  bool _isEmployeeLoading = false;
+  TextEditingController _employeeSearchController = TextEditingController();
+
   static const List<String> _sections = [
     'POS Opening & Closing',
     'POS Card Terminal',
@@ -52,7 +57,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     'Item',
     'Variant',
     'Stock',
-    'Finished Goods',
+    'Employee Management',
   ];
 
   @override
@@ -62,9 +67,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _qtyController = TextEditingController();
     _costController = TextEditingController();
     _actualQtyController = TextEditingController();
+    _employeeSearchController = TextEditingController();
     _loadStockItems(); // Load stock items when screen initializes
     _loadSavedConfig(); // Load saved config when widget initializes
     _loadVariantGroups();
+    _loadEmployees(); // Load employees when screen initializes
   }
 
   @override
@@ -75,6 +82,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _actualQtyController.dispose();
     _ipController.dispose();
     _portController.dispose();
+    _employeeSearchController.dispose();
     super.dispose();
   }
 
@@ -339,6 +347,104 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _loadEmployees() async {
+    try {
+      setState(() => _isEmployeeLoading = true);
+      final authState = ref.read(authProvider);
+
+      await authState.when(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+          final response = await PosService().getEmployees();
+          if (response['success'] == true) {
+            setState(() {
+              _employees =
+                  List<Map<String, dynamic>>.from(response['message'] ?? []);
+            });
+          } else {
+            throw Exception(response['message'] ?? 'Failed to load employees');
+          }
+        },
+        initial: () => throw Exception('Not authenticated'),
+        unauthenticated: () => throw Exception('Not authenticated'),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error loading employees: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      setState(() {
+        _employees = [];
+      });
+    } finally {
+      setState(() => _isEmployeeLoading = false);
+    }
+  }
+
+  Future<void> _employeeCheckIn(String employeeId, String branch) async {
+    try {
+      setState(() => _isEmployeeLoading = true);
+      final response = await PosService().employeeCheckIn(
+        employee: employeeId,
+        branch: branch,
+      );
+
+      if (response['success'] == true) {
+        Fluttertoast.showToast(
+          msg: 'Check-in successful',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+        await _loadEmployees(); // Refresh the list
+      } else {
+        throw Exception(response['message'] ?? 'Failed to check in');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error checking in: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isEmployeeLoading = false);
+    }
+  }
+
+  Future<void> _employeeCheckOut(String employeeId, String branch) async {
+    try {
+      setState(() => _isEmployeeLoading = true);
+      final response = await PosService().employeeCheckOut(
+        employee: employeeId,
+        branch: branch,
+      );
+
+      if (response['success'] == true) {
+        Fluttertoast.showToast(
+          msg: 'Check-out successful',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+        await _loadEmployees(); // Refresh the list
+      } else {
+        throw Exception(response['message'] ?? 'Failed to check out');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error checking out: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isEmployeeLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -412,7 +518,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       case 5:
         return _buildStockSection();
       case 6:
-        return _buildFinishedGoodsSection();
+        return _buildEmployeeManagementSection();
       default:
         return const Center(child: Text('Select a section'));
     }
@@ -1219,9 +1325,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.black
-              ),
+                  backgroundColor: Colors.white,
+                  surfaceTintColor: Colors.black),
               child: Text(
                 DateFormat('yyyy-MM-dd').format(_selectedDate),
                 style:
@@ -1273,16 +1378,117 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildFinishedGoodsSection() {
-    return const Column(
+  Widget _buildEmployeeManagementSection() {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Finished Goods Management',
+        const Text(
+          'Employee Management',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 20),
-        Text('Finished goods management will be shown here'),
+        const SizedBox(height: 20),
+        
+        // Search and Refresh
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _employeeSearchController,
+                decoration: const InputDecoration(
+                  labelText: 'Search Employees',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  // Implement search functionality if needed
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: _isEmployeeLoading ? null : _loadEmployees,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Refresh',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        
+        // Employees List
+        Expanded(
+          child: _isEmployeeLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _employees.isEmpty
+                  ? const Center(child: Text('No employees found'))
+                  : ListView.builder(
+                      itemCount: _employees.length,
+                      itemBuilder: (context, index) {
+                        final employee = _employees[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: ListTile(
+                            leading: const Icon(Icons.person),
+                            title: Text(employee['employee_name'] ?? 'Unknown'),
+                            subtitle: Text(employee['designation'] ?? ''),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (employee['status'] == 'Active')
+                                  IconButton(
+                                    icon: const Icon(Icons.login, color: Colors.green),
+                                    onPressed: () {
+                                      final authState = ref.read(authProvider);
+                                      authState.when(
+                                        authenticated: (sid, apiKey, apiSecret, username, 
+                                            email, fullName, posProfile, branch, 
+                                            paymentMethods, taxes, hasOpening, tier) {
+                                          _employeeCheckIn(employee['name'], branch);
+                                        },
+                                        initial: () {},
+                                        unauthenticated: () {},
+                                      );
+                                    },
+                                    tooltip: 'Check In',
+                                  ),
+                                if (employee['status'] == 'Checked In')
+                                  IconButton(
+                                    icon: const Icon(Icons.logout, color: Colors.red),
+                                    onPressed: () {
+                                      final authState = ref.read(authProvider);
+                                      authState.when(
+                                        authenticated: (sid, apiKey, apiSecret, username, 
+                                            email, fullName, posProfile, branch, 
+                                            paymentMethods, taxes, hasOpening, tier) {
+                                          _employeeCheckOut(employee['name'], branch);
+                                        },
+                                        initial: () {},
+                                        unauthenticated: () {},
+                                      );
+                                    },
+                                    tooltip: 'Check Out',
+                                  ),
+                                Text(
+                                  employee['status'] ?? 'Unknown',
+                                  style: TextStyle(
+                                    color: employee['status'] == 'Checked In' 
+                                        ? Colors.green 
+                                        : Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+        ),
       ],
     );
   }

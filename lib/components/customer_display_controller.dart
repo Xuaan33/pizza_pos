@@ -1,11 +1,12 @@
 import 'package:flutter/services.dart';
+import 'package:shiok_pos_android_app/service/auth_service.dart';
 
 class CustomerDisplayController {
   static const _channel = MethodChannel('dual_screen');
 
   static Future<void> showCustomerScreen() async {
     try {
-      await _channel.invokeMethod('showCustomerScreen');
+      await _channel.invokeMethod('showCustomerScreen', {'authToken': await AuthService.getAuthToken()});
     } catch (e) {
       print('Error showing customer screen: $e');
     }
@@ -28,6 +29,7 @@ class CustomerDisplayController {
     required double total,
   }) async {
     try {
+      await _channel.invokeMethod('showCustomerScreen', {'authToken': await AuthService.getAuthToken()});
       await _channel.invokeMethod('updateOrderDisplay', {
         'items': items.map((item) {
           return {
@@ -107,7 +109,19 @@ class CustomerDisplayController {
     }
   }
 
-  static void showDefaultDisplay() {
-    MethodChannel('dual_screen').invokeMethod('showDefaultDisplay');
+  // Clear the order display by sending empty data - this will automatically show slideshow
+  static Future<void> clearOrderDisplay() async {
+    try {
+      await _channel.invokeMethod('updateOrderDisplay', {
+        'items': <Map<String, dynamic>>[],
+        'subtotal': 0.0,
+        'tax': 0.0,
+        'discount': 0.0,
+        'rounding': 0.0,
+        'total': 0.0,
+      });
+    } catch (e) {
+      print('Error clearing order display: $e');
+    }
   }
 }

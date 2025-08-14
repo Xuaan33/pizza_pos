@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'auth_service.dart';
 
 class PosService {
@@ -25,7 +23,6 @@ class PosService {
         if (method != 'GET') 'Content-Type': 'application/json',
       };
 
-      //print('API Request: $method $uri');
       if (body != null) print('Request Body: ${jsonEncode(body)}');
 
       final response = await (method == 'GET'
@@ -33,7 +30,6 @@ class PosService {
               : http.post(uri, headers: headers, body: jsonEncode(body)))
           .timeout(timeout);
 
-      //print('API Response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -140,7 +136,6 @@ class PosService {
           )
           .timeout(Duration(seconds: 10));
 
-      print('Received response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -593,6 +588,57 @@ class PosService {
       body: {
         'pos_profile': posProfile,
         'items': items,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> getPaymentMethodDistribution({
+    required String posProfile,
+    String? fromDate,
+    String? toDate,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      if (fromDate != null) 'from_date': fromDate,
+      if (toDate != null) 'to_date': toDate,
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_payment_method_distribution?$queryString',
+    );
+  }
+
+  Future<Map<String, dynamic>> getEmployees() async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_employees',
+    );
+  }
+
+  Future<Map<String, dynamic>> employeeCheckIn({
+    required String employee,
+    required String branch,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.employee_check_in',
+      method: 'POST',
+      body: {
+        'employee': employee,
+        'branch': branch,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> employeeCheckOut({
+    required String employee,
+    required String branch,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.employee_check_out',
+      method: 'POST',
+      body: {
+        'employee': employee,
+        'branch': branch,
       },
     );
   }

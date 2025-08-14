@@ -41,7 +41,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    CustomerDisplayController.showDefaultDisplay();
     _loadFloorsAndTables();
     _loadTodayInfo();
   }

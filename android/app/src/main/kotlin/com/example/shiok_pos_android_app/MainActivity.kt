@@ -16,19 +16,40 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.net.Uri
-import android.widget.VideoView
+import com.bumptech.glide.Glide
+import java.net.URL
+import java.net.HttpURLConnection
+import java.util.Scanner
+import org.json.JSONObject
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import java.util.concurrent.Executors
 
 
-class CustomerDisplay(context: Context, display: Display) : Presentation(context, display) {
+class CustomerDisplay(context: Context, display: Display,  private val authToken: String?) : Presentation(context, display) {
     private lateinit var orderItemsList: ListView
     private lateinit var orderSubtotal: TextView
     private lateinit var orderTax: TextView
     private lateinit var orderDiscount: TextView
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
-    private lateinit var videoView: VideoView
+    private lateinit var slideshowView: ImageView
     private lateinit var logoView: ImageView
     private val handler = Handler(Looper.getMainLooper())
+    private val imageUrls = mutableListOf<String>()
+    private var currentImageIndex = 0
+    private val imageChangeInterval = 5000L // 5 seconds
+    private val executor = Executors.newFixedThreadPool(4)
+
+     // Runnable for changing images
+    private val imageChangeRunnable = object : Runnable {
+        override fun run() {
+            if (imageUrls.isNotEmpty()) {
+                currentImageIndex = (currentImageIndex + 1) % imageUrls.size
+                loadImage(imageUrls[currentImageIndex])
+                handler.postDelayed(this, imageChangeInterval)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,31 +61,31 @@ class CustomerDisplay(context: Context, display: Display) : Presentation(context
         orderDiscount = findViewById(R.id.orderDiscount)
         orderRounding = findViewById(R.id.orderRounding)
         orderTotal = findViewById(R.id.orderTotal)
-        videoView = findViewById(R.id.videoView)
+        slideshowView = findViewById(R.id.videoView)
         logoView = findViewById(R.id.logoView)
 
-        // Setup video
-        try {
-            val videoPath = "android.resource://${context.packageName}/${R.raw.default_video}"
-            videoView.setVideoURI(Uri.parse(videoPath))
-            videoView.setOnPreparedListener { mp ->
-                mp.isLooping = true
-                mp.setVolume(0f, 0f) // Mute the video
-            }
-            videoView.start()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+       // Start with default view
+        showDefaultView()
+    }
+
+    // In CustomerDisplay.kt
+    private fun loadImage(url: String) {
+        Glide.with(context)
+            .load(url)
+            .diskCacheStrategy(DiskCacheStrategy.ALL) // Cache images
+            .placeholder(R.drawable.splash) // Show placeholder while loading
+            .error(R.drawable.splash) // Show error image if loading fails
+            .into(slideshowView)
     }
 
     override fun onStop() {
         super.onStop()
-        videoView.stopPlayback()
+        handler.removeCallbacks(imageChangeRunnable)
     }
 
     fun cleanup() {
-        videoView.stopPlayback()
-        videoView.setVideoURI(null)
+        handler.removeCallbacks(imageChangeRunnable)
+        executor.shutdownNow()
     }
 
     fun updateOrderDetails(
@@ -120,14 +141,50 @@ class CustomerDisplay(context: Context, display: Display) : Presentation(context
     }
 
     fun showDefaultView() {
-        handler.post {
-            videoView.start()
+            // Fetch images from API
+            executor.execute {
+                try {
+                    val url = URL("https://shiokpos.byondwave.com/api/method/shiok_pos.api.get_customer_facing_images")
+                    val connection = url.openConnection() as HttpURLConnection
+                    connection.requestMethod = "GET"
+
+                     // Add authorization header if token exists
+                    authToken?.let { token ->
+                        connection.setRequestProperty("Authorization", token)
+                    }
+                    
+                    val responseCode = connection.responseCode
+                    if (responseCode == HttpURLConnection.HTTP_OK) {
+                        val inputStream = connection.inputStream
+                        val scanner = Scanner(inputStream).useDelimiter("\\A")
+                        val response = if (scanner.hasNext()) scanner.next() else ""
+                        
+                        val json = JSONObject(response)
+                        if (json.getBoolean("success")) {
+                            val imagesArray = json.getJSONArray("message")
+                            imageUrls.clear()
+                            for (i in 0 until imagesArray.length()) {
+                                imageUrls.add(imagesArray.getString(i))
+                            }
+                            
+                            if (imageUrls.isNotEmpty()) {
+                                handler.post {
+                                    loadImage(imageUrls[0])
+                                    handler.postDelayed(imageChangeRunnable, imageChangeInterval)
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
-    }
 }
 
 class MainActivity : FlutterActivity() {
     private var customerDisplay: CustomerDisplay? = null
+    private var authToken: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -136,6 +193,7 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "showCustomerScreen" -> {
+                        authToken = call.argument<String>("authToken")
                         showCustomerScreen()
                         result.success(null)
                     }
@@ -172,7 +230,7 @@ class MainActivity : FlutterActivity() {
         val displays = displayManager.displays
         if (displays.size > 1) {
             val secondaryDisplay = displays[1]
-            customerDisplay = CustomerDisplay(this, secondaryDisplay)
+            customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken)
             customerDisplay?.show()
         }
     }

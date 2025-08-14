@@ -88,6 +88,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             endpoint:
                 'shiok_pos.api.get_top_five_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
+          PosService().getPaymentMethodDistribution(
+            // Add this new call
+            posProfile: posProfile,
+            fromDate: dateFormat.format(fromDate),
+            toDate: dateFormat.format(toDate),
+          ),
         ]);
 
         final peakTimes = _convertListToProperType(results[1]['message']);
@@ -107,6 +113,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'revenueData': _convertListToProperType(results[3]['message']),
           'peakTimes': _convertListToProperType(results[4]['message']),
           'topItems': _convertListToProperType(results[5]['message']),
+          'paymentMethods': _convertListToProperType(results[6]['message']),
           'fromDate': fromDate,
           'toDate': toDate,
         };
@@ -217,6 +224,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     <Map<String, dynamic>>[];
             final topItems = data['topItems'] as List<Map<String, dynamic>>? ??
                 <Map<String, dynamic>>[];
+            final paymentMethods =
+                data['paymentMethods'] as List<Map<String, dynamic>>? ??
+                    <Map<String, dynamic>>[];
             final fromDate = data['fromDate'] as DateTime? ?? DateTime.now();
             final toDate = data['toDate'] as DateTime? ?? DateTime.now();
 
@@ -234,6 +244,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 30),
                     _buildRevenueChart(revenueData),
                     const SizedBox(height: 30),
+                    _buildPaymentMethodChart(paymentMethods),
+                    const SizedBox(height: 30),
                     Row(
                       children: [
                         Expanded(child: _buildPeakTimeChart(peakTimes)),
@@ -241,7 +253,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Expanded(child: _buildTopItemsList(topItems)),
                       ],
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -681,7 +693,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildPeakTimeChart(List<Map<String, dynamic>> peakTimes) {
-    // Process peak time data for chart
     final chartData = peakTimes.map((timeData) {
       return <String, dynamic>{
         'time': timeData['time_period'] as String? ?? 'Unknown',
@@ -692,7 +703,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return ConstrainedBox(
       constraints: const BoxConstraints(
         minHeight: 315,
-        maxHeight: 315, // fixed height
+        maxHeight: 315,
       ),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -748,7 +759,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
             ),
-            // Additional legend information if needed
             if (chartData.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -842,5 +852,195 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildPaymentMethodChart(List<Map<String, dynamic>> paymentMethods) {
+    // Filter and sort data outside the build method
+    final filteredMethods = paymentMethods
+        .where((method) => _convertToDouble(method['total_paid']) > 0)
+        .toList()
+      ..sort((a, b) => _convertToDouble(b['total_paid'])
+          .compareTo(_convertToDouble(a['total_paid'])));
+
+    final totalAmount = filteredMethods.fold(
+        0.0, (sum, method) => sum + _convertToDouble(method['total_paid']));
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: 315,
+        maxHeight: 315,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Payment Methods Distribution',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Total: RM ${totalAmount.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (filteredMethods.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Text('No payment data available'),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView(
+                  // Disable scroll physics if not needed
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: filteredMethods.map((method) {
+                    final amount = _convertToDouble(method['total_paid']);
+                    final percentage =
+                        totalAmount > 0 ? (amount / totalAmount * 100) : 0.0;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                method['mode_of_payment'] as String? ??
+                                    'Unknown',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'RM ${amount.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${percentage.toStringAsFixed(1)}% of total',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            height: 8,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: CustomPaint(
+                                painter: _ProgressBarPainter(
+                                  value: percentage / 100,
+                                  color: _getPaymentMethodColor(
+                                      method['mode_of_payment'] as String? ??
+                                          ''),
+                                  backgroundColor: Colors.grey[200]!,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper method to assign colors based on payment method
+  Color _getPaymentMethodColor(String method) {
+    switch (method.toLowerCase()) {
+      case 'cash':
+        return Colors.blue;
+      case 'credit card':
+        return Colors.purple;
+      case 'touch n go':
+        return Colors.orange;
+      case 'duitnow':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+}
+
+// Custom painter for progress bars (more efficient than LinearProgressIndicator)
+class _ProgressBarPainter extends CustomPainter {
+  final double value;
+  final Color color;
+  final Color backgroundColor;
+
+  _ProgressBarPainter({
+    required this.value,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Draw background
+    final backgroundPaint = Paint()..color = backgroundColor;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Radius.circular(size.height / 2),
+      ),
+      backgroundPaint,
+    );
+
+    // Draw progress
+    if (value > 0) {
+      final progressPaint = Paint()..color = color;
+      final progressWidth = size.width * value.clamp(0.0, 1.0);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, 0, progressWidth, size.height),
+          Radius.circular(size.height / 2),
+        ),
+        progressPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProgressBarPainter oldDelegate) {
+    return value != oldDelegate.value ||
+        color != oldDelegate.color ||
+        backgroundColor != oldDelegate.backgroundColor;
   }
 }

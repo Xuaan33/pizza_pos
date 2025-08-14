@@ -131,18 +131,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             final response =
                 await PosService().getOrders(posProfile: posProfile);
 
-            print('Full API response: ${jsonEncode(response)}');
 
             if (response['message']?['success'] == true) {
               final List<dynamic> invoices =
                   (response['message']?['message'] as List?) ?? [];
-              print('Found ${invoices.length} invoices');
 
               setState(() {
                 activeOrders = invoices
                     .map((invoice) {
                       try {
-                        print('Processing invoice: ${invoice['name']}');
 
                         final items =
                             (invoice['items'] as List? ?? []).map((item) {
