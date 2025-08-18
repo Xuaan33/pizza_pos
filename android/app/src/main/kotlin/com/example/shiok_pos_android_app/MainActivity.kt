@@ -71,11 +71,11 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
     // In CustomerDisplay.kt
     private fun loadImage(url: String) {
         Glide.with(context)
-            .load(url)
-            .diskCacheStrategy(DiskCacheStrategy.ALL) // Cache images
-            .placeholder(R.drawable.splash) // Show placeholder while loading
-            .error(R.drawable.splash) // Show error image if loading fails
-            .into(slideshowView)
+        .load(url)
+        .diskCacheStrategy(DiskCacheStrategy.ALL)
+        .override(800, 600) // scale down instead of decoding full-size
+        .into(slideshowView)
+
     }
 
     override fun onStop() {

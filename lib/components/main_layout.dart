@@ -80,14 +80,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       },
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
           posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
-        if (!_customerScreenShown) {
-          _customerScreenShown = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_selectedTabIndex == 0 || _selectedTabIndex == 2) {
-              CustomerDisplayController.showCustomerScreen();
-            }
-          });
-        }
+        
         return Scaffold(
           body: Row(
             children: [

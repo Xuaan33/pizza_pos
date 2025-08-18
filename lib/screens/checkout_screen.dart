@@ -156,6 +156,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         search: invoiceName,
       );
 
+      debugPrint('Check order: ${response['message']?['message']}');
+
       if (response['message']?['success'] == true) {
         final List<dynamic> invoices = response['message']?['message'] ?? [];
         if (invoices.isNotEmpty) {
@@ -578,8 +580,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildActionButtonsGrid() {
-    final canSplit =
-        orderItems.length > 1; // Check if more than one item exists
+    final canSplit = orderItems.length > 1;
 
     return Container(
       height: 120,
@@ -588,18 +589,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           Expanded(
             child: Row(
               children: [
-                Expanded(
-                  child: _buildActionButton(
-                    _isSplitting ? 'Cancel Split' : 'Split Bill',
-                    _isEditing
-                        ? Colors.grey
-                        : canSplit
-                            ? const Color(0xFF00203E)
-                            : Colors.grey,
-                    onPressed:
-                        _isEditing || !canSplit ? null : _toggleSplitMode,
+                if (_isSplitting)
+                  Expanded(
+                    child: _buildActionButton(
+                      'Cancel Split',
+                      Colors.grey,
+                      onPressed: _toggleSplitMode,
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: _buildPayNowButton(),
                   ),
-                ),
                 const SizedBox(width: 10),
                 if (_isSplitting)
                   Expanded(
@@ -610,8 +611,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                   )
                 else
-                  Expanded(child: _buildPayNowButton()),
+                  Expanded(
+                    child: _buildPayLaterButton(),
+                  ),
               ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: _buildActionButton(
+              _isSplitting ? 'Cancel Split' : 'Split Bill',
+              _isEditing
+                  ? Colors.grey
+                  : canSplit
+                      ? const Color(0xFF00203E)
+                      : Colors.grey,
+              onPressed: _isEditing || !canSplit ? null : _toggleSplitMode,
             ),
           ),
         ],
@@ -979,14 +994,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                         ),
                       ),
-                    if ((items[i]['discount_amount'] ?? 0) > 0)
-                      Text(
-                        'Discount: -RM${(items[i]['discount_amount'] as num).toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.red,
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -1080,10 +1087,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               // Price cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Text(
-                  (items[i]['price'] as num).toStringAsFixed(2),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.right,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Show original price if there's a discount
+                    if ((items[i]['discount_amount'] ?? 0) > 0) ...[
+                      Text(
+                        'RM${(items[i]['price'] + (items[i]['discount_amount'] / items[i]['quantity'])).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          decoration: TextDecoration.lineThrough,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                    // Show current price
+                    Text(
+                      'RM${items[i]['price'].toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: (items[i]['discount_amount'] ?? 0) > 0
+                            ? Color(0xFFE732A0)
+                            : Colors.black,
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -1093,19 +1121,38 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    if ((items[i]['discount_amount'] ?? 0) > 0)
+                    // Show original amount if there's a discount
+                    if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${(items[i]['price'] * items[i]['quantity']).toStringAsFixed(2)}',
+                        'RM${((items[i]['price'] + (items[i]['discount_amount'] / items[i]['quantity'])) * items[i]['quantity']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
                           color: Colors.grey,
                         ),
                       ),
+                    ],
+                    // Show current amount
                     Text(
-                      'RM${((items[i]['price'] * items[i]['quantity']) - (items[i]['discount_amount'] ?? 0)).toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      'RM${(items[i]['price'] * items[i]['quantity']).toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: (items[i]['discount_amount'] ?? 0) > 0
+                            ? Color(0xFFE732A0)
+                            : Colors.black,
+                      ),
                     ),
+                    // Show discount amount if any
+                    if ((items[i]['discount_amount'] ?? 0) > 0) ...[
+                      Text(
+                        'Discount: RM${items[i]['discount_amount'].toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1251,6 +1298,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  Widget _buildPayLaterButton() {
+    return SizedBox(
+      height: 50,
+      child: ElevatedButton(
+        onPressed: _isEditing
+            ? null
+            : () async {
+                // if (_selectedPaymentMethod.isEmpty) {
+                //   Fluttertoast.showToast(
+                //     msg: "Please select a payment method",
+                //     gravity: ToastGravity.BOTTOM,
+                //     backgroundColor: Colors.red,
+                //     textColor: Colors.white,
+                //   );
+                //   return;
+                // }
+
+                await _completePayment(payLater: true);
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _isEditing ? Colors.grey : Colors.blue,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        child: const Text(
+          'Pay Later',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPayNowButton() {
     return SizedBox(
       height: 50,
@@ -1285,12 +1366,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Future<void> _completePayment() async {
+  Future<void> _completePayment({bool payLater = false}) async {
     setState(() => _isProcessingPayment = true);
 
     // Show processing dialog for non-cash payments
     Completer<void>? dialogCompleter;
-    if (_selectedPaymentMethod != 'Cash' && mounted) {
+    if (_selectedPaymentMethod != 'Cash' && mounted && !payLater) {
       dialogCompleter = Completer<void>();
       _showPaymentProcessingDialog(context).then((_) {
         if (!dialogCompleter!.isCompleted) {
@@ -1316,7 +1397,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         throw Exception('Invoice number not available');
       }
 
-      if (_selectedPaymentMethod != 'Cash') {
+      if (_selectedPaymentMethod != 'Cash' && !payLater) {
         // 1. Get the selected payment method's m1 value
         final selectedMethod = _paymentMethods.firstWhere(
           (method) => method['name'] == _selectedPaymentMethod,
@@ -1366,40 +1447,90 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       }
 
-      // Rest of your checkout logic...
-      final response = await PosService().checkoutOrder(
-        invoiceName: invoiceName,
-        payments: payments,
-      );
+      // For Pay Later, we just submit the order without processing payment
+      if (payLater) {
+        final response = await PosService().submitOrder(
+          name: invoiceName,
+          posProfile: ref.read(authProvider).maybeWhen(
+                    authenticated: (
+                      sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier,
+                    ) {
+                      return posProfile;
+                    },
+                    orElse: () => null,
+                  ) ??
+              '',
+          customer: 'Guest',
+          items: orderItems.map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['custom_variant_info'] != null)
+                'custom_variant_info': item['custom_variant_info'],
+            };
+          }).toList(),
+          couponCode: widget.order['coupon_code'],
+          custom_user_voucher: widget.order['custom_user_voucher'],
+        );
 
-      if (response['success'] == true) {
-        // Handle successful payment
-        if (mounted) {
-          Fluttertoast.showToast(
-            msg: "Payment Successful",
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-          );
+        if (response['success'] == true) {
+          if (mounted) {
+            Fluttertoast.showToast(
+              msg: "Order saved for later payment",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+            Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+          }
         }
+      } else {
+        // Original payment processing code
+        final response = await PosService().checkoutOrder(
+          invoiceName: invoiceName,
+          payments: payments,
+        );
 
-        // Close the dialog if it exists
-        if (dialogCompleter != null && !dialogCompleter.isCompleted) {
-          Navigator.of(context).pop();
-          dialogCompleter.complete();
+        if (response['success'] == true) {
+          if (mounted) {
+            Fluttertoast.showToast(
+              msg: "Payment Successful",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+          }
+
+          if (dialogCompleter != null && !dialogCompleter.isCompleted) {
+            Navigator.of(context).pop();
+            dialogCompleter.complete();
+          }
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
-        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       }
     } catch (e) {
       if (mounted) {
-        // Close the dialog if it's still open
         if (dialogCompleter != null && !dialogCompleter.isCompleted) {
           Navigator.of(context).pop();
           dialogCompleter.complete();
         }
 
         Fluttertoast.showToast(
-          msg: "Payment Error: ${e.toString()}",
+          msg: "Error: ${e.toString()}",
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.red,
           textColor: Colors.white,
@@ -2152,7 +2283,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         runSpacing: 8,
                         children: [
                           ChoiceChip(
-                            label: const Text('Voucher'),
+                            label: Text(
+                              'Voucher',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             selected: selectedDiscountType == 0,
                             onSelected: (selected) {
                               setState(() {
@@ -2162,7 +2296,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             },
                           ),
                           ChoiceChip(
-                            label: const Text('Percentage'),
+                            label: Text(
+                              'Percentage',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             selected: selectedDiscountType == 1,
                             onSelected: (selected) {
                               setState(() {
@@ -2176,7 +2313,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             },
                           ),
                           ChoiceChip(
-                            label: const Text('Amount'),
+                            label: Text(
+                              'Amount',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             selected: selectedDiscountType == 2,
                             onSelected: (selected) {
                               setState(() {
@@ -2190,7 +2330,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             },
                           ),
                           ChoiceChip(
-                            label: const Text('Itemized Discount'),
+                            label: Text(
+                              'Itemized Discount',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                             selected: selectedDiscountType == 3,
                             onSelected: (selected) {
                               setState(() {
