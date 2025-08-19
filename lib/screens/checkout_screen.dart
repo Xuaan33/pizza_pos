@@ -1122,7 +1122,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original price if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${(items[i]['price'] + (items[i]['discount_amount'] / items[i]['quantity'])).toStringAsFixed(2)}',
+                        'RM${(items[i]['price']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1132,7 +1132,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current price
                     Text(
-                      'RM${items[i]['price'].toStringAsFixed(2)}',
+                      'RM${(items[i]['price'] - (items[i]['discount_amount'] / items[i]['quantity'])).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1153,7 +1153,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original amount if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${((items[i]['price'] + (items[i]['discount_amount'] / items[i]['quantity'])) * items[i]['quantity']).toStringAsFixed(2)}',
+                        'RM${((items[i]['price']) * items[i]['quantity']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1163,7 +1163,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current amount
                     Text(
-                      'RM${(items[i]['price'] * items[i]['quantity']).toStringAsFixed(2)}',
+                      'RM${(items[i]['price'] - (items[i]['discount_amount'] / items[i]['quantity'])).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1517,6 +1517,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
 
         if (response['success'] == true) {
+          final updatedOrder = response['message'];
+          setState(() {
+            // Update all order properties from server response
+            widget.order['status'] = updatedOrder['status'] ?? 'Draft';
+            widget.order['discount_amount'] =
+                updatedOrder['discount_amount'] ?? 0.0;
+            widget.order['total_taxes_and_charges'] =
+                updatedOrder['total_taxes_and_charges'] ?? 0.0;
+            widget.order['base_rounding_adjustment'] =
+                updatedOrder['base_rounding_adjustment'] ?? 0.0;
+            widget.order['rounded_total'] =
+                updatedOrder['rounded_total'] ?? 0.0;
+            widget.order['total'] = updatedOrder['total'] ?? 0.0;
+            widget.order['grand_total'] = updatedOrder['grand_total'] ?? 0.0;
+
+            // Also update the discount amount for display
+            _discountAmount = widget.order['discount_amount'];
+          });
           if (mounted) {
             Fluttertoast.showToast(
               msg: "Order saved for later payment",
