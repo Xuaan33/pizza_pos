@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/components/split_order_payment_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
@@ -1535,6 +1536,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             // Also update the discount amount for display
             _discountAmount = widget.order['discount_amount'];
           });
+
+          // Show print receipt dialog
+          final shouldPrint = await _showPrintReceiptDialog();
+
+          if (shouldPrint) {
+            await ReceiptPrinter.showPrintDialog(context, invoiceName);
+          }
           if (mounted) {
             Fluttertoast.showToast(
               msg: "Order saved for later payment",
@@ -1553,6 +1561,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
 
         if (response['success'] == true) {
+          // Show print receipt dialog
+          final shouldPrint = await _showPrintReceiptDialog();
+
+          if (shouldPrint) {
+            await ReceiptPrinter.showPrintDialog(context, invoiceName);
+          }
           if (mounted) {
             Fluttertoast.showToast(
               msg: "Payment Successful",
@@ -1865,6 +1879,47 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint('Error extracting POS invoice number: $e');
     }
     return '000000';
+  }
+
+  Future<bool> _showPrintReceiptDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Print Receipt?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: const Text(
+                'Would you like to print the receipt for this transaction?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text(
+                    'No',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text(
+                    'Yes',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 
   Future<bool> _confirmExit() async {
