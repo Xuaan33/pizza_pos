@@ -417,12 +417,11 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _imageUrlController = TextEditingController();
   String? _selectedItemGroup; // Changed to single selection
   List<Map<String, Object>> _selectedVariantGroups = []; // Fixed type
-  bool _isPosItem = false;
+  bool _isPosItem = true;
   bool _isLoading = false;
   bool _itemGroupExpanded = false;
   bool _variantGroupExpanded = false;
@@ -449,9 +448,6 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
         itemGroup: _selectedItemGroup!,
         variantGroupTable: _selectedVariantGroups,
         description: _descriptionController.text.trim(),
-        imageUrl: _imageUrlController.text.trim().isNotEmpty
-            ? _imageUrlController.text.trim()
-            : null,
         isPosItem: _isPosItem ? 1 : 0,
       );
 
@@ -513,15 +509,6 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
                         children: [
                           const Icon(Icons.image, size: 40, color: Colors.grey),
                           const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _imageUrlController,
-                            decoration: const InputDecoration(
-                              hintText: 'Image URL',
-                              border: InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -550,24 +537,6 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
                             validator: (value) => value?.isEmpty ?? true
                                 ? 'Please enter an item name'
                                 : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _priceController,
-                            decoration: const InputDecoration(
-                              labelText: 'Price *',
-                              border: OutlineInputBorder(),
-                              prefixText: 'RM ',
-                            ),
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                            validator: (value) {
-                              if (value?.isEmpty ?? true)
-                                return 'Please enter a price';
-                              if (double.tryParse(value!) == null)
-                                return 'Invalid price';
-                              return null;
-                            },
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
@@ -829,7 +798,6 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   void dispose() {
     _codeController.dispose();
     _nameController.dispose();
-    _priceController.dispose();
     _descriptionController.dispose();
     _imageUrlController.dispose();
     super.dispose();
@@ -859,12 +827,11 @@ class _EditItemDialogState extends State<EditItemDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _codeController;
   late TextEditingController _nameController;
-  late TextEditingController _priceController;
   late TextEditingController _descriptionController;
   late TextEditingController _imageUrlController;
   String? _selectedItemGroup; // Changed to single selection
   List<Map<String, Object>> _selectedVariantGroups = []; // Fixed type
-  bool _isPosItem = false;
+  bool _isPosItem = true;
   bool _isLoading = false;
   bool _itemGroupExpanded = false;
   bool _variantGroupExpanded = false;
@@ -874,9 +841,6 @@ class _EditItemDialogState extends State<EditItemDialog> {
     super.initState();
     _codeController = TextEditingController(text: widget.item.itemCode);
     _nameController = TextEditingController(text: widget.item.itemName);
-    _priceController = TextEditingController(
-      text: widget.item.price.toStringAsFixed(2),
-    );
     _descriptionController = TextEditingController(
       text: widget.item.description ?? '',
     );
@@ -892,7 +856,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
             })
         .toList();
 
-    _isPosItem = widget.item.isPosItem ?? false;
+    _isPosItem = widget.item.isPosItem ?? true;
   }
 
   Future<void> _updateItem() async {
@@ -916,9 +880,6 @@ class _EditItemDialogState extends State<EditItemDialog> {
         itemGroup: _selectedItemGroup!,
         variantGroupTable: _selectedVariantGroups,
         description: _descriptionController.text.trim(),
-        imageUrl: _imageUrlController.text.trim().isNotEmpty
-            ? _imageUrlController.text.trim()
-            : null,
         isPosItem: _isPosItem ? 1 : 0,
       );
 
@@ -996,20 +957,6 @@ class _EditItemDialogState extends State<EditItemDialog> {
                             child: const Icon(Icons.image),
                           ),
                         const SizedBox(height: 8),
-                        SizedBox(
-                          width: 120,
-                          child: TextFormField(
-                            controller: _imageUrlController,
-                            decoration: const InputDecoration(
-                              labelText: 'Image URL',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            onChanged: (value) {
-                              setState(() {}); // Refresh to show preview
-                            },
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(width: 16),
@@ -1035,24 +982,6 @@ class _EditItemDialogState extends State<EditItemDialog> {
                             validator: (value) => value?.isEmpty ?? true
                                 ? 'Please enter an item name'
                                 : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _priceController,
-                            decoration: const InputDecoration(
-                              labelText: 'Price *',
-                              border: OutlineInputBorder(),
-                              prefixText: 'RM ',
-                            ),
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                            validator: (value) {
-                              if (value?.isEmpty ?? true)
-                                return 'Please enter a price';
-                              if (double.tryParse(value!) == null)
-                                return 'Invalid price';
-                              return null;
-                            },
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
@@ -1314,7 +1243,6 @@ class _EditItemDialogState extends State<EditItemDialog> {
   void dispose() {
     _codeController.dispose();
     _nameController.dispose();
-    _priceController.dispose();
     _descriptionController.dispose();
     _imageUrlController.dispose();
     super.dispose();

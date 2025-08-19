@@ -697,15 +697,37 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 // Helper method to calculate original subtotal before discounts
   double _calculateOriginalSubtotal(Map<String, dynamic> order) {
     final items = (order['items'] as List?) ?? [];
+    final orderLevelDiscount =
+        (order['discount_amount'] as num?)?.toDouble() ?? 0.0;
+
+    // If there's an order-level discount, calculate original subtotal
+    if (orderLevelDiscount > 0) {
+      final currentSubtotal = items.fold(0.0, (sum, item) {
+        final quantity = (item['quantity'] ?? 1).toDouble();
+        final price = (item['price'] ?? 0).toDouble();
+        return sum + (price * quantity);
+      });
+      return currentSubtotal + orderLevelDiscount;
+    }
+
+    // For item-level discounts in draft orders
     return items.fold(0.0, (sum, item) {
       final quantity = (item['quantity'] ?? 1).toDouble();
-      final discountedPrice = (item['price'] ?? 0).toDouble();
+      final currentPrice = (item['price'] ?? 0).toDouble();
       final discountAmount =
           (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
+      final discountPercentage =
+          (item['discount_percentage'] as num?)?.toDouble() ?? 0.0;
 
-      // Calculate original price per unit by adding back the discount per unit
-      final originalPricePerUnit =
-          discountedPrice + (discountAmount / quantity);
+      double originalPricePerUnit;
+
+      if (discountAmount > 0) {
+        originalPricePerUnit = currentPrice + (discountAmount / quantity);
+      } else if (discountPercentage > 0) {
+        originalPricePerUnit = currentPrice / (1 - (discountPercentage / 100));
+      } else {
+        originalPricePerUnit = currentPrice;
+      }
 
       return sum + (originalPricePerUnit * quantity);
     });
@@ -714,15 +736,28 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 // Helper method to build item price column with proper original/discounted price display
   List<Widget> _buildItemPriceColumn(Map<String, dynamic> item) {
     final quantity = (item['quantity'] ?? 1).toDouble();
-    final discountedPrice = (item['price'] ?? 0).toDouble();
+    final currentPrice = (item['price'] ?? 0).toDouble();
     final discountAmount = (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
+    final discountPercentage =
+        (item['discount_percentage'] as num?)?.toDouble() ?? 0.0;
 
-    final discountedTotal = discountedPrice * quantity;
+    final currentTotal = currentPrice * quantity;
 
-    if (discountAmount > 0) {
-      // Calculate original price per unit
-      final originalPricePerUnit =
-          discountedPrice + (discountAmount / quantity);
+    // Check if this item has any discount
+    final hasDiscount = discountAmount > 0 || discountPercentage > 0;
+
+    if (hasDiscount) {
+      // For draft orders, we need to calculate the original price
+      double originalPricePerUnit;
+
+      if (discountAmount > 0) {
+        // Fixed amount discount: original = current + (discount/quantity)
+        originalPricePerUnit = currentPrice + (discountAmount / quantity);
+      } else {
+        // Percentage discount: original = current / (1 - percentage/100)
+        originalPricePerUnit = currentPrice / (1 - (discountPercentage / 100));
+      }
+
       final originalTotal = originalPricePerUnit * quantity;
 
       return [
@@ -737,22 +772,29 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         ),
         // Show discounted price
         Text(
-          'RM ${discountedTotal.toStringAsFixed(2)}',
+          'RM ${currentTotal.toStringAsFixed(2)}',
           style:
               TextStyle(color: Color(0xFFE732A0), fontWeight: FontWeight.w600),
         ),
-        // Show discount amount
-        Text(
-          'Discount: RM ${discountAmount.toStringAsFixed(2)}',
-          style: TextStyle(
-              color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
-        ),
+        // Show discount details
+        if (discountAmount > 0)
+          Text(
+            'Discount: RM ${discountAmount.toStringAsFixed(2)}',
+            style: TextStyle(
+                color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        if (discountPercentage > 0)
+          Text(
+            'Discount: ${discountPercentage.toStringAsFixed(1)}%',
+            style: TextStyle(
+                color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
       ];
     } else {
       // No discount, just show the price
       return [
         Text(
-          'RM ${discountedTotal.toStringAsFixed(2)}',
+          'RM ${currentTotal.toStringAsFixed(2)}',
           style:
               TextStyle(color: Color(0xFFE732A0), fontWeight: FontWeight.w600),
         ),
@@ -861,28 +903,59 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   void _goToCheckout(Map<String, dynamic> order) {
+    // Safely convert items to the correct type
+    final List<dynamic> rawItems = order['items'] ?? [];
+    final List<Map<String, dynamic>> formattedItems = [];
+
+    for (var item in rawItems) {
+      if (item is Map) {
+        // Convert Map<dynamic, dynamic> to Map<String, dynamic>
+        final Map<String, dynamic> convertedItem = {};
+        item.forEach((key, value) {
+          convertedItem[key.toString()] = value;
+        });
+
+        // Ensure image URL is properly formatted
+        final image = convertedItem['image']?.toString() ?? '';
+        if (image.isNotEmpty && !image.startsWith('http')) {
+          convertedItem['image'] = 'https://shiokpos.byondwave.com$image';
+        }
+
+        formattedItems.add(convertedItem);
+      }
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CheckoutScreen(
           order: {
             ...order,
-            'items': List<Map<String, dynamic>>.from(order['items'] ?? []),
+            'items': formattedItems,
+            'invoiceNumber': order['orderId'],
+            // Ensure discount information is passed through
+            'discount_amount': order['discount_amount'] ?? 0.0,
+            'coupon_code': order['coupon_code'],
+            'custom_user_voucher': order['custom_user_voucher'],
+            'total_taxes_and_charges': order['total_taxes_and_charges'] ?? 0.0,
+            'base_rounding_adjustment':
+                order['base_rounding_adjustment'] ?? 0.0,
+            'rounded_total': order['rounded_total'] ?? 0.0,
           },
-          tablesWithSubmittedOrders: {}, // Pass an empty set if not available
+          tablesWithSubmittedOrders: {},
           onOrderSubmitted: (newOrder) {
-            // Handle order submission if needed
             widget.onOrderPaid(newOrder);
           },
           onOrderPaid: (tableNumber) {
             // Handle order paid if needed
           },
-          activeOrders: widget.orders, // Pass the current orders list
+          activeOrders: widget.orders,
         ),
       ),
     ).then((orderCompleted) {
       if (orderCompleted == true) {
         widget.onOrderPaid(order);
+        _refreshOrders();
       }
     });
   }

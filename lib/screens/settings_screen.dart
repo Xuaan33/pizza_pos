@@ -39,33 +39,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isStockLoading = false;
   DateTime _selectedDate = DateTime.now();
   TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _selectedItemsForStockIn = [];
-  List<Map<String, dynamic>> _selectedItemsForAdjustment = [];
   TextEditingController _qtyController = TextEditingController();
-  TextEditingController _costController = TextEditingController();
   TextEditingController _actualQtyController = TextEditingController();
+  List<Map<String, dynamic>> _filteredStockItems = [];
 
   // Employee Management
   List<Map<String, dynamic>> _employees = [];
   bool _isEmployeeLoading = false;
   TextEditingController _employeeSearchController = TextEditingController();
 
-  static const List<String> _sections = [
-    'POS Opening & Closing',
-    'POS Card Terminal',
-    'Item Group',
-    'Item',
-    'Variant',
-    'Stock',
-    'Employee Management',
-  ];
+  List<String> _getSections(String tier) {
+    final sections = [
+      'POS Opening & Closing',
+      'POS Card Terminal',
+      'Item Group',
+      'Item',
+      'Variant',
+      'Stock',
+    ];
+
+    // Only add Employee Management for tier 2 and above
+    if (tier.toLowerCase() != 'tier1') {
+      sections.add('Employee Management');
+    }
+
+    return sections;
+  }
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _filteredStockItems = _stockItems;
     _qtyController = TextEditingController();
-    _costController = TextEditingController();
     _actualQtyController = TextEditingController();
     _employeeSearchController = TextEditingController();
     _loadStockItems(); // Load stock items when screen initializes
@@ -78,7 +84,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _searchController.dispose();
     _qtyController.dispose();
-    _costController.dispose();
     _actualQtyController.dispose();
     _ipController.dispose();
     _portController.dispose();
@@ -162,6 +167,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             if (mounted) {
               setState(() {
                 _stockItems = mappedItems;
+                _filteredStockItems = mappedItems; // Update filtered list too
               });
             }
           } else {
@@ -182,6 +188,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
         setState(() {
           _stockItems = [];
+          _filteredStockItems = []; // Clear filtered list too
         });
       }
     } finally {
@@ -194,11 +201,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _stockInItems(
     List<Map<String, dynamic>> items,
     String qtyText,
-    String costText,
   ) async {
-    if (qtyText.isEmpty || costText.isEmpty) {
+    if (qtyText.isEmpty ) {
       Fluttertoast.showToast(
-        msg: 'Please enter both quantity and cost',
+        msg: 'Please enter quantity',
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.orange,
         textColor: Colors.white,
@@ -217,7 +223,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             return {
               'item_code': item['item_code'],
               'qty': double.parse(qtyText),
-              'cost': double.parse(costText),
             };
           }).toList();
 
@@ -492,6 +497,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         hasOpening,
         tier,
       ) {
+        final sections = _getSections(tier);
+
         return Scaffold(
           body: Row(
             children: [
@@ -500,10 +507,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 width: 250,
                 color: Colors.grey[100],
                 child: ListView.builder(
-                  itemCount: _sections.length,
+                  itemCount: sections.length,
                   itemBuilder: (context, index) {
                     return ListTile(
-                      title: Text(_sections[index]),
+                      title: Text(sections[index]),
                       selected: _selectedIndex == index,
                       onTap: () {
                         setState(() {
@@ -519,7 +526,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Container(
                   color: Colors.white,
                   padding: const EdgeInsets.all(20),
-                  child: _buildSectionContent(_selectedIndex, hasOpening),
+                  child: _buildSectionContent(_selectedIndex, hasOpening, tier),
                 ),
               ),
             ],
@@ -529,21 +536,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildSectionContent(int index, bool hasOpening) {
-    switch (index) {
-      case 0:
+  Widget _buildSectionContent(int index, bool hasOpening, String tier) {
+    final sections = _getSections(tier);
+
+    if (index >= sections.length) {
+      return const Center(child: Text('Select a section'));
+    }
+
+    final section = sections[index];
+
+    switch (section) {
+      case 'POS Opening & Closing':
         return _buildPosOpeningClosingSection(hasOpening);
-      case 1:
+      case 'POS Card Terminal':
         return _buildPosTerminalSection();
-      case 2:
+      case 'Item Group':
         return _buildItemGroupSection();
-      case 3:
+      case 'Item':
         return _buildItemSection();
-      case 4:
+      case 'Variant':
         return _buildVariantSection();
-      case 5:
+      case 'Stock':
         return _buildStockSection();
-      case 6:
+      case 'Employee Management':
         return _buildEmployeeManagementSection();
       default:
         return const Center(child: Text('Select a section'));
@@ -1324,13 +1339,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Expanded(
               child: TextField(
                 controller: _searchController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Search Items',
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _filterStockItems('');
+                          },
+                        )
+                      : null,
                 ),
                 onChanged: (value) {
-                  // Implement search functionality if needed
+                  _filterStockItems(value);
                 },
               ),
             ),
@@ -1379,12 +1403,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Expanded(
             child: _isStockLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _stockItems.isEmpty
+                : _filteredStockItems.isEmpty
                     ? const Center(child: Text('No stock items found'))
                     : ListView.builder(
-                        itemCount: _stockItems.length,
+                        itemCount: _filteredStockItems.length,
                         itemBuilder: (context, index) {
-                          final item = _stockItems[index];
+                          final item = _filteredStockItems[index];
                           return StockItemCard(
                             itemCode: item['item_code'] ?? '',
                             itemName: item['item_name'] ?? '',
@@ -1539,6 +1563,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       ],
     );
+  }
+
+  void _filterStockItems(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _filteredStockItems = _stockItems;
+      });
+      return;
+    }
+
+    final filtered = _stockItems.where((item) {
+      final itemCode = item['item_code']?.toString().toLowerCase() ?? '';
+      final itemName = item['item_name']?.toString().toLowerCase() ?? '';
+      final searchLower = query.toLowerCase();
+
+      return itemCode.contains(searchLower) || itemName.contains(searchLower);
+    }).toList();
+
+    setState(() {
+      _filteredStockItems = filtered;
+    });
   }
 
   Widget _buildOpeningEntryButton(bool hasOpening) {
@@ -1736,7 +1781,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showStockInDialog(List<Map<String, dynamic>> items) {
     final item = items.first;
     final qtyController = TextEditingController();
-    final costController = TextEditingController();
 
     showDialog(
       context: context,
@@ -1762,16 +1806,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               keyboardType: TextInputType.numberWithOptions(decimal: true),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: costController,
-              decoration: const InputDecoration(
-                labelText: 'Cost per Unit',
-                prefixText: 'RM ',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-            ),
           ],
         ),
         actions: [
@@ -1785,7 +1819,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _stockInItems(items, qtyController.text, costController.text);
+              _stockInItems(items, qtyController.text);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,

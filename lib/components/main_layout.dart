@@ -160,6 +160,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             'discount_amount':
                                 (item['discount_amount'] as num?)?.toDouble() ??
                                     0.0,
+                            'image': (item['image'])
                           };
                         }).toList();
 

@@ -30,7 +30,6 @@ class PosService {
               : http.post(uri, headers: headers, body: jsonEncode(body)))
           .timeout(timeout);
 
-
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
@@ -135,7 +134,6 @@ class PosService {
             body: jsonEncode(requestBody),
           )
           .timeout(Duration(seconds: 10));
-
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -645,6 +643,9 @@ class PosService {
 }
 
 class OrderMapper {
+  // Update your order mapping logic (wherever you map server responses to order objects)
+// Make sure this includes proper discount field extraction:
+
   static Map<String, dynamic> mapSubmittedOrder(
       Map<String, dynamic> apiResponse) {
     try {
@@ -653,6 +654,12 @@ class OrderMapper {
         'orderId': order['name'] as String,
         'status': order['status'] as String,
         'items': (order['items'] as List).map((item) {
+          // Extract discount information
+          final discountAmount =
+              (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
+          final discountPercentage =
+              (item['discount_percentage'] as num?)?.toDouble() ?? 0.0;
+
           // Parse variant info if exists
           Map<String, dynamic>? options;
           String? optionText;
@@ -684,8 +691,9 @@ class OrderMapper {
             'serve_later': item['custom_serve_later'] == 1,
             'options': options ?? {},
             'option_text': optionText ?? '',
-            'custom_variant_info': customVariantInfo, // Preserve original
-            'discount_amount': (item['discount_amount'] as num).toDouble(),
+            'custom_variant_info': customVariantInfo,
+            'discount_amount': discountAmount,
+            'discount_percentage': discountPercentage,
           };
         }).toList(),
         'total': (order['rounded_total'] as num).toDouble(),
@@ -695,6 +703,10 @@ class OrderMapper {
         'taxBreakdown': _mapTaxes(order['taxes'] as List?),
         'total_taxes_and_charges':
             (order['total_taxes_and_charges'] as num).toDouble(),
+        'discount_amount': (order['discount_amount'] as num).toDouble(),
+        'net_total': (order['net_total'] as num).toDouble(),
+        'base_rounding_adjustment':
+            (order['base_rounding_adjustment'] as num).toDouble(),
       };
     } catch (e) {
       print('Error mapping submitted order: $e');

@@ -76,6 +76,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _loadTodayInfo();
     _fetchOrderDetails();
     _checkStockForItems();
+    print('CheckoutScreen initialized with order: ${widget.order}');
+    print('Discount amount: ${widget.order['discount_amount']}');
+    print('Items: ${widget.order['items']?.length}');
+    if (widget.order['items'] != null) {
+      for (var item in widget.order['items']) {
+        print('Item: ${item['name']}, Discount: ${item['discount_amount']}');
+      }
+    }
   }
 
   void _loadPaymentMethods() {
@@ -156,13 +164,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         search: invoiceName,
       );
 
-      debugPrint('Check order: ${response['message']?['message']}');
-
       if (response['message']?['success'] == true) {
         final List<dynamic> invoices = response['message']?['message'] ?? [];
         if (invoices.isNotEmpty) {
           final invoice = invoices.first;
+
+          // Get the detailed items with discounts from server
+          final List<dynamic> serverItems = invoice['items'] ?? [];
+
           setState(() {
+            // Update order details
             widget.order['grand_total'] =
                 invoice['grand_total']?.toDouble() ?? 0.0;
             widget.order['base_rounding_adjustment'] =
@@ -179,10 +190,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0;
             widget.order['total'] =
                 (invoice['total'] as num?)?.toDouble() ?? 0.0;
-            total_taxes_and_charges =
-                (invoice['total_taxes_and_charges'] as num?)?.toDouble() ??
-                    _calculateGST();
+
+            // Update local discount amount
             _discountAmount = widget.order['discount_amount'];
+            total_taxes_and_charges = widget.order['total_taxes_and_charges'];
+
+            // Update individual item discounts from server response
+            if (serverItems.isNotEmpty) {
+              for (var serverItem in serverItems) {
+                final itemCode = serverItem['item_code'];
+                final discountAmount =
+                    (serverItem['discount_amount'] as num?)?.toDouble() ?? 0.0;
+                final discountPercentage =
+                    (serverItem['discount_percentage'] as num?)?.toDouble() ??
+                        0.0;
+
+                // Find and update the corresponding local item
+                for (var localItem in orderItems) {
+                  if (localItem['item_code'] == itemCode) {
+                    localItem['discount_amount'] = discountAmount;
+                    localItem['discount_percentage'] = discountPercentage;
+                    break;
+                  }
+                }
+              }
+            }
           });
         }
       }
@@ -251,7 +283,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
@@ -921,15 +952,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: Stack(
                   children: [
                     Image.network(
-                      '${items[i]['image']}',
+                      _getProperImageUrl('${items[i]['image']}'),
                       width: 50,
                       height: 50,
-                      errorBuilder: (context, error, stackTrace) =>
-                          Image.network(
-                        'https://shiokpos.byondwave.com${items[i]['image']}',
-                        width: 50,
-                        height: 50,
-                      ),
+                      errorBuilder: (context, error, stackTrace) => Image.asset(
+                          'assets/pizza.png',
+                          width: 50,
+                          height: 50),
                     ),
                     if (_isEditing)
                       Positioned(
@@ -2417,7 +2446,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 .pop(true); // Close this dialog
                             _showItemizedDiscountDialog(); // Show itemized discount dialog
                           },
-                          child: const Text('Select Items to Discount'),
+                          child: Text(
+                            'Select Items to Discount',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                     ],
                   ),
@@ -2901,6 +2933,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
+      // Update local state immediately
+      setState(() {
+        _discountAmount = amount;
+
+        // Update each item's discount amount proportionally
+        final subtotal = _calculateSubtotal();
+        if (subtotal > 0) {
+          for (var item in orderItems) {
+            final itemTotal = item['price'] * item['quantity'];
+            final itemDiscount = (itemTotal / subtotal) * amount;
+            item['discount_amount'] = itemDiscount;
+          }
+        }
+      });
+
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
@@ -2937,11 +2984,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
 
       if (response['success'] == true) {
-        // Update the order details with new amounts
+        // Update the order details with new amounts from server
         await _fetchOrderDetails();
-        setState(() {
-          _discountAmount = amount;
-        });
         Fluttertoast.showToast(
           msg: "Discount applied successfully",
           gravity: ToastGravity.BOTTOM,
@@ -2956,6 +3000,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+      // Revert local changes on error
+      setState(() {
+        _discountAmount = 0;
+        for (var item in orderItems) {
+          item['discount_amount'] = 0;
+        }
+      });
     } finally {
       _showLoadingOverlay(false);
     }
@@ -2968,14 +3019,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
-      final items = _isEditing ? _editableItems : orderItems;
-      final itemsWithoutDiscounts = items.map((item) {
-        return {
-          ...item,
-          'discount_percentage': 0,
-          'discount_amount': 0,
-        };
-      }).toList();
+      // Update local state immediately
+      setState(() {
+        _discountAmount = 0;
+        _voucherCode = '';
+
+        // Remove discounts from all items
+        for (var item in orderItems) {
+          item['discount_amount'] = 0;
+        }
+
+        if (_isEditing) {
+          for (var item in _editableItems) {
+            item['discount_amount'] = 0;
+          }
+        }
+      });
 
       final response = await PosService().submitOrder(
         name: invoiceName,
@@ -2997,7 +3056,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
-        items: itemsWithoutDiscounts.map((item) {
+        items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
             'qty': item['quantity'],
@@ -3016,19 +3075,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (response['success'] == true) {
         // Force a complete refresh of order details
         await _fetchOrderDetails();
-
-        setState(() {
-          _discountAmount = 0;
-          _voucherCode = '';
-          if (_isEditing) {
-            _editableItems = List.from(itemsWithoutDiscounts);
-          }
-
-          // Explicitly recalculate all amounts
-          widget.order['grand_total'] = _calculateTotal();
-          widget.order['total_taxes_and_charges'] = _calculateGST();
-          widget.order['base_rounding_adjustment'] = _calculateRounding();
-        });
 
         Fluttertoast.showToast(
           msg: "Discount removed successfully",
@@ -3093,12 +3139,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  // Update the _updateOrderWithVoucher method in _CheckoutScreenState
   Future<void> _updateOrderWithVoucher(
       String voucherName, String couponCode) async {
     try {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
+
+      // Update local state immediately
+      setState(() {
+        _voucherCode = voucherName;
+        // We'll let the server calculate the discount amount
+        // The _fetchOrderDetails() call below will update the actual discount amount
+      });
 
       final response = await PosService().submitOrder(
         name: invoiceName,
@@ -3137,11 +3189,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
 
       if (response['success'] == true) {
-        // Update the order details with new amounts
+        // Update the order details with new amounts from server
         await _fetchOrderDetails();
       }
     } catch (e) {
       debugPrint('Error updating order with voucher: $e');
+      // Revert local changes on error
+      setState(() {
+        _voucherCode = '';
+      });
     }
   }
 
@@ -3830,74 +3886,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Future<void> _createSplitOrder() async {
-    setState(() => _isProcessingSplit = true);
-
-    try {
-      final authState = ref.read(authProvider);
-      final posProfile = authState.maybeWhen(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
-          return posProfile;
-        },
-        orElse: () => null,
-      );
-
-      if (posProfile == null) throw Exception('Not authenticated');
-
-      // Prepare items for split order
-      final splitItems = _itemsToSplit.map((item) {
-        return {
-          'item_code': item['item_code'],
-          'qty': item['split_quantity'],
-          'price_list_rate': item['price'],
-          'custom_item_remarks': item['custom_item_remarks'] ?? '',
-          'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-          if (item['custom_variant_info'] != null)
-            'custom_variant_info': item['custom_variant_info'],
-        };
-      }).toList();
-
-      // Create new split order
-      final response = await PosService().submitOrder(
-        posProfile: posProfile,
-        customer: 'Guest',
-        items: splitItems,
-        table: "MK-Floor 1-Take Away", // Or use original table if needed
-        orderChannel: "Dine In",
-      );
-
-      if (response['success'] == true) {
-        final splitOrder = response['message'];
-
-        // Show payment dialog for split order
-        final paymentSuccess = await _showSplitOrderPaymentDialog(splitOrder);
-
-        if (paymentSuccess) {
-          // Update original order by removing split items
-          await _updateOriginalOrderAfterSplit();
-
-          // Refresh the screen
-          if (mounted) {
-            setState(() {
-              _isSplitting = false;
-              _itemsToSplit.clear();
-            });
-          }
-        }
-      }
-    } catch (e) {
-      // Fluttertoast.showToast(
-      //   msg: "Error splitting order: ${e.toString()}",
-      //   gravity: ToastGravity.BOTTOM,
-      //   backgroundColor: Colors.red,
-      //   textColor: Colors.white,
-      // );
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessingSplit = false);
-      }
+  String _getProperImageUrl(String imagePath) {
+    if (imagePath == null || imagePath.isEmpty) {
+      return 'assets/pizza.png';
     }
+
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+
+    if (imagePath.startsWith('/')) {
+      return 'https://shiokpos.byondwave.com$imagePath';
+    }
+
+    if (!imagePath.startsWith('assets/')) {
+      return 'https://shiokpos.byondwave.com/$imagePath';
+    }
+
+    return imagePath; // local asset
   }
 
   Future<bool> _showSplitOrderPaymentDialog(
