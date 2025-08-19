@@ -29,6 +29,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool _isLoggingOut = false;
   // int _orderCounter = 1;
   bool _customerScreenShown = false;
+  Future<void>? _refreshFuture;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -40,6 +41,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authProvider.notifier).loadSession();
     });
+  }
+
+  @override
+  void dispose() {
+    _refreshFuture = null; // break reference
+    super.dispose();
   }
 
   @override
@@ -80,7 +87,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       },
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
           posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
-        
         return Scaffold(
           body: Row(
             children: [
@@ -102,6 +108,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     if (!mounted) return; // Add this check at the start
 
     setState(() => _isOrdersLoading = true);
+
     try {
       final authState = ref.read(authProvider);
 
@@ -121,9 +128,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           tier,
         ) async {
           try {
-            final response =
-                await PosService().getOrders(posProfile: posProfile);
-
+            final future = PosService().getOrders(posProfile: posProfile);
+            _refreshFuture = future;
+            final response = await future;
+            if (_refreshFuture != future || !mounted) return;
 
             if (response['message']?['success'] == true) {
               final List<dynamic> invoices =
@@ -133,7 +141,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 activeOrders = invoices
                     .map((invoice) {
                       try {
-
                         final items =
                             (invoice['items'] as List? ?? []).map((item) {
                           return {

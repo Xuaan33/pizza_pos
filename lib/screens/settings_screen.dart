@@ -88,29 +88,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadVariantGroups() async {
     try {
+      if (mounted) {
+        setState(() => isLoading = true);
+      }
+
       final response = await PosService().getVariantGroups();
       if (response['success'] == true) {
-        setState(() {
-          variantGroups = (response['message'] as List)
-              .map((json) => VariantGroup.fromJson(json))
-              .toList();
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            variantGroups = (response['message'] as List)
+                .map((json) => VariantGroup.fromJson(json))
+                .toList();
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      setState(() => isLoading = false);
-      Fluttertoast.showToast(
-        msg: 'Error loading variant groups: $e',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
+      if (mounted) {
+        setState(() => isLoading = false);
+        Fluttertoast.showToast(
+          msg: 'Error loading variant groups: $e',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
     }
   }
 
   Future<void> _loadStockItems() async {
     try {
-      setState(() => _isStockLoading = true);
+      if (mounted) {
+        setState(() => _isStockLoading = true);
+      }
+
       final authState = ref.read(authProvider);
 
       await authState.when(
@@ -148,9 +159,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               };
             }).toList();
 
-            setState(() {
-              _stockItems = mappedItems;
-            });
+            if (mounted) {
+              setState(() {
+                _stockItems = mappedItems;
+              });
+            }
           } else {
             throw Exception(
                 response['message'] ?? 'Failed to load stock items');
@@ -160,17 +173,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         unauthenticated: () => throw Exception('Not authenticated'),
       );
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Error loading stock items: ${e.toString()}',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
-      setState(() {
-        _stockItems = [];
-      });
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: 'Error loading stock items: ${e.toString()}',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        setState(() {
+          _stockItems = [];
+        });
+      }
     } finally {
-      setState(() => _isStockLoading = false);
+      if (mounted) {
+        setState(() => _isStockLoading = false);
+      }
     }
   }
 
@@ -349,7 +366,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadEmployees() async {
     try {
-      setState(() => _isEmployeeLoading = true);
+      if (mounted) {
+        setState(() => _isEmployeeLoading = true);
+      }
+
       final authState = ref.read(authProvider);
 
       await authState.when(
@@ -357,10 +377,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
-            setState(() {
-              _employees =
-                  List<Map<String, dynamic>>.from(response['message'] ?? []);
-            });
+            if (mounted) {
+              setState(() {
+                _employees =
+                    List<Map<String, dynamic>>.from(response['message'] ?? []);
+              });
+            }
           } else {
             throw Exception(response['message'] ?? 'Failed to load employees');
           }
@@ -369,17 +391,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         unauthenticated: () => throw Exception('Not authenticated'),
       );
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Error loading employees: ${e.toString()}',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
-      setState(() {
-        _employees = [];
-      });
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: 'Error loading employees: ${e.toString()}',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        setState(() {
+          _employees = [];
+        });
+      }
     } finally {
-      setState(() => _isEmployeeLoading = false);
+      if (mounted) {
+        setState(() => _isEmployeeLoading = false);
+      }
     }
   }
 
@@ -1387,7 +1413,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
-        
+
         // Search and Refresh
         Row(
           children: [
@@ -1419,7 +1445,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         const SizedBox(height: 20),
-        
+
         // Employees List
         Expanded(
           child: _isEmployeeLoading
@@ -1441,14 +1467,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               children: [
                                 if (employee['status'] == 'Active')
                                   IconButton(
-                                    icon: const Icon(Icons.login, color: Colors.green),
+                                    icon: const Icon(Icons.login,
+                                        color: Colors.green),
                                     onPressed: () {
                                       final authState = ref.read(authProvider);
                                       authState.when(
-                                        authenticated: (sid, apiKey, apiSecret, username, 
-                                            email, fullName, posProfile, branch, 
-                                            paymentMethods, taxes, hasOpening, tier) {
-                                          _employeeCheckIn(employee['name'], branch);
+                                        authenticated: (sid,
+                                            apiKey,
+                                            apiSecret,
+                                            username,
+                                            email,
+                                            fullName,
+                                            posProfile,
+                                            branch,
+                                            paymentMethods,
+                                            taxes,
+                                            hasOpening,
+                                            tier) {
+                                          _employeeCheckIn(
+                                              employee['name'], branch);
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -1458,14 +1495,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ),
                                 if (employee['status'] == 'Checked In')
                                   IconButton(
-                                    icon: const Icon(Icons.logout, color: Colors.red),
+                                    icon: const Icon(Icons.logout,
+                                        color: Colors.red),
                                     onPressed: () {
                                       final authState = ref.read(authProvider);
                                       authState.when(
-                                        authenticated: (sid, apiKey, apiSecret, username, 
-                                            email, fullName, posProfile, branch, 
-                                            paymentMethods, taxes, hasOpening, tier) {
-                                          _employeeCheckOut(employee['name'], branch);
+                                        authenticated: (sid,
+                                            apiKey,
+                                            apiSecret,
+                                            username,
+                                            email,
+                                            fullName,
+                                            posProfile,
+                                            branch,
+                                            paymentMethods,
+                                            taxes,
+                                            hasOpening,
+                                            tier) {
+                                          _employeeCheckOut(
+                                              employee['name'], branch);
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -1476,8 +1524,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 Text(
                                   employee['status'] ?? 'Unknown',
                                   style: TextStyle(
-                                    color: employee['status'] == 'Checked In' 
-                                        ? Colors.green 
+                                    color: employee['status'] == 'Checked In'
+                                        ? Colors.green
                                         : Colors.grey,
                                     fontWeight: FontWeight.bold,
                                   ),
