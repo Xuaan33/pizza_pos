@@ -1133,7 +1133,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current price
                     Text(
-                      'RM${(items[i]['price'] - (items[i]['discount_amount'] / items[i]['quantity'])).toStringAsFixed(2)}',
+                      'RM${(items[i]['price'] - ((items[i]['discount_amount'] ?? 0) / items[i]['quantity'])).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1164,7 +1164,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current amount
                     Text(
-                      'RM${(items[i]['price'] - (items[i]['discount_amount'] / items[i]['quantity'])).toStringAsFixed(2)}',
+                      'RM${((items[i]['price'] - ((items[i]['discount_amount'] ?? 0) / items[i]['quantity'])) * items[i]['quantity']).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: (items[i]['discount_amount'] ?? 0) > 0

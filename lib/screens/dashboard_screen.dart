@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
@@ -19,6 +20,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   String _selectedTimeRange = 'Daily'; // 'Daily', 'Weekly', 'Monthly', 'Custom'
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
+  String _selectedPopularItemsLimit = '5';
+  int _customLimit = 10;
 
   @override
   void initState() {
@@ -66,6 +69,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             fromDate = toDate;
         }
 
+        // Determine limit for popular items
+        int limit;
+        if (_selectedPopularItemsLimit == 'Custom') {
+          limit = _customLimit;
+        } else {
+          limit = int.parse(_selectedPopularItemsLimit);
+        }
+
         // Fetch all data concurrently
         final results = await Future.wait([
           PosService().makeRequest(
@@ -86,7 +97,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           PosService().makeRequest(
             endpoint:
-                'shiok_pos.api.get_top_five_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
+                'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
           ),
           PosService().getPaymentMethodDistribution(
             // Add this new call
@@ -155,6 +166,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _loadData();
       });
     }
+  }
+
+  // Add method to show custom limit dialog
+  Future<void> _showCustomLimitDialog() async {
+    final TextEditingController limitController = TextEditingController(
+      text: _customLimit.toString(),
+    );
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Custom Limit',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: TextField(
+            controller: limitController,
+            decoration: const InputDecoration(
+              labelText: 'Number of items to show',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.number,
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Apply',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                final newLimit = int.tryParse(limitController.text) ?? 10;
+                setState(() {
+                  _customLimit =
+                      newLimit.clamp(1, 50); // Limit to reasonable range
+                  _selectedPopularItemsLimit = 'Custom';
+                  _loadData();
+                });
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // Helper methods to convert types (keep existing ones)
@@ -793,69 +862,107 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
       constraints: BoxConstraints(
-        minHeight: 315, // Set a minimum height
-        maxHeight: 315, // Set a maximum height (same as min to make it fixed)
+        minHeight: 315,
+        maxHeight: 315,
       ),
-      child: SingleChildScrollView(
-        // Add scrolling for overflow content
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Popular Items',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Popular Items',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              DropdownButton<String>(
+                value: _selectedPopularItemsLimit,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+                dropdownColor: Colors.white,
+                items: ['3', '5', '10', 'Custom'].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      if (newValue == 'Custom') {
+                        _showCustomLimitDialog();
+                      } else {
+                        _selectedPopularItemsLimit = newValue;
+                        _loadData();
+                      }
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: topItems
+                    .take(_selectedPopularItemsLimit == 'Custom'
+                        ? _customLimit
+                        : int.parse(_selectedPopularItemsLimit))
+                    .map((item) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(8),
+                                  image: item['image'] != null
+                                      ? DecorationImage(
+                                          image: NetworkImage(
+                                              '$baseImageUrl${item['image'] as String}'),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  item['item_code'] as String? ??
+                                      'Unknown Item',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                              Text(
+                                '${_convertToInt(item['total_qty_sold'])} sold',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
               ),
             ),
-            const SizedBox(height: 10),
-            ...topItems
-                .take(5)
-                .map((item) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[200],
-                              borderRadius: BorderRadius.circular(8),
-                              image: item['image'] != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(
-                                          '$baseImageUrl${item['image'] as String}'),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              item['item_code'] as String? ?? 'Unknown Item',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ),
-                          Text(
-                            '${_convertToInt(item['total_qty_sold'])} sold',
-                            style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ))
-                .toList(),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildPaymentMethodChart(List<Map<String, dynamic>> paymentMethods) {
-    // Filter and sort data outside the build method
+    // Filter and sort data
     final filteredMethods = paymentMethods
         .where((method) => _convertToDouble(method['total_paid']) > 0)
         .toList()
@@ -898,8 +1005,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Text(
               'Total: RM ${totalAmount.toStringAsFixed(2)}',
               style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+                fontSize: 16,
+                color: Colors.green,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -912,68 +1019,143 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               )
             else
               Expanded(
-                child: ListView(
-                  // Disable scroll physics if not needed
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: filteredMethods.map((method) {
-                    final amount = _convertToDouble(method['total_paid']);
-                    final percentage =
-                        totalAmount > 0 ? (amount / totalAmount * 100) : 0.0;
+                child: ScrollConfiguration(
+                  behavior: NoStretchScrollBehavior(),
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    shrinkWrap: true,
+                    children: filteredMethods.map((method) {
+                      final amount = _convertToDouble(method['total_paid']);
+                      final percentage =
+                          totalAmount > 0 ? (amount / totalAmount * 100) : 0.0;
+                      final methodName =
+                          method['mode_of_payment'] as String? ?? 'Unknown';
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                method['mode_of_payment'] as String? ??
-                                    'Unknown',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
+                      // Get payment method image from auth provider
+                      final authState = ref.read(authProvider);
+                      final paymentMethodData = authState.maybeWhen(
+                        authenticated: (sid,
+                            apiKey,
+                            apiSecret,
+                            username,
+                            email,
+                            fullName,
+                            posProfile,
+                            branch,
+                            paymentMethods,
+                            taxes,
+                            hasOpening,
+                            tier) {
+                          return paymentMethods.firstWhere(
+                            (pm) => pm['name'] == methodName,
+                            orElse: () => {},
+                          );
+                        },
+                        orElse: () => {},
+                      );
+
+                      final imageUrl = paymentMethodData[
+                                  'custom_payment_mode_image'] !=
+                              null
+                          ? 'https://shiokpos.byondwave.com${paymentMethodData['custom_payment_mode_image']}'
+                          : null;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                if (imageUrl != null)
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    margin: const EdgeInsets.only(right: 12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(6),
+                                      image: DecorationImage(
+                                        image: NetworkImage(imageUrl),
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    margin: const EdgeInsets.only(right: 12),
+                                    decoration: BoxDecoration(
+                                      color: _getPaymentMethodColor(methodName),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(
+                                      Icons.payment,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        methodName,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${percentage.toStringAsFixed(1)}% of total',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                'RM ${amount.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.green[700],
-                                  fontWeight: FontWeight.bold,
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'RM ${amount.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.green[700],
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${percentage.toStringAsFixed(1)}% of total',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          SizedBox(
-                            height: 8,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: CustomPaint(
-                                painter: _ProgressBarPainter(
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 6,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
                                   value: percentage / 100,
-                                  color: _getPaymentMethodColor(
-                                      method['mode_of_payment'] as String? ??
-                                          ''),
-                                  backgroundColor: Colors.grey[200]!,
+                                  backgroundColor: Colors.grey[200],
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    _getPaymentMethodColor(methodName),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
           ],
@@ -986,13 +1168,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Color _getPaymentMethodColor(String method) {
     switch (method.toLowerCase()) {
       case 'cash':
-        return Colors.blue;
+        return Colors.green;
       case 'credit card':
         return Colors.purple;
       case 'touch n go':
-        return Colors.orange;
+        return Colors.blue;
       case 'duitnow':
-        return Colors.green;
+        return Colors.pink;
       default:
         return Colors.grey;
     }

@@ -200,18 +200,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _stockInItems(
     List<Map<String, dynamic>> items,
-    String qtyText,
+    double quantityToAdd, // Changed from String to double
   ) async {
-    if (qtyText.isEmpty ) {
-      Fluttertoast.showToast(
-        msg: 'Please enter quantity',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.orange,
-        textColor: Colors.white,
-      );
-      return;
-    }
-
     try {
       setState(() => _isStockLoading = true);
       final authState = ref.read(authProvider);
@@ -222,7 +212,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           final itemsToStockIn = items.map((item) {
             return {
               'item_code': item['item_code'],
-              'qty': double.parse(qtyText),
+              'qty': quantityToAdd, // Use the quantity directly
             };
           }).toList();
 
@@ -233,14 +223,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           if (response['success'] == true) {
             Fluttertoast.showToast(
-              msg: 'Stock in successful',
+              msg: 'Stock added successfully',
               gravity: ToastGravity.BOTTOM,
               backgroundColor: Colors.green,
               textColor: Colors.white,
             );
             await _loadStockItems(); // Refresh the list
           } else {
-            throw Exception(response['message'] ?? 'Failed to stock in items');
+            throw Exception(response['message'] ?? 'Failed to add stock');
           }
         },
         initial: () => throw Exception('Not authenticated'),
@@ -248,67 +238,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     } catch (e) {
       Fluttertoast.showToast(
-        msg: 'Error stocking in items: ${e.toString()}',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
-    } finally {
-      setState(() => _isStockLoading = false);
-    }
-  }
-
-  Future<void> _adjustStock(
-    List<Map<String, dynamic>> items,
-    String actualQtyText,
-  ) async {
-    if (actualQtyText.isEmpty) {
-      Fluttertoast.showToast(
-        msg: 'Please enter the new quantity',
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.orange,
-        textColor: Colors.white,
-      );
-      return;
-    }
-
-    try {
-      setState(() => _isStockLoading = true);
-      final authState = ref.read(authProvider);
-
-      await authState.when(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
-          final itemsToAdjust = items.map((item) {
-            return {
-              'item_code': item['item_code'],
-              'actual_qty': double.parse(actualQtyText),
-            };
-          }).toList();
-
-          final response = await PosService().adjustStock(
-            posProfile: posProfile,
-            items: itemsToAdjust,
-          );
-
-          if (response['success'] == true) {
-            Fluttertoast.showToast(
-              msg: 'Stock adjustment successful',
-              gravity: ToastGravity.BOTTOM,
-              backgroundColor: Colors.green,
-              textColor: Colors.white,
-            );
-            await _loadStockItems(); // Refresh the list
-          } else {
-            throw Exception(response['message'] ?? 'Failed to adjust stock');
-          }
-        },
-        initial: () => throw Exception('Not authenticated'),
-        unauthenticated: () => throw Exception('Not authenticated'),
-      );
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Error adjusting stock: ${e.toString()}',
+        msg: 'Error adding stock: ${e.toString()}',
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
@@ -334,7 +264,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (posIp.isEmpty || posPort.isEmpty) {
       Fluttertoast.showToast(
-        msg: "Please enter both IP and Port",
+        msg: "Please enter IP Address",
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
@@ -1416,11 +1346,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             reservedQty: (item['reserved_qty'] ?? 0).toDouble(),
                             availableQty:
                                 (item['available_qty'] ?? 0).toDouble(),
-                            value: (item['value'] ?? 0).toDouble(), // Add this
-                            image: item['image'], // Add this
-                            onStockIn: () => _showStockInDialog([item]),
-                            onAdjustStock: () =>
-                                _showStockAdjustmentDialog([item]),
+                            value: (item['value'] ?? 0).toDouble(),
+                            image: item['image'],
+                            onManageStock: () => _showManageStockDialog([item]),
                           );
                         },
                       )),
@@ -1778,7 +1706,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  void _showStockInDialog(List<Map<String, dynamic>> items) {
+  void _showManageStockDialog(List<Map<String, dynamic>> items) {
     final item = items.first;
     final qtyController = TextEditingController();
 
@@ -1787,7 +1715,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         title: const Text(
-          'Stock In Item',
+          'Manage Stock',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         content: Column(
@@ -1797,11 +1725,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               item['item_name'] ?? 'Unknown Item',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
+            const SizedBox(height: 10),
+            Text(
+              'Current Quantity: ${(item['actual_qty'] ?? 0).toStringAsFixed(0)}',
+              style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
             TextField(
               controller: qtyController,
               decoration: const InputDecoration(
-                labelText: 'Quantity',
+                labelText: 'Quantity to Add/Remove',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.numberWithOptions(decimal: true),
@@ -1814,84 +1747,149 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: TextButton.styleFrom(
               foregroundColor: Colors.red,
             ),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold),),
           ),
           ElevatedButton(
             onPressed: () {
+              if (qtyController.text.isEmpty) {
+                Fluttertoast.showToast(
+                  msg: 'Please enter quantity',
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
+                );
+                return;
+              }
+
+              final quantity = double.parse(qtyController.text);
+              if (quantity <= 0) {
+                Fluttertoast.showToast(
+                  msg: 'Quantity must be greater than 0',
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
+                );
+                return;
+              }
+
+              // Check if reduction would result in negative stock
+              if (_wouldResultInNegativeStock(items.first, quantity)) {
+                Fluttertoast.showToast(
+                  msg: 'Cannot reduce more than current quantity',
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                );
+              } else {
+                Navigator.pop(context);
+                _reduceStock(items, quantity);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Reduce Stock', style: TextStyle(fontWeight: FontWeight.bold),),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (qtyController.text.isEmpty) {
+                Fluttertoast.showToast(
+                  msg: 'Please enter quantity',
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
+                );
+                return;
+              }
+
+              final quantity = double.parse(qtyController.text);
+              if (quantity <= 0) {
+                Fluttertoast.showToast(
+                  msg: 'Quantity must be greater than 0',
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
+                );
+                return;
+              }
+
               Navigator.pop(context);
-              _stockInItems(items, qtyController.text);
+              _stockInItems(items, quantity);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Confirm'),
+            child: const Text('Add Stock', style: TextStyle(fontWeight: FontWeight.bold),),
           ),
         ],
       ),
     );
   }
 
-  void _showStockAdjustmentDialog(List<Map<String, dynamic>> items) {
-    final item = items.first;
-    final actualQtyController = TextEditingController(
-      text: (item['actual_qty'] ?? 0).toStringAsFixed(0),
-    );
+  Future<void> _reduceStock(
+    List<Map<String, dynamic>> items,
+    double quantityToRemove, // Changed from String to double
+  ) async {
+    try {
+      setState(() => _isStockLoading = true);
+      final authState = ref.read(authProvider);
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Adjust Stock',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              item['item_name'] ?? 'Unknown Item',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: actualQtyController,
-              decoration: const InputDecoration(
-                labelText: 'New Actual Quantity',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.numberWithOptions(decimal: false),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _adjustStock(items, actualQtyController.text);
-            },
-            style: ElevatedButton.styleFrom(
+      await authState.when(
+        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+          final itemsToAdjust = items.map((item) {
+            // Calculate the new quantity by subtracting from current
+            final currentQty = (item['actual_qty'] ?? 0).toDouble();
+            final newQty = currentQty - quantityToRemove;
+
+            // Ensure we don't go below zero
+            final adjustedQty = newQty >= 0 ? newQty : 0;
+
+            return {
+              'item_code': item['item_code'],
+              'actual_qty': adjustedQty,
+            };
+          }).toList();
+
+          final response = await PosService().adjustStock(
+            posProfile: posProfile,
+            items: itemsToAdjust,
+          );
+
+          if (response['success'] == true) {
+            Fluttertoast.showToast(
+              msg: 'Stock reduced successfully',
+              gravity: ToastGravity.BOTTOM,
               backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text(
-              'Confirm',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
+              textColor: Colors.white,
+            );
+            await _loadStockItems(); // Refresh the list
+          } else {
+            throw Exception(response['message'] ?? 'Failed to reduce stock');
+          }
+        },
+        initial: () => throw Exception('Not authenticated'),
+        unauthenticated: () => throw Exception('Not authenticated'),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error reducing stock: ${e.toString()}',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isStockLoading = false);
+    }
+  }
+
+  // Add this helper function to check if reduction would result in negative stock
+  bool _wouldResultInNegativeStock(
+      Map<String, dynamic> item, double quantityToRemove) {
+    final currentQty = (item['actual_qty'] ?? 0).toDouble();
+    return (currentQty - quantityToRemove) < 0;
   }
 
   Future<void> _testPosConnection() async {

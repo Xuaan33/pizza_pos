@@ -8,8 +8,7 @@ class StockItemCard extends StatelessWidget {
   final double availableQty;
   final double value; // Add this
   final String? image; // Add this
-  final VoidCallback onStockIn;
-  final VoidCallback onAdjustStock;
+  final VoidCallback onManageStock; // Changed from onStockIn and onAdjustStock
 
   const StockItemCard({
     Key? key,
@@ -20,8 +19,7 @@ class StockItemCard extends StatelessWidget {
     required this.availableQty,
     required this.value, // Add this
     this.image, // Add this
-    required this.onStockIn,
-    required this.onAdjustStock,
+    required this.onManageStock,
   }) : super(key: key);
 
   @override
@@ -95,37 +93,15 @@ class StockItemCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: onStockIn,
+                    onPressed: onManageStock,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: Color(0xFFE732A0),
                       foregroundColor: Colors.white,
                     ),
                     child: const Text(
-                      'Stock In',
+                      'Manage Stock',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Tooltip(
-                    message: canAdjustStock
-                        ? 'Adjust current stock quantity'
-                        : 'Stock in first before adjusting',
-                    child: ElevatedButton(
-                        onPressed: canAdjustStock ? onAdjustStock : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              canAdjustStock ? Colors.orange : Colors.grey,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: Text(
-                          'Adjust Stock',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  canAdjustStock ? Colors.white : Colors.black),
-                        )),
                   ),
                 ),
               ],
