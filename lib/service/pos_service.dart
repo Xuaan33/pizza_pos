@@ -365,38 +365,40 @@ class PosService {
     );
   }
 
+  // Create Variant Group
   Future<Map<String, dynamic>> createVariantGroup({
     required String title,
     required List<Map<String, dynamic>> variantInfoTable,
-    int requiredNo = 1,
-    int optionRequiredNo = 1,
+    required int required,
+    required int optionRequiredNo,
   }) async {
-    return makeRequest(
+    return await makeRequest(
       endpoint: 'shiok_pos.api.create_variant_group',
       method: 'POST',
       body: {
-        'title': title,
-        'variant_info_table': variantInfoTable,
-        'required': requiredNo,
-        'option_required_no': optionRequiredNo,
+        "title": title,
+        "variant_info_table": variantInfoTable,
+        "required": required,
+        "option_required_no": optionRequiredNo,
       },
     );
   }
 
+// Update Variant Group
   Future<Map<String, dynamic>> updateVariantGroup({
     required String name,
     required List<Map<String, dynamic>> variantInfoTable,
-    required int requiredNo,
+    required int required,
     required int optionRequiredNo,
   }) async {
-    return makeRequest(
+    return await makeRequest(
       endpoint: 'shiok_pos.api.update_variant_group',
       method: 'POST',
       body: {
-        'name': name,
-        'variant_info_table': variantInfoTable,
-        'required': requiredNo,
-        'option_required_no': optionRequiredNo,
+        "name": name,
+        "variant_info_table": variantInfoTable,
+        "required": required,
+        "option_required_no": optionRequiredNo,
       },
     );
   }

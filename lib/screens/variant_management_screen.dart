@@ -123,7 +123,7 @@ class _VariantManagementScreenState
         await PosService().createVariantGroup(
           title: _titleController.text,
           variantInfoTable: mappedVariantInfoTable,
-          requiredNo: _isRequired ? 1 : 0,
+          required: _isRequired ? 1 : 0,
           optionRequiredNo: _isOptionRequired ? 1 : 0,
         );
         _showSuccess('Variant group created successfully');
@@ -132,7 +132,7 @@ class _VariantManagementScreenState
         await PosService().updateVariantGroup(
           name: _selectedVariantGroup!,
           variantInfoTable: mappedVariantInfoTable,
-          requiredNo: _isRequired ? 1 : 0,
+          required: _isRequired ? 1 : 0,
           optionRequiredNo: _isOptionRequired ? 1 : 0,
         );
         _showSuccess('Variant group updated successfully');

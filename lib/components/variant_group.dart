@@ -188,12 +188,11 @@ class VariantGroup {
 
   factory VariantGroup.fromJson(Map<String, dynamic> json) {
     return VariantGroup(
-      variantGroup: json['variant_group'] as String,
-      required: json['required'] as int,
-      optionRequiredNo: json['option_required_no'] as int,
-      disabled: json['disabled'] as int? ?? 0,
-      options: (json['options'] as List)
-          .map((option) => VariantOption.fromJson(option))
+      variantGroup: json['variant_group'] ?? '',
+      required: json['required'] ?? 0,
+      optionRequiredNo: json['option_required_no'] ?? 0,
+      options: (json['options'] as List<dynamic>? ?? [])
+          .map((o) => VariantOption.fromJson(o))
           .toList(),
     );
   }
@@ -210,8 +209,8 @@ class VariantOption {
 
   factory VariantOption.fromJson(Map<String, dynamic> json) {
     return VariantOption(
-      option: json['option'] as String,
-      additionalCost: (json['additional_cost'] as num).toDouble(),
+      option: json['option'] ?? '', // 👈 fallback to empty string
+      additionalCost: (json['additional_cost'] ?? 0).toDouble(),
     );
   }
 }

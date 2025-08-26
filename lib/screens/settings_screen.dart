@@ -11,6 +11,7 @@ import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/item.dart';
 import 'package:shiok_pos_android_app/components/item_group.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
+import 'package:shiok_pos_android_app/components/option_dialog.dart';
 import 'package:shiok_pos_android_app/components/stock_item_card.dart';
 import 'package:shiok_pos_android_app/components/variant_group.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -42,6 +43,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   TextEditingController _qtyController = TextEditingController();
   TextEditingController _actualQtyController = TextEditingController();
   List<Map<String, dynamic>> _filteredStockItems = [];
+  bool isRequired = false;
+  int optionRequiredNo = 1;
+  List<Map<String, dynamic>> confirmedOptions = [];
 
   // Employee Management
   List<Map<String, dynamic>> _employees = [];
@@ -147,10 +151,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               String imageUrl = '';
               if (item['image'] != null &&
                   item['image'].toString().isNotEmpty) {
-                // Handle both cases where image might already have the base URL or not
-                imageUrl = item['image'].toString().startsWith('http')
-                    ? item['image']
-                    : '$baseUrl${item['image']}';
+                final rawImage = item['image'].toString();
+
+                if (rawImage.startsWith('http')) {
+                  imageUrl = rawImage;
+                } else if (rawImage.startsWith('/')) {
+                  imageUrl = '$baseUrl$rawImage';
+                } else {
+                  imageUrl = '$baseUrl/$rawImage'; // ensure slash consistency
+                }
               }
 
               return {
@@ -778,7 +787,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final response = await PosService().createVariantGroup(
         title: title,
         variantInfoTable: [],
-        requiredNo: isRequired ? 1 : 0,
+        required: isRequired ? 1 : 0,
         optionRequiredNo: 1,
       );
 
@@ -826,7 +835,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final response = await PosService().updateVariantGroup(
         name: group.variantGroup,
         variantInfoTable: updatedVariants,
-        requiredNo: group.required,
+        required: group.required,
         optionRequiredNo: group.optionRequiredNo,
       );
 
@@ -853,20 +862,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _showEditVariantGroupDialog(VariantGroup group) {
     final nameController = TextEditingController(text: group.variantGroup);
-    final descriptionController =
-        TextEditingController(); // Fill if available in model
-    bool isRequired = group.required == 1;
-    int optionRequiredNo = group.optionRequiredNo;
+    final descriptionController = TextEditingController();
+
+    // ✅ SCOPED to this dialog and initialized from THIS group
+    List<Map<String, dynamic>> confirmedOptions = (group.options ?? [])
+        .map((o) => {
+              "option": (o.option ?? "").toString(),
+              "additional_cost": (o.additionalCost ?? 0).toDouble(),
+            })
+        .toList();
+
+    bool isRequired = (group.required ?? 0) == 1;
+    int optionRequiredNo = group.optionRequiredNo ?? 1;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: Colors.white,
-          title: Text(
-            'Edit Variant Group',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          title: const Text('Edit Variant Group',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: 400,
             child: SingleChildScrollView(
@@ -895,21 +910,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
+
+                    // Required toggle
                     Row(
                       children: [
                         const Text('Required?'),
                         const SizedBox(width: 16),
                         Switch(
                           value: isRequired,
-                          onChanged: (value) {
-                            setDialogState(() {
-                              isRequired = value;
-                            });
-                          },
+                          onChanged: (value) =>
+                              setDialogState(() => isRequired = value),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
+
+                    // Option required no
                     Row(
                       children: [
                         const Text('Option Required Number:'),
@@ -918,49 +934,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           width: 80,
                           child: TextField(
                             decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                            ),
+                                border: OutlineInputBorder()),
                             keyboardType: TextInputType.number,
                             controller: TextEditingController(
-                              text: optionRequiredNo.toString(),
-                            ),
-                            onChanged: (value) {
-                              optionRequiredNo = int.tryParse(value) ?? 1;
-                            },
+                                text: optionRequiredNo.toString()),
+                            onChanged: (value) =>
+                                optionRequiredNo = int.tryParse(value) ?? 1,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Current Variants:',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+
+                    // Header row + Manage Options button
+                    Row(
+                      children: [
+                        const Text('Current Variants:',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final result =
+                                await showDialog<List<Map<String, dynamic>>>(
+                              context: context,
+                              builder: (_) =>
+                                  OptionDialog(options: confirmedOptions),
+                            );
+                            if (result != null) {
+                              setDialogState(() {
+                                confirmedOptions =
+                                    result; // ✅ reflect confirmed changes locally
+                              });
+                            }
+                          },
+                          child: const Text("Manage Options"),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 150,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(4),
+                    const SizedBox(height: 10),
+
+                    // Scrollable list of current variants
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.3,
                       ),
                       child: ListView.builder(
-                        itemCount: group.options.length,
-                        itemBuilder: (context, index) {
-                          final option = group.options[index];
+                        shrinkWrap: true,
+                        itemCount: confirmedOptions.length,
+                        itemBuilder: (_, i) {
+                          final opt = confirmedOptions[i];
                           return ListTile(
                             dense: true,
-                            title: Text(option.option),
-                            subtitle: Text(
-                              option.additionalCost > 0
-                                  ? 'Additional Cost: RM ${option.additionalCost.toStringAsFixed(2)}'
-                                  : 'Free',
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.edit, size: 16),
-                              onPressed: () {
-                                _showEditVariantDialog(group, option, index);
-                              },
-                            ),
+                            title: Text(opt["option"]?.toString() ?? ""),
+                            subtitle: Text("RM ${opt["additional_cost"].toStringAsFixed(2) ?? 0}"),
                           );
                         },
                       ),
@@ -973,10 +999,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Cancel',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              child: const Text('Cancel',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -990,18 +1014,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   return;
                 }
 
-                await _updateVariantGroup(
-                  group,
-                  nameController.text.trim(),
-                  isRequired,
-                  optionRequiredNo,
+                await PosService().updateVariantGroup(
+                  name: nameController.text.trim(),
+                  required: isRequired ? 1 : 0,
+                  optionRequiredNo: optionRequiredNo,
+                  variantInfoTable: confirmedOptions,
                 );
-                Navigator.pop(context);
+
+                Navigator.pop(context); // close dialog
+
+                // ✅ refresh settings list so next group shows fresh data
+                if (mounted) {
+                  setState(() {
+                    _loadVariantGroups(); // make sure this refreshes from backend
+                  });
+                }
               },
-              child: Text(
-                'Update',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              child: const Text('Update',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1104,7 +1134,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   'additional_cost': option.additionalCost,
                 })
             .toList(),
-        requiredNo: isRequired ? 1 : 0,
+        required: isRequired ? 1 : 0,
         optionRequiredNo: optionRequiredNo,
       );
 
@@ -1182,7 +1212,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final response = await PosService().updateVariantGroup(
         name: group.variantGroup,
         variantInfoTable: updatedVariants,
-        requiredNo: group.required,
+        required: group.required,
         optionRequiredNo: group.optionRequiredNo,
       );
 
@@ -1226,7 +1256,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final response = await PosService().updateVariantGroup(
         name: group.variantGroup,
         variantInfoTable: updatedVariants,
-        requiredNo: group.required,
+        required: group.required,
         optionRequiredNo: group.optionRequiredNo,
       );
 
@@ -1728,7 +1758,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 10),
             Text(
               'Current Quantity: ${(item['actual_qty'] ?? 0).toStringAsFixed(0)}',
-              style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: Colors.grey[600], fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
             TextField(
@@ -1747,7 +1778,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: TextButton.styleFrom(
               foregroundColor: Colors.red,
             ),
-            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold),),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1789,7 +1823,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Reduce Stock', style: TextStyle(fontWeight: FontWeight.bold),),
+            child: const Text(
+              'Reduce Stock',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1821,7 +1858,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Add Stock', style: TextStyle(fontWeight: FontWeight.bold),),
+            child: const Text(
+              'Add Stock',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
