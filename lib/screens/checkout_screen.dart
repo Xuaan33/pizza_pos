@@ -169,8 +169,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final List<dynamic> invoices = response['message']?['message'] ?? [];
         if (invoices.isNotEmpty) {
           final invoice = invoices.first;
-
-          // Get the detailed items with discounts from server
           final List<dynamic> serverItems = invoice['items'] ?? [];
 
           setState(() {
@@ -196,26 +194,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             _discountAmount = widget.order['discount_amount'];
             total_taxes_and_charges = widget.order['total_taxes_and_charges'];
 
-            // Update individual item discounts from server response
-            if (serverItems.isNotEmpty) {
-              for (var serverItem in serverItems) {
-                final itemCode = serverItem['item_code'];
-                final discountAmount =
-                    (serverItem['discount_amount'] as num?)?.toDouble() ?? 0.0;
-                final discountPercentage =
-                    (serverItem['discount_percentage'] as num?)?.toDouble() ??
-                        0.0;
+            // Clear existing items and rebuild from server response
+            widget.order['items'] = serverItems.map((serverItem) {
+              // Find existing item to preserve UI state if needed
+              final existingItem = orderItems.firstWhere(
+                (item) => item['item_code'] == serverItem['item_code'],
+                orElse: () => {},
+              );
 
-                // Find and update the corresponding local item
-                for (var localItem in orderItems) {
-                  if (localItem['item_code'] == itemCode) {
-                    localItem['discount_amount'] = discountAmount;
-                    localItem['discount_percentage'] = discountPercentage;
-                    break;
-                  }
-                }
-              }
-            }
+              return {
+                ...existingItem,
+                'item_code': serverItem['item_code'],
+                'name': serverItem['item_name'] ?? existingItem['name'],
+                'price': (serverItem['rate'] as num?)?.toDouble() ??
+                    existingItem['price'],
+                'quantity': (serverItem['qty'] as num?)?.toDouble() ??
+                    existingItem['quantity'],
+                'discount_amount':
+                    (serverItem['discount_amount'] as num?)?.toDouble() ?? 0.0,
+                'discount_percentage':
+                    (serverItem['discount_percentage'] as num?)?.toDouble() ??
+                        0.0,
+                'custom_item_remarks': serverItem['custom_item_remarks'] ??
+                    existingItem['custom_item_remarks'],
+                'custom_serve_later': serverItem['custom_serve_later'] ??
+                    existingItem['custom_serve_later'],
+                'custom_variant_info': serverItem['custom_variant_info'] ??
+                    existingItem['custom_variant_info'],
+                'image': existingItem['image'], // Preserve image from original
+              };
+            }).toList();
           });
         }
       }
@@ -1133,7 +1141,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current price
                     Text(
-                      'RM${(items[i]['price'] - ((items[i]['discount_amount'] ?? 0) / items[i]['quantity'])).toStringAsFixed(2)}',
+                      'RM${(items[i]['price'] ).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1154,7 +1162,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original amount if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${((items[i]['price']) * items[i]['quantity']).toStringAsFixed(2)}',
+                        'RM${((items[i]['price']) * items[i]['quantity'] + items[i]['discount_amount']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1162,9 +1170,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                       ),
                     ],
-                    // Show current amount
+                    // Show current amount with proper discount calculation
                     Text(
-                      'RM${((items[i]['price'] - ((items[i]['discount_amount'] ?? 0) / items[i]['quantity'])) * items[i]['quantity']).toStringAsFixed(2)}',
+                      'RM${((items[i]['price'] * items[i]['quantity'])).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1175,7 +1183,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show discount amount if any
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'Discount: RM${items[i]['discount_amount'].toStringAsFixed(2)}',
+                        'Discount: RM${(items[i]['discount_amount'] * items[i]['quantity']).toStringAsFixed(2)}',
                         style: TextStyle(
                           color: Colors.green,
                           fontSize: 10,
@@ -1511,6 +1519,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
               if (item['custom_variant_info'] != null)
                 'custom_variant_info': item['custom_variant_info'],
+
             };
           }).toList(),
           couponCode: widget.order['coupon_code'],
@@ -1518,6 +1527,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
 
         if (response['success'] == true) {
+          await _fetchOrderDetails();
           final updatedOrder = response['message'];
           setState(() {
             // Update all order properties from server response
@@ -2915,28 +2925,55 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _applyItemizedDiscounts(
       List<Map<String, dynamic>> itemsWithDiscounts) async {
+    // Validate discounts before sending
+    for (int i = 0; i < itemsWithDiscounts.length; i++) {
+      final item = itemsWithDiscounts[i];
+      final discountAmount = item['discount_amount'] ?? 0;
+      final discountPercentage = item['discount_percentage'] ?? 0;
+      final itemTotal = item['price'] * item['quantity'];
+
+      
+
+      // Check if discount exceeds item total
+      if (discountAmount > itemTotal) {
+        Fluttertoast.showToast(
+          msg:
+              "Discount for '${item['name']}' cannot exceed item total (RM${itemTotal.toStringAsFixed(2)})",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+        return;
+      }
+    }
+
     _showLoadingOverlay(true);
 
     try {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
-      // Prepare items for submission
+      // Prepare items for submission - ensure only one discount type per item
       final itemsToSubmit = itemsWithDiscounts.map((item) {
-        return {
+        final itemData = {
           'item_code': item['item_code'] ?? '',
           'qty': item['quantity'],
           'price_list_rate': item['price'],
           'custom_item_remarks': item['custom_item_remarks'] ?? '',
           'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-          if (item['discount_percentage'] != null &&
-              item['discount_percentage'] > 0)
-            'discount_percentage': item['discount_percentage'],
-          if (item['discount_amount'] != null && item['discount_amount'] > 0)
-            'discount_amount': item['discount_amount'],
           if (item['custom_variant_info'] != null)
             'custom_variant_info': item['custom_variant_info'],
         };
+
+        // Add only one discount field - prioritize amount over percentage
+        if (item['discount_amount'] != null && item['discount_amount'] > 0) {
+          itemData['discount_amount'] = item['discount_amount'];
+        } else if (item['discount_percentage'] != null &&
+            item['discount_percentage'] > 0) {
+          itemData['discount_percentage'] = item['discount_percentage'];
+        }
+
+        return itemData;
       }).toList();
 
       final response = await PosService().submitOrder(
