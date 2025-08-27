@@ -16,6 +16,7 @@ class _ItemManagementState extends State<ItemManagement> {
   List<ItemGroup> itemGroups = [];
   List<VariantGroup> variantGroups = [];
   bool isLoading = true;
+  Map<String, Item> _detailedItemsCache = {}; // Cache for detailed items
 
   @override
   void initState() {
@@ -36,8 +37,16 @@ class _ItemManagementState extends State<ItemManagement> {
 
       if (responses[0]['success'] == true) {
         final List<dynamic> itemsData = responses[0]['message']['items'];
+
+        // First create basic items
+        final basicItems =
+            itemsData.map((item) => Item.fromJson(item)).toList();
+
+        // Then fetch detailed information for each item
+        final detailedItems = await _fetchDetailedItems(basicItems);
+
         setState(() {
-          items = itemsData.map((item) => Item.fromJson(item)).toList();
+          items = detailedItems;
         });
       }
 
@@ -67,6 +76,64 @@ class _ItemManagementState extends State<ItemManagement> {
     }
   }
 
+  Future<List<Item>> _fetchDetailedItems(List<Item> basicItems) async {
+    final List<Item> detailedItems = [];
+
+    for (final basicItem in basicItems) {
+      try {
+        // Check cache first
+        if (_detailedItemsCache.containsKey(basicItem.itemCode)) {
+          detailedItems.add(_detailedItemsCache[basicItem.itemCode]!);
+          continue;
+        }
+
+        // Fetch detailed item information
+        final response = await PosService().getItem(basicItem.itemCode);
+
+        if (response['success'] == true) {
+          final detailedItem = Item.fromDetailedJson(response['message']);
+          _detailedItemsCache[basicItem.itemCode] = detailedItem;
+          detailedItems.add(detailedItem);
+        } else {
+          // If detailed fetch fails → mark as not POS
+          detailedItems.add(
+            basicItem.copyWith(isPosItem: 0),
+          );
+        }
+      } catch (e) {
+        print('Error fetching detailed info for ${basicItem.itemCode}: $e');
+        // Same here → mark as not POS
+        detailedItems.add(
+          basicItem.copyWith(isPosItem: 0),
+        );
+      }
+    }
+
+    return detailedItems;
+  }
+
+  Future<void> _refreshItemDetails(Item item) async {
+    try {
+      // Fetch updated detailed information
+      final response = await PosService().getItem(item.itemCode);
+
+      if (response['success'] == true) {
+        final updatedItem = Item.fromDetailedJson(response['message']);
+        _detailedItemsCache[item.itemCode] = updatedItem;
+
+        // Update the item in the list
+        setState(() {
+          final index = items.indexWhere((i) => i.itemCode == item.itemCode);
+          if (index != -1) {
+            items[index] = updatedItem;
+          }
+        });
+      }
+    } catch (e) {
+      print('Error refreshing item details: $e');
+    }
+  }
+
   void _showCreateItemDialog() {
     showDialog(
       context: context,
@@ -79,22 +146,41 @@ class _ItemManagementState extends State<ItemManagement> {
   }
 
   void _showEditItemDialog(Item item) {
-    showDialog(
-      context: context,
-      builder: (context) => EditItemDialog(
-        item: item,
-        itemGroups: itemGroups,
-        variantGroups: variantGroups,
-        onSave: _loadData,
-      ),
-    );
+    // Refresh item details before opening edit dialog
+    _refreshItemDetails(item).then((_) {
+      final updatedItem = _detailedItemsCache[item.itemCode] ?? item;
+
+      print('Opening EditDialog for: ${updatedItem.itemCode}');
+      print(
+          'isPosItem value: ${updatedItem.isPosItem} (${updatedItem.isPosItemBool})');
+
+      showDialog(
+        context: context,
+        builder: (context) => EditItemDialog(
+          item: updatedItem,
+          itemGroups: itemGroups,
+          variantGroups: variantGroups,
+          onSave: _loadData,
+        ),
+      );
+    });
   }
 
   Future<void> _toggleItemStatus(Item item, bool isActive) async {
     try {
       setState(() => isLoading = true);
+      await _refreshItemDetails(item);
+      final currentItem = _detailedItemsCache[item.itemCode] ?? item;
       await PosService().updateItem(
         itemCode: item.itemCode,
+        itemName: currentItem.itemName,
+        itemGroup: currentItem.itemGroup,
+        variantGroupTable: currentItem.variantGroups
+            .map<Map<String, Object>>((group) => {
+                  'variant_group': group,
+                  'active': 0,
+                })
+            .toList(),
         disabled: isActive ? 0 : 1,
       );
       await _loadData();
@@ -249,10 +335,16 @@ class _ItemCardState extends State<ItemCard> {
                     height: 50,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.fastfood, size: 50,);
+                      return const Icon(
+                        Icons.fastfood,
+                        size: 50,
+                      );
                     },
                   )
-                : const Icon(Icons.fastfood, size: 50,),
+                : const Icon(
+                    Icons.fastfood,
+                    size: 50,
+                  ),
             title: Row(
               children: [
                 Flexible(
@@ -284,17 +376,17 @@ class _ItemCardState extends State<ItemCard> {
               ],
             ),
             subtitle: Text('Group: ${widget.item.itemGroup}'),
-            // trailing: Row(
-            //   mainAxisSize: MainAxisSize.min,
-            //   children: [
-            //     Switch(
-            //       value: isActive,
-            //       onChanged: (value) => _toggleActiveStatus(value),
-            //       activeColor: Colors.green,
-            //       inactiveThumbColor: Colors.grey,
-            //     ),
-            //   ],
-            // ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Switch(
+                  value: isActive,
+                  onChanged: (value) => _toggleActiveStatus(value),
+                  activeColor: Colors.green,
+                  inactiveThumbColor: Colors.grey,
+                ),
+              ],
+            ),
             onTap: () {
               setState(() {
                 isExpanded = !isExpanded;
@@ -831,7 +923,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
   late TextEditingController _imageUrlController;
   String? _selectedItemGroup; // Changed to single selection
   List<Map<String, Object>> _selectedVariantGroups = []; // Fixed type
-  bool _isPosItem = true;
+  late bool _isPosItem; // Keep as bool for Switch widget
   bool _isLoading = false;
   bool _itemGroupExpanded = false;
   bool _variantGroupExpanded = false;
@@ -848,7 +940,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
         TextEditingController(text: widget.item.imageUrl ?? '');
     _selectedItemGroup = widget.item.itemGroup;
 
-    // Initialize variant groups correctly with proper typing
+    // Initialize variant groups from detailed response
     _selectedVariantGroups = widget.item.variantGroups
         .map<Map<String, Object>>((group) => {
               'variant_group': group,
@@ -856,7 +948,13 @@ class _EditItemDialogState extends State<EditItemDialog> {
             })
         .toList();
 
-    _isPosItem = widget.item.isPosItem ?? true;
+    // FIX: Use the actual custom_is_pos_item value from detailed API
+    _isPosItem = widget.item.isPosItemBool;
+
+    print('EditItemDialog - Item: ${widget.item.itemCode}');
+    print('EditItemDialog - isPosItem (int): ${widget.item.isPosItem}');
+    print('EditItemDialog - isPosItem (bool): $_isPosItem');
+    print('EditItemDialog - Variant groups: ${widget.item.variantGroups}');
   }
 
   Future<void> _updateItem() async {
@@ -1259,7 +1357,7 @@ class Item {
   final String? description;
   final List<String> variantGroups;
   final int disabled;
-  final bool? isPosItem;
+  final int isPosItem; // Use custom_is_pos_item from detailed API
 
   Item({
     required this.itemCode,
@@ -1270,9 +1368,34 @@ class Item {
     this.description,
     this.variantGroups = const [],
     this.disabled = 0,
-    this.isPosItem,
+    required this.isPosItem,
   });
 
+  Item copyWith({
+    String? itemCode,
+    String? itemName,
+    String? itemGroup,
+    double? price,
+    String? imageUrl,
+    String? description,
+    List<String>? variantGroups,
+    int? disabled,
+    int? isPosItem,
+  }) {
+    return Item(
+      itemCode: itemCode ?? this.itemCode,
+      itemName: itemName ?? this.itemName,
+      itemGroup: itemGroup ?? this.itemGroup,
+      price: price ?? this.price,
+      imageUrl: imageUrl ?? this.imageUrl,
+      description: description ?? this.description,
+      variantGroups: variantGroups ?? this.variantGroups,
+      disabled: disabled ?? this.disabled,
+      isPosItem: isPosItem ?? this.isPosItem,
+    );
+  }
+
+  // Factory method for basic item list response
   factory Item.fromJson(Map<String, dynamic> json) {
     return Item(
       itemCode: json['item_code'] ?? '',
@@ -1288,7 +1411,32 @@ class Item {
               .toList() ??
           [],
       disabled: json['disabled'] as int? ?? 0,
-      isPosItem: json['is_pos_item'] == 1,
+      // For basic list, we might not have custom_is_pos_item, so default to 1
+      isPosItem: 1, // Default value until we fetch detailed info
     );
   }
+
+  // Factory method for detailed item response
+  factory Item.fromDetailedJson(Map<String, dynamic> json) {
+    return Item(
+      itemCode: json['item_code'] ?? '',
+      itemName: json['item_name'] ?? '',
+      itemGroup: json['item_group'] ?? '',
+      price: (json['price_list_rate'] as num?)?.toDouble() ?? 0.0,
+      imageUrl: json['image'] != null
+          ? 'https://shiokpos.byondwave.com${json['image']}'
+          : null,
+      description: json['description'] as String?,
+      variantGroups: (json['custom_variant_group_table'] as List<dynamic>?)
+              ?.map((e) => e['variant_group'].toString())
+              .toList() ??
+          [],
+      disabled: json['disabled'] as int? ?? 0,
+      // FIX: Use the actual custom_is_pos_item from detailed API
+      isPosItem: json['custom_is_pos_item'] as int? ?? 1,
+    );
+  }
+
+  // Helper getter for UI convenience
+  bool get isPosItemBool => isPosItem == 1;
 }
