@@ -322,6 +322,78 @@ class PosService {
     }
   }
 
+  Future<Uint8List> printKitchenOrder({
+    required String orderName,
+    String? onlyAdditionalItems,
+  }) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final params = {
+        'name': orderName,
+        if (onlyAdditionalItems != null)
+          'only_additional_items': onlyAdditionalItems,
+      };
+
+      final queryString = Uri(queryParameters: params).query;
+      final uri =
+          Uri.parse('$_baseUrl/shiok_pos.api.print_kitchen_order?$queryString');
+
+      final headers = {
+        'Authorization': token,
+      };
+
+      print('API Request: GET $uri');
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      print('API Response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        return response.bodyBytes; // Return raw image bytes
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ??
+            'Request failed with status ${response.statusCode}');
+      }
+    } catch (e) {
+      print('API Error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, Uint8List>> printReceiptAndKitchenOrder({
+    required String orderName,
+    required bool shouldPrintKitchenOrder,
+    String? onlyAdditionalItems,
+  }) async {
+    try {
+      final receiptBytes = await printReceipt(orderName);
+      Map<String, Uint8List> result = {'receipt': receiptBytes};
+
+      if (shouldPrintKitchenOrder) {
+        try {
+          final kitchenOrderBytes = await printKitchenOrder(
+            orderName: orderName,
+            onlyAdditionalItems: onlyAdditionalItems,
+          );
+          result['kitchen_order'] = kitchenOrderBytes;
+        } catch (e) {
+          print('Failed to print kitchen order: $e');
+          // Continue with just the receipt if kitchen order printing fails
+        }
+      }
+
+      return result;
+    } catch (e) {
+      print('Failed to print receipt: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> validateVoucher(String voucherCode) async {
     return makeRequest(
       endpoint: 'shiok_pos.api.validate_user_voucher',

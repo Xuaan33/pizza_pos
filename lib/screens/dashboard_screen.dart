@@ -38,8 +38,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<Map<String, dynamic>> _loadDashboardData() async {
     final authState = ref.read(authProvider);
     return authState.maybeWhen(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) async {
         _posProfile = posProfile;
         final dateFormat = DateFormat('yyyy-MM-dd');
 
@@ -267,8 +278,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return FutureBuilder<Map<String, dynamic>>(
           future: _dashboardData,
           builder: (context, snapshot) {
@@ -1045,7 +1067,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             paymentMethods,
                             taxes,
                             hasOpening,
-                            tier) {
+                            tier,
+                            printKitchenOrder) {
                           return paymentMethods.firstWhere(
                             (pm) => pm['name'] == methodName,
                             orElse: () => {},

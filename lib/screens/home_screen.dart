@@ -214,8 +214,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final authState = ref.read(authProvider);
     await authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) async {
         try {
           final newStockQuantities = <String, int>{};
 
@@ -265,8 +276,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
@@ -945,8 +967,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<bool> _onBackPressed() async {
     final authState = ref.read(authProvider);
     final isTier1 = authState.maybeWhen(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return tier.toLowerCase() == 'tier1';
       },
       orElse: () => false,
@@ -1090,8 +1123,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!confirmed) return;
 
     authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) async {
         setState(() => _isLoading = true);
 
         try {
@@ -1256,7 +1300,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           paymentMethods,
           taxes,
           hasOpening,
-          tier) async {
+          tier,
+          printKitchenOrder) async {
         if (tier.toLowerCase() == "tier1") {
           if (!hasOpening) {
             // Show dialog if no opening entry exists
@@ -2070,8 +2115,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-              posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+          authenticated: (sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,

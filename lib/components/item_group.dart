@@ -113,7 +113,7 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
             children: [
               const Text(
                 'Item Groups',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
               ElevatedButton(
                 onPressed: _showCreateItemGroupDialog,

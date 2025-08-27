@@ -25,6 +25,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final taxesJson = prefs.getString('taxes');
     final hasOpening = prefs.getBool('has_opening') ?? false;
     final tier = prefs.getString('tier');
+    final printKitchenOrder = prefs.getInt('print_kitchen_order');
 
     // Add session expiration (e.g., 7 days)
     if (lastLogin != null) {
@@ -58,6 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             : [],
         hasOpening: hasOpening,
         tier: tier ?? '',
+        printKitchenOrder: printKitchenOrder ?? 1,
       );
     } else {
       state = const AuthState.unauthenticated();
@@ -101,6 +103,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
           tier: response['tier'] ?? 'tier2', // Default to tier2 if not provided
+          printKitchenOrder: response['print_kitchen_order'] ?? 1,
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -115,7 +118,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> updateOpeningStatus(bool hasOpening) async {
     state.maybeWhen(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, _, tier) async {
+          posProfile, branch, paymentMethods, taxes, _, tier, printKitchenOrder) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
 
@@ -133,6 +136,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           taxes: taxes,
           hasOpening: hasOpening,
           tier: tier,
+          printKitchenOrder: printKitchenOrder
         );
       },
       orElse: () {},

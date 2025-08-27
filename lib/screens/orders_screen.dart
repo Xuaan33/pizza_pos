@@ -117,7 +117,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder) {
         return Scaffold(
           body: Row(
             children: [

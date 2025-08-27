@@ -85,8 +85,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return Scaffold(
           body: Row(
             children: [
@@ -113,20 +124,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final authState = ref.read(authProvider);
 
       await authState.whenOrNull(
-        authenticated: (
-          sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-        ) async {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) async {
           try {
             final future = PosService().getOrders(posProfile: posProfile);
             _refreshFuture = future;
@@ -476,8 +486,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           const Scaffold(body: Center(child: CircularProgressIndicator()))
         ];
       },
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         if (tier.toLowerCase() == 'tier1') {
           return [
             FutureBuilder(
@@ -591,8 +612,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       },
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return Container(
           width: 100,
           color: Colors.white,

@@ -64,7 +64,8 @@ class _SplitOrderPaymentDialogState
                       paymentMethods,
                       taxes,
                       hasOpening,
-                      tier) {
+                      tier,
+                      printKitchenOrder) {
                     return posProfile;
                   },
                   orElse: () => null,

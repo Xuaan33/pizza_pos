@@ -223,7 +223,7 @@ class _ItemManagementState extends State<ItemManagement> {
             children: [
               const Text(
                 'Items',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               ElevatedButton(
                 onPressed: _showCreateItemDialog,

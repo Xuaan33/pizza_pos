@@ -17,8 +17,19 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return Container(
           color: Colors.grey[100],
           padding: const EdgeInsets.all(20),

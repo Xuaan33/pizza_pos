@@ -134,8 +134,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
@@ -216,8 +227,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) async {
           final itemsToStockIn = items.map((item) {
             return {
               'item_code': item['item_code'],
@@ -317,8 +339,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
             if (mounted) {
@@ -435,6 +468,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         taxes,
         hasOpening,
         tier,
+        printKitchenOrder,
       ) {
         final sections = _getSections(tier);
 
@@ -549,7 +583,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildItemGroupSection() {
     return SingleChildScrollView(
       child: Container(
-        height: MediaQuery.of(context).size.height - 200,
+        height: MediaQuery.of(context).size.height,
         child: ItemGroupManagement(),
       ),
     );
@@ -558,7 +592,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildItemSection() {
     return SingleChildScrollView(
       child: Container(
-        height: MediaQuery.of(context).size.height - 200,
+        height: MediaQuery.of(context).size.height,
         child: ItemManagement(),
       ),
     );
@@ -575,7 +609,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               const Text(
                 'Variant Groups',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
               ElevatedButton(
                 onPressed: _showCreateVariantGroupDialog,
@@ -986,7 +1020,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           return ListTile(
                             dense: true,
                             title: Text(opt["option"]?.toString() ?? ""),
-                            subtitle: Text("RM ${opt["additional_cost"].toStringAsFixed(2) ?? 0}"),
+                            subtitle: Text(
+                                "RM ${opt["additional_cost"].toStringAsFixed(2) ?? 0}"),
                           );
                         },
                       ),
@@ -1465,7 +1500,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                             paymentMethods,
                                             taxes,
                                             hasOpening,
-                                            tier) {
+                                            tier,
+                                            printKitchenOrder) {
                                           _employeeCheckIn(
                                               employee['name'], branch);
                                         },
@@ -1493,7 +1529,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                             paymentMethods,
                                             taxes,
                                             hasOpening,
-                                            tier) {
+                                            tier,
+                                            printKitchenOrder) {
                                           _employeeCheckOut(
                                               employee['name'], branch);
                                         },
@@ -1609,8 +1646,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.whenOrNull(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,
           );
@@ -1877,8 +1925,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) async {
           final itemsToAdjust = items.map((item) {
             // Calculate the new quantity by subtracting from current
             final currentQty = (item['actual_qty'] ?? 0).toDouble();

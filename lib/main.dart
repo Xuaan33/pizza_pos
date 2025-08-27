@@ -22,9 +22,23 @@ class MyApp extends ConsumerWidget {
       title: 'Shiok POS Android App',
       theme: ThemeData(primarySwatch: Colors.blue, fontFamily: 'Raleway'),
       home: authState.when(
-        initial: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+        initial: () =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
         unauthenticated: () => const LoginPage(),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName, posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) {
+              print('HIHIHIHIHHIHIHI $printKitchenOrder');
           return MainLayout();
         },
       ),

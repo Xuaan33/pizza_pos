@@ -90,8 +90,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void _loadPaymentMethods() {
     final authState = ref.read(authProvider);
     authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
             return {
@@ -156,6 +167,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     taxes,
                     hasOpening,
                     tier,
+                    printKitchenOrder,
                   ) {
                     return posProfile;
                   },
@@ -251,8 +263,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final authState = ref.read(authProvider);
     await authState.whenOrNull(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) async {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) async {
         try {
           final newStockQuantities = <String, int>{};
 
@@ -295,8 +318,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
@@ -1141,7 +1175,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current price
                     Text(
-                      'RM${(items[i]['price'] ).toStringAsFixed(2)}',
+                      'RM${(items[i]['price']).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1503,6 +1537,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       taxes,
                       hasOpening,
                       tier,
+                      printKitchenOrder,
                     ) {
                       return posProfile;
                     },
@@ -1519,7 +1554,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
               if (item['custom_variant_info'] != null)
                 'custom_variant_info': item['custom_variant_info'],
-
             };
           }).toList(),
           couponCode: widget.order['coupon_code'],
@@ -1936,8 +1970,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     // For tier 1, show delete order dialog instead of exit dialog
     final authState = ref.read(authProvider);
     final isTier1 = authState.maybeWhen(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return tier.toLowerCase() == 'tier1';
       },
       orElse: () => false,
@@ -2932,8 +2977,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final discountPercentage = item['discount_percentage'] ?? 0;
       final itemTotal = item['price'] * item['quantity'];
 
-      
-
       // Check if discount exceeds item total
       if (discountAmount > itemTotal) {
         Fluttertoast.showToast(
@@ -2992,6 +3035,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     taxes,
                     hasOpening,
                     tier,
+                    printKitchenOrder,
                   ) {
                     return posProfile;
                   },
@@ -3072,7 +3116,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       paymentMethods,
                       taxes,
                       hasOpening,
-                      tier) {
+                      tier,
+                      printKitchenOrder) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3160,7 +3205,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           paymentMethods,
                           taxes,
                           hasOpening,
-                          tier) =>
+                          tier,
+                          printKitchenOrder) =>
                       posProfile,
                   orElse: () => null,
                 ) ??
@@ -3276,7 +3322,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       paymentMethods,
                       taxes,
                       hasOpening,
-                      tier) {
+                      tier,
+                      printKitchenOrder) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3353,8 +3400,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-              posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+          authenticated: (sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -3637,7 +3695,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       paymentMethods,
                       taxes,
                       hasOpening,
-                      tier) {
+                      tier,
+                      printKitchenOrder) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3797,8 +3856,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     try {
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) {
           return posProfile;
         },
         orElse: () => null,
@@ -4068,8 +4138,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Submit updated order
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier) {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder) {
           return posProfile;
         },
         orElse: () => null,
