@@ -60,35 +60,69 @@ class ReceiptPrinter {
     }
   }
 
+  static Future<void> printReceiptAndKitchenOrder(String orderName) async {
+    try {
+      // Use the combined method from PosService that prints both
+      final printResults = await PosService().printReceiptAndKitchenOrder(
+        orderName: orderName,
+        shouldPrintKitchenOrder: true,
+      );
+
+      // Print receipt
+      if (printResults.containsKey('receipt')) {
+        await printReceipt(printResults['receipt']!, isPdf: false);
+      }
+
+      // Print kitchen order if available
+      if (printResults.containsKey('kitchen_order')) {
+        await printReceipt(printResults['kitchen_order']!, isPdf: false);
+      }
+    } catch (e) {
+      print('Print receipt and kitchen order error: $e');
+      rethrow;
+    }
+  }
+
   static Future<void> showPrintDialog(
-      BuildContext context, String orderName) async {
+    BuildContext context, 
+    String orderName, {
+    bool shouldPrintKitchenOrder = false,
+  }) async {
     ScaffoldMessenger.of(context);
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const AlertDialog(
+        builder: (context) => AlertDialog(
           backgroundColor: Colors.white,
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
               Text(
-                'Preparing receipt for printing...',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                shouldPrintKitchenOrder 
+                  ? 'Preparing receipt and kitchen order for printing...'
+                  : 'Preparing receipt for printing...',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
           ),
         ),
       );
 
-      await printReceiptFromApi(orderName);
+      if (shouldPrintKitchenOrder) {
+        await printReceiptAndKitchenOrder(orderName);
+      } else {
+        await printReceiptFromApi(orderName);
+      }
 
       Navigator.of(context).pop();
 
       Fluttertoast.showToast(
-        msg: "Receipt printed successfully",
+        msg: shouldPrintKitchenOrder 
+          ? "Receipt and kitchen order printed successfully"
+          : "Receipt printed successfully",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.green,
         textColor: Colors.white,
@@ -96,7 +130,9 @@ class ReceiptPrinter {
     } catch (e) {
       Navigator.of(context).pop();
       Fluttertoast.showToast(
-        msg: "Failed to print receipt: $e",
+        msg: shouldPrintKitchenOrder 
+          ? "Failed to print receipt and kitchen order: $e"
+          : "Failed to print receipt: $e",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,

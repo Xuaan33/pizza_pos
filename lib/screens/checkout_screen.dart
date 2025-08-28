@@ -1469,6 +1469,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         throw Exception('Invoice number not available');
       }
 
+      // Get printKitchenOrder flag from auth provider
+      final shouldPrintKitchenOrder = ref.read(authProvider).maybeWhen(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+            ) {
+              return printKitchenOrder == 1;
+            },
+            orElse: () => false,
+          );
+
       if (_selectedPaymentMethod != 'Cash' && !payLater) {
         // 1. Get the selected payment method's m1 value
         final selectedMethod = _paymentMethods.firstWhere(
@@ -1585,7 +1607,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final shouldPrint = await _showPrintReceiptDialog();
 
           if (shouldPrint) {
-            await ReceiptPrinter.showPrintDialog(context, invoiceName);
+            await ReceiptPrinter.showPrintDialog(
+              context,
+              invoiceName,
+              shouldPrintKitchenOrder: shouldPrintKitchenOrder,
+            );
           }
           if (mounted) {
             Fluttertoast.showToast(
@@ -1609,7 +1635,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final shouldPrint = await _showPrintReceiptDialog();
 
           if (shouldPrint) {
-            await ReceiptPrinter.showPrintDialog(context, invoiceName);
+            await ReceiptPrinter.showPrintDialog(
+              context,
+              invoiceName,
+              shouldPrintKitchenOrder: shouldPrintKitchenOrder,
+            );
           }
           if (mounted) {
             Fluttertoast.showToast(
