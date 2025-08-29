@@ -89,6 +89,7 @@ flutter:
     - assets/drinks.jpg
     - assets/gif-do-payment.gif
     - assets/img-sidebar-table.png
+    - assets/logo_shiokpos_launcher.png
 
   fonts:
     - family: Raleway
@@ -110,6 +111,6 @@ flutter_native_splash:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo-shiokpos.png"
+  image_path: "assets/logo_shiokpos_launcher.png"
   adaptive_icon_background: "#00000000"
-  adaptive_icon_foreground: "assets/logo-shiokpos.png"
+  adaptive_icon_foreground: "assets/logo_shiokpos_launcher.png"
