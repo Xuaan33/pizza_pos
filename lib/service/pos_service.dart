@@ -158,7 +158,8 @@ class PosService {
     double? discountAmount,
     String? table,
     String? orderChannel,
-    String? custom_user_voucher, // Add this parameter
+    String? custom_user_voucher,
+    String? remarks,
   }) async {
     return makeRequest(
       endpoint: 'shiok_pos.api.submit_order',
@@ -175,6 +176,7 @@ class PosService {
         if (discountAmount != null) 'discount_amount': discountAmount,
         if (custom_user_voucher != null)
           'custom_user_voucher': custom_user_voucher,
+        if (remarks != null) 'remarks': remarks,
       },
     );
   }

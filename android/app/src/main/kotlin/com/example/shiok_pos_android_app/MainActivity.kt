@@ -121,7 +121,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
                     val remarks = item["custom_item_remarks"]?.toString() ?: ""
                     val variantInfo = item["custom_variant_info"]?.toString() ?: ""
                     
-                    val priceAfterDiscount = price - discountAmount
+                    val priceAfterDiscount = price
                     val itemTotal = priceAfterDiscount * quantity
                     
                     val serveStatus = if (serveLater) "[SERVE LATER]" else ""

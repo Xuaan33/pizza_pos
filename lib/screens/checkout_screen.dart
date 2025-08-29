@@ -61,12 +61,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isSplitting = false;
   bool _isProcessingSplit = false;
   Map<String, dynamic>? _splitOrder;
+  TextEditingController _remarksController = TextEditingController();
+  bool _isRemarksEditing = false;
+  bool _isSavingRemarks = false;
+  String _currentRemarks = '';
 
   @override
   void dispose() {
     _isDisposed = true; // Mark as disposed
     // CustomerDisplayController.showDefaultDisplay();
-
+    _remarksController.dispose();
     super.dispose();
   }
 
@@ -77,14 +81,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _loadTodayInfo();
     _fetchOrderDetails();
     _checkStockForItems();
-    print('CheckoutScreen initialized with order: ${widget.order}');
-    print('Discount amount: ${widget.order['discount_amount']}');
-    print('Items: ${widget.order['items']?.length}');
-    if (widget.order['items'] != null) {
-      for (var item in widget.order['items']) {
-        print('Item: ${item['name']}, Discount: ${item['discount_amount']}');
-      }
-    }
+    // Initialize remarks
+    _currentRemarks = widget.order['remarks'] ?? '';
+    _remarksController.text = _currentRemarks;
   }
 
   void _loadPaymentMethods() {
@@ -201,10 +200,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0;
             widget.order['total'] =
                 (invoice['total'] as num?)?.toDouble() ?? 0.0;
+            widget.order['remarks'] = invoice['remarks'];
 
             // Update local discount amount
             _discountAmount = widget.order['discount_amount'];
             total_taxes_and_charges = widget.order['total_taxes_and_charges'];
+
+            // Update remarks
+            _currentRemarks = widget.order['remarks'] ?? '';
+            _remarksController.text = _currentRemarks;
+            _isRemarksEditing = false;
 
             // Clear existing items and rebuild from server response
             widget.order['items'] = serverItems.map((serverItem) {
@@ -332,7 +337,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             tier,
             printKitchenOrder) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
               items: orderItems.map((item) {
                 return {
@@ -422,7 +426,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                     ),
                                   ),
                                 ),
-
+                                _buildRemarksField(),
                                 // Fixed bottom Order Summary
                                 Container(
                                   width: double.infinity,
@@ -1326,6 +1330,158 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildRemarksField() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _remarksController,
+              decoration: InputDecoration(
+                hintText: 'Add remarks...',
+                hintStyle: TextStyle(fontSize: 16, color: Colors.grey),
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Color(0xFFE732A0)),
+                ),
+              ),
+              style: TextStyle(fontSize: 16),
+              maxLines: 1,
+              enabled: !_isSavingRemarks,
+              onChanged: (value) {
+                setState(() {
+                  _isRemarksEditing = value != _currentRemarks;
+                });
+              },
+              onSubmitted: (_) {
+                if (_isRemarksEditing && !_isSavingRemarks) {
+                  _saveRemarks();
+                  FocusScope.of(context).unfocus();
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          _isSavingRemarks
+              ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    color: _isRemarksEditing
+                        ? Color(0xFFE732A0)
+                        : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.check, size: 18, color: Colors.white),
+                    onPressed: _isRemarksEditing && !_isSavingRemarks
+                        ? () {
+                            _saveRemarks();
+                            FocusScope.of(context).unfocus();
+                          }
+                        : null,
+                    constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveRemarks() async {
+    if (_remarksController.text.isEmpty || _isSavingRemarks) return;
+
+    setState(() => _isSavingRemarks = true);
+
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                  ) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        items: orderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'],
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        couponCode: widget.order['coupon_code'],
+        custom_user_voucher: widget.order['custom_user_voucher'],
+        remarks: _remarksController.text, // Add remarks parameter
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          _currentRemarks = _remarksController.text;
+          _isRemarksEditing = false;
+          widget.order['remarks'] = _currentRemarks;
+        });
+
+        Fluttertoast.showToast(
+          msg: "Remarks updated successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save remarks: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isSavingRemarks = false);
+    }
   }
 
   Widget _buildSummaryRow(String label, dynamic value, {bool isTotal = false}) {
