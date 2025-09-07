@@ -38,7 +38,6 @@ class MyApp extends ConsumerWidget {
             hasOpening,
             tier,
             printKitchenOrder) {
-              print('HIHIHIHIHHIHIHI $printKitchenOrder');
           return MainLayout();
         },
       ),

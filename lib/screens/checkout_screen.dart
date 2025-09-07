@@ -358,7 +358,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               tax: _calculateGST(),
               discount: _discountAmount,
               rounding: _calculateRounding(),
-              total: widget.order['rounded_total'],
+              total: _calculateTotal(),
             );
           });
 

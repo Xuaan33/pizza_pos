@@ -166,7 +166,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
                             for (i in 0 until imagesArray.length()) {
                                 imageUrls.add(imagesArray.getString(i))
                             }
-                            
+                            handler.removeCallbacks(imageChangeRunnable) 
                             if (imageUrls.isNotEmpty()) {
                                 handler.post {
                                     loadImage(imageUrls[0])
@@ -236,6 +236,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun hideCustomerScreen() {
+        customerDisplay?.cleanup()   
         customerDisplay?.dismiss()
         customerDisplay = null
     }
