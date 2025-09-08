@@ -461,20 +461,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    // Remarks if available
-                    // if (order['custom_item_remarks'] != null &&
-                    //     order['custom_item_remarks'].toString().isNotEmpty &&
-                    //     order['custom_item_remarks'].toString() != 'No remarks')
-                    //   Padding(
-                    //     padding: EdgeInsets.only(top: 8),
-                    //     child: Text(
-                    //       'Remarks: ${order['custom_item_remarks']}',
-                    //       style: TextStyle(
-                    //         fontSize: 14,
-                    //         fontWeight: FontWeight.bold,
-                    //       ),
-                    //     ),
-                    //   ),
+                   
+                      Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Remarks: ${order['remarks']}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

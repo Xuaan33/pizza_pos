@@ -30,7 +30,7 @@ class _ItemManagementState extends State<ItemManagement> {
 
       // Load all necessary data in parallel
       final responses = await Future.wait([
-        PosService().getAvailableItems(),
+        PosService().getAllItems(),
         PosService().getItemGroups(),
         PosService().getVariantGroups(),
       ]);

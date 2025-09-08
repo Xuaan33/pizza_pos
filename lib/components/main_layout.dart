@@ -230,6 +230,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                                   : 'Cash',
                           'customerName':
                               invoice['customer_name']?.toString() ?? 'Guest',
+                          'remarks': invoice['remarks']?.toString() ?? 'No Remarks',
                           'custom_item_remarks':
                               invoice['custom_item_remarks']?.toString() ??
                                   'No remarks',

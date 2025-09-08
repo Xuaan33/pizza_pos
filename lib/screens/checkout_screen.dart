@@ -1699,85 +1699,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       // For Pay Later, we just submit the order without processing payment
       if (payLater) {
-        final response = await PosService().submitOrder(
-          name: invoiceName,
-          posProfile: ref.read(authProvider).maybeWhen(
-                    authenticated: (
-                      sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier,
-                      printKitchenOrder,
-                    ) {
-                      return posProfile;
-                    },
-                    orElse: () => null,
-                  ) ??
-              '',
-          customer: 'Guest',
-          items: orderItems.map((item) {
-            return {
-              'item_code': item['item_code'] ?? '',
-              'qty': item['quantity'],
-              'price_list_rate': item['price'],
-              'custom_item_remarks': item['custom_item_remarks'] ?? '',
-              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-              if (item['custom_variant_info'] != null)
-                'custom_variant_info': item['custom_variant_info'],
-            };
-          }).toList(),
-          couponCode: widget.order['coupon_code'],
-          custom_user_voucher: widget.order['custom_user_voucher'],
-        );
+        // Show print receipt dialog
+        final shouldPrint = await _showPrintReceiptDialog();
 
-        if (response['success'] == true) {
-          await _fetchOrderDetails();
-          final updatedOrder = response['message'];
-          setState(() {
-            // Update all order properties from server response
-            widget.order['status'] = updatedOrder['status'] ?? 'Draft';
-            widget.order['discount_amount'] =
-                updatedOrder['discount_amount'] ?? 0.0;
-            widget.order['total_taxes_and_charges'] =
-                updatedOrder['total_taxes_and_charges'] ?? 0.0;
-            widget.order['base_rounding_adjustment'] =
-                updatedOrder['base_rounding_adjustment'] ?? 0.0;
-            widget.order['rounded_total'] =
-                updatedOrder['rounded_total'] ?? 0.0;
-            widget.order['total'] = updatedOrder['total'] ?? 0.0;
-            widget.order['grand_total'] = updatedOrder['grand_total'] ?? 0.0;
-
-            // Also update the discount amount for display
-            _discountAmount = widget.order['discount_amount'];
-          });
-
-          // Show print receipt dialog
-          final shouldPrint = await _showPrintReceiptDialog();
-
-          if (shouldPrint) {
-            await ReceiptPrinter.showPrintDialog(
-              context,
-              invoiceName,
-              shouldPrintKitchenOrder: shouldPrintKitchenOrder,
-            );
-          }
-          if (mounted) {
-            Fluttertoast.showToast(
-              msg: "Order saved for later payment",
-              gravity: ToastGravity.BOTTOM,
-              backgroundColor: Colors.green,
-              textColor: Colors.white,
-            );
-            Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-          }
+        if (shouldPrint) {
+          await ReceiptPrinter.showPrintDialog(
+            context,
+            invoiceName,
+            shouldPrintKitchenOrder: shouldPrintKitchenOrder,
+          );
+        }
+        if (mounted) {
+          Fluttertoast.showToast(
+            msg: "Order saved for later payment",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       } else {
         // Original payment processing code

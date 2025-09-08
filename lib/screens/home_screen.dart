@@ -131,8 +131,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (response['success'] == true) {
         if (mounted) {
           setState(() {
+            // Filter out disabled item groups (where disabled != 0)
             itemGroups = List<Map<String, dynamic>>.from(
-                response['message']['item_groups']);
+                    response['message']['item_groups'])
+                .where((group) => (group['disabled'] ?? 1) == 0)
+                .toList();
+
             _isLoadingItemGroups = false;
           });
         }

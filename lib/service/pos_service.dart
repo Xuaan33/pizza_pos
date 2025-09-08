@@ -55,6 +55,12 @@ class PosService {
     );
   }
 
+  Future<Map<String, dynamic>> getAllItems() async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_items',
+    );
+  }
+
   Future<Map<String, dynamic>> getItemGroups() async {
     return makeRequest(
       endpoint: 'shiok_pos.api.get_item_groups',
@@ -783,6 +789,7 @@ class OrderMapper {
         'net_total': (order['net_total'] as num).toDouble(),
         'base_rounding_adjustment':
             (order['base_rounding_adjustment'] as num).toDouble(),
+        'remarks': order['remarks'] as String? ?? 'No remarks'
       };
     } catch (e) {
       print('Error mapping submitted order: $e');
