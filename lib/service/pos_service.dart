@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class PosService {
-  static const String _baseUrl = 'https://shiokpos.byondwave.com/api/method';
+  static const String _baseUrl = 'https://wakuwaku.joydivisionpadel.com/api/method';
 
   // Helper method for common request handling
   Future<Map<String, dynamic>> makeRequest({

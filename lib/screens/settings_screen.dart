@@ -25,7 +25,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  static const String baseUrl = 'https://shiokpos.byondwave.com';
+  static const String baseUrl = 'https://wakuwaku.joydivisionpadel.com';
   int _selectedIndex = 0;
   bool _isPosConnected = false;
   bool _isTesting = false;

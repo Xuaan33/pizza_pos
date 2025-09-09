@@ -144,7 +144,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
             // Fetch images from API
             executor.execute {
                 try {
-                    val url = URL("https://shiokpos.byondwave.com/api/method/shiok_pos.api.get_customer_facing_images")
+                    val url = URL("https://wakuwaku.joydivisionpadel.com/api/method/shiok_pos.api.get_customer_facing_images")
                     val connection = url.openConnection() as HttpURLConnection
                     connection.requestMethod = "GET"
 

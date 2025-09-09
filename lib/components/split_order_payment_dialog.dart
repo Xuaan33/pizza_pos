@@ -38,7 +38,7 @@ class _SplitOrderPaymentDialogState
   double _amountGiven = 0.0;
   bool _isProcessingPayment = false;
   bool _isCashPayment = false;
-  String baseImageUrl = 'http://shiokpos.byondwave.com';
+  String baseImageUrl = 'https://wakuwaku.joydivisionpadel.com';
   bool _isDeletingOrder = false;
   bool _isLoading = true;
   Map<String, dynamic> _orderDetails = {};

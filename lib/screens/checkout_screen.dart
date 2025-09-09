@@ -630,7 +630,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    'https://shiokpos.byondwave.com${method['custom_payment_mode_image']}',
+                    'https://wakuwaku.joydivisionpadel.com${method['custom_payment_mode_image']}',
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
@@ -4201,11 +4201,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'https://shiokpos.byondwave.com$imagePath';
+      return 'https://wakuwaku.joydivisionpadel.com$imagePath';
     }
 
     if (!imagePath.startsWith('assets/')) {
-      return 'https://shiokpos.byondwave.com/$imagePath';
+      return 'https://wakuwaku.joydivisionpadel.com/$imagePath';
     }
 
     return imagePath; // local asset
