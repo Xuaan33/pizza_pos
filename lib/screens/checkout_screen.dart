@@ -630,7 +630,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    'https://wakuwaku.joydivisionpadel.com${method['custom_payment_mode_image']}',
+                    'https://mejaa.joydivisionpadel.com${method['custom_payment_mode_image']}',
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
@@ -4201,11 +4201,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'https://wakuwaku.joydivisionpadel.com$imagePath';
+      return 'https://mejaa.joydivisionpadel.com$imagePath';
     }
 
     if (!imagePath.startsWith('assets/')) {
-      return 'https://wakuwaku.joydivisionpadel.com/$imagePath';
+      return 'https://mejaa.joydivisionpadel.com$imagePath';
     }
 
     return imagePath; // local asset

@@ -16,7 +16,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   late Future<Map<String, dynamic>> _dashboardData;
   late String _posProfile;
-  String baseImageUrl = 'https://wakuwaku.joydivisionpadel.com';
+  String baseImageUrl = 'https://mejaa.joydivisionpadel.com';
   String _selectedTimeRange = 'Daily'; // 'Daily', 'Weekly', 'Monthly', 'Custom'
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
@@ -1080,7 +1080,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       final imageUrl = paymentMethodData[
                                   'custom_payment_mode_image'] !=
                               null
-                          ? 'https://wakuwaku.joydivisionpadel.com${paymentMethodData['custom_payment_mode_image']}'
+                          ? 'https://mejaa.joydivisionpadel.com${paymentMethodData['custom_payment_mode_image']}'
                           : null;
 
                       return Container(

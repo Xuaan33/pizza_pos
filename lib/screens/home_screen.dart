@@ -37,7 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<TextEditingController> _itemRemarkControllers = [];
   bool _isLoading = false;
   Map<String, dynamic>? _existingOrder;
-  String baseImageUrl = 'https://wakuwaku.joydivisionpadel.com';
+  String baseImageUrl = 'https://mejaa.joydivisionpadel.com';
   Map<String, int> _itemStockQuantities =
       {}; // key: item_code, value: available stock
   bool _isLoadingStock = false;

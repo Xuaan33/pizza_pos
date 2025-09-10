@@ -915,7 +915,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         // Ensure image URL is properly formatted
         final image = convertedItem['image']?.toString() ?? '';
         if (image.isNotEmpty && !image.startsWith('http')) {
-          convertedItem['image'] = 'https://wakuwaku.joydivisionpadel.com$image';
+          convertedItem['image'] = 'https://mejaa.joydivisionpadel.com$image';
         }
 
         formattedItems.add(convertedItem);
