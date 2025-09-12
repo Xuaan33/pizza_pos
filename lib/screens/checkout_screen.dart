@@ -4205,7 +4205,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (!imagePath.startsWith('assets/')) {
-      return 'https://wakuwaku.joydivisionpadel.com/$imagePath';
+      return 'https://wakuwaku.joydivisionpadel.com$imagePath';
     }
 
     return imagePath; // local asset
