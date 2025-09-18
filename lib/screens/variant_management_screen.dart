@@ -21,7 +21,8 @@ class _VariantManagementScreenState
   final TextEditingController _titleController = TextEditingController();
   final List<Map<String, dynamic>> _variantInfoTable = [];
   bool _isRequired = true;
-  bool _isOptionRequired = true;
+  int _optionRequiredNo = 1; // Changed from bool to int
+  int _maximumSelection = 1; // Added maximum selection
 
   @override
   void initState() {
@@ -96,7 +97,8 @@ class _VariantManagementScreenState
           );
         }
         _isRequired = data['required'] == 1;
-        _isOptionRequired = data['option_required_no'] == 1;
+        _optionRequiredNo = data['option_required_no'];
+        _maximumSelection = data['maximum_selection'];
       });
     } catch (e) {
       _showError('Failed to load variant group details: $e');
@@ -124,7 +126,8 @@ class _VariantManagementScreenState
           title: _titleController.text,
           variantInfoTable: mappedVariantInfoTable,
           required: _isRequired ? 1 : 0,
-          optionRequiredNo: _isOptionRequired ? 1 : 0,
+          optionRequiredNo: _optionRequiredNo,
+          maximumSelection: _maximumSelection,
         );
         _showSuccess('Variant group created successfully');
       } else {
@@ -133,7 +136,8 @@ class _VariantManagementScreenState
           name: _selectedVariantGroup!,
           variantInfoTable: mappedVariantInfoTable,
           required: _isRequired ? 1 : 0,
-          optionRequiredNo: _isOptionRequired ? 1 : 0,
+          optionRequiredNo: _optionRequiredNo,
+          maximumSelection: _maximumSelection,
         );
         _showSuccess('Variant group updated successfully');
       }
@@ -189,7 +193,8 @@ class _VariantManagementScreenState
       _titleController.clear();
       _variantInfoTable.clear();
       _isRequired = true;
-      _isOptionRequired = true;
+      _optionRequiredNo = 0;
+      _maximumSelection = 1;
     });
   }
 
@@ -340,11 +345,6 @@ class _VariantManagementScreenState
           title: const Text('Required'),
           value: _isRequired,
           onChanged: (value) => setState(() => _isRequired = value),
-        ),
-        SwitchListTile(
-          title: const Text('Option Required'),
-          value: _isOptionRequired,
-          onChanged: (value) => setState(() => _isOptionRequired = value),
         ),
         const SizedBox(height: 16),
         Row(

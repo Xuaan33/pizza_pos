@@ -47,7 +47,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
     setState(() => _isLoading = true);
     try {
       final [itemsRes, groupsRes, variantsRes] = await Future.wait([
-        PosService().getAvailableItems(),
+        PosService().getAllItems(),
         PosService().getItemGroups(),
         PosService().getVariantGroups(),
       ]);

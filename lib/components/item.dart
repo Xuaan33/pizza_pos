@@ -18,10 +18,33 @@ class _ItemManagementState extends State<ItemManagement> {
   bool isLoading = true;
   Map<String, Item> _detailedItemsCache = {}; // Cache for detailed items
 
+  // New state variables for search and sorting
+  String _searchQuery = '';
+  String _sortBy = 'name'; // Default sort by name
+  bool _sortAscending = true;
+  String? _filterStatus; // 'active', 'inactive', or null for all
+  String? _filterPosStatus; // 'pos', 'non-pos', or null for all
+  String? _filterItemGroup; // Specific item group or null for all
+  String? _filterVariantGroup; // Specific variant group or null for all
+
+  String? _tempFilterStatus;
+  String? _tempFilterPosStatus;
+  String? _tempFilterItemGroup;
+  String? _tempFilterVariantGroup;
+  String? _tempSortBy;
+  bool? _tempSortAscending;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+
+    _tempFilterStatus = _filterStatus;
+    _tempFilterPosStatus = _filterPosStatus;
+    _tempFilterItemGroup = _filterItemGroup;
+    _tempFilterVariantGroup = _filterVariantGroup;
+    _tempSortBy = _sortBy;
+    _tempSortAscending = _sortAscending;
   }
 
   Future<void> _loadData() async {
@@ -134,6 +157,91 @@ class _ItemManagementState extends State<ItemManagement> {
     }
   }
 
+  List<Item> get _filteredItems {
+    List<Item> filtered = items.where((item) {
+      // Search filter
+      final matchesSearch = _searchQuery.isEmpty ||
+          item.itemName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          item.itemCode.toLowerCase().contains(_searchQuery.toLowerCase());
+
+      // Status filter
+      final matchesStatus = _filterStatus == null ||
+          (_filterStatus == 'active' && item.disabled == 0) ||
+          (_filterStatus == 'inactive' && item.disabled == 1);
+
+      // POS status filter
+      final matchesPosStatus = _filterPosStatus == null ||
+          (_filterPosStatus == 'pos' && item.isPosItemBool) ||
+          (_filterPosStatus == 'non-pos' && !item.isPosItemBool);
+
+      // Item group filter
+      final matchesItemGroup =
+          _filterItemGroup == null || item.itemGroup == _filterItemGroup;
+
+      // Variant group filter
+      final matchesVariantGroup = _filterVariantGroup == null ||
+          item.variantGroups.contains(_filterVariantGroup);
+
+      return matchesSearch &&
+          matchesStatus &&
+          matchesPosStatus &&
+          matchesItemGroup &&
+          matchesVariantGroup;
+    }).toList();
+
+    // Apply sorting
+    filtered.sort((a, b) {
+      int compareResult;
+      switch (_sortBy) {
+        case 'name':
+          compareResult = a.itemName.compareTo(b.itemName);
+          break;
+        case 'code':
+          compareResult = a.itemCode.compareTo(b.itemCode);
+          break;
+        case 'price':
+          compareResult = a.price.compareTo(b.price);
+          break;
+        case 'status':
+          compareResult = a.disabled.compareTo(b.disabled);
+          break;
+        case 'posStatus':
+          compareResult = a.isPosItem.compareTo(b.isPosItem);
+          break;
+        case 'group':
+          compareResult = a.itemGroup.compareTo(b.itemGroup);
+          break;
+        default:
+          compareResult = a.itemName.compareTo(b.itemName);
+      }
+
+      return _sortAscending ? compareResult : -compareResult;
+    });
+
+    return filtered;
+  }
+
+  // Reset all filters
+  void _resetFilters() {
+    setState(() {
+      _searchQuery = '';
+      _sortBy = 'name';
+      _sortAscending = true;
+      _filterStatus = null;
+      _filterPosStatus = null;
+      _filterItemGroup = null;
+      _filterVariantGroup = null;
+
+      // Also reset temp variables
+      _tempFilterStatus = null;
+      _tempFilterPosStatus = null;
+      _tempFilterItemGroup = null;
+      _tempFilterVariantGroup = null;
+      _tempSortBy = 'name';
+      _tempSortAscending = true;
+    });
+  }
+
   void _showCreateItemDialog() {
     showDialog(
       context: context,
@@ -240,18 +348,115 @@ class _ItemManagementState extends State<ItemManagement> {
           ),
           const SizedBox(height: 16),
 
+          // Search and Filter Section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Search Bar
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search by name or code...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                setState(() {
+                                  _searchQuery = '';
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Filters and Sorting Row
+                  Row(
+                    children: [
+                      // Filter Button
+                      ElevatedButton.icon(
+                        onPressed: () => _showFilterDialog(),
+                        icon: const Icon(Icons.filter_list, size: 16),
+                        label: const Text(
+                          'Filters',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Sort Button
+                      ElevatedButton.icon(
+                        onPressed: () => _showSortDialog(),
+                        icon: Icon(
+                          _sortAscending
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward,
+                          size: 16,
+                        ),
+                        label: const Text(
+                          'Sort',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Reset Filters Button
+                      if (_hasActiveFilters)
+                        TextButton.icon(
+                          onPressed: _resetFilters,
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Clear Filters'),
+                        ),
+                    ],
+                  ),
+
+                  // Active Filters Indicator
+                  if (_hasActiveFilters) ...[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _activeFilterChips,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Items List
           if (isLoading)
             const Center(child: CircularProgressIndicator())
-          else if (items.isEmpty)
+          else if (_filteredItems.isEmpty)
             const Center(child: Text('No items found'))
           else
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: items.length,
+              itemCount: _filteredItems.length,
               itemBuilder: (context, index) {
-                final item = items[index];
+                final item = _filteredItems[index];
                 return ItemCard(
                   item: item,
                   onEdit: () => _showEditItemDialog(item),
@@ -261,6 +466,438 @@ class _ItemManagementState extends State<ItemManagement> {
             ),
         ],
       ),
+    );
+  }
+
+  // Check if any filters are active
+  bool get _hasActiveFilters {
+    return _searchQuery.isNotEmpty ||
+        _filterStatus != null ||
+        _filterPosStatus != null ||
+        _filterItemGroup != null ||
+        _filterVariantGroup != null ||
+        _sortBy != 'name' ||
+        !_sortAscending;
+  }
+
+  // Get active filter chips
+  List<Widget> get _activeFilterChips {
+    final chips = <Widget>[];
+
+    if (_searchQuery.isNotEmpty) {
+      chips.add(Chip(
+        label: Text('Search: "$_searchQuery"'),
+        onDeleted: () {
+          setState(() {
+            _searchQuery = '';
+          });
+        },
+      ));
+    }
+
+    if (_filterStatus != null) {
+      chips.add(Chip(
+        label: Text(
+            'Status: ${_filterStatus == 'active' ? 'Active' : 'Inactive'}'),
+        onDeleted: () {
+          setState(() {
+            _filterStatus = null;
+          });
+        },
+      ));
+    }
+
+    if (_filterPosStatus != null) {
+      chips.add(Chip(
+        label: Text(
+            'POS: ${_filterPosStatus == 'pos' ? 'POS Item' : 'Non-POS Item'}'),
+        onDeleted: () {
+          setState(() {
+            _filterPosStatus = null;
+          });
+        },
+      ));
+    }
+
+    if (_filterItemGroup != null) {
+      chips.add(Chip(
+        label: Text('Group: $_filterItemGroup'),
+        onDeleted: () {
+          setState(() {
+            _filterItemGroup = null;
+          });
+        },
+      ));
+    }
+
+    if (_filterVariantGroup != null) {
+      chips.add(Chip(
+        label: Text('Variant: $_filterVariantGroup'),
+        onDeleted: () {
+          setState(() {
+            _filterVariantGroup = null;
+          });
+        },
+      ));
+    }
+
+    if (_sortBy != 'name' || !_sortAscending) {
+      String sortText = '';
+      switch (_sortBy) {
+        case 'name':
+          sortText = 'Name ${_sortAscending ? 'A-Z' : 'Z-A'}';
+          break;
+        case 'code':
+          sortText = 'Code ${_sortAscending ? 'A-Z' : 'Z-A'}';
+          break;
+        case 'price':
+          sortText = 'Price ${_sortAscending ? 'Low-High' : 'High-Low'}';
+          break;
+        case 'status':
+          sortText =
+              'Status ${_sortAscending ? 'Active First' : 'Inactive First'}';
+          break;
+        case 'posStatus':
+          sortText = 'POS ${_sortAscending ? 'POS First' : 'Non-POS First'}';
+          break;
+        case 'group':
+          sortText = 'Group ${_sortAscending ? 'A-Z' : 'Z-A'}';
+          break;
+      }
+
+      chips.add(Chip(
+        label: Text('Sort: $sortText'),
+        onDeleted: () {
+          setState(() {
+            _sortBy = 'name';
+            _sortAscending = true;
+          });
+        },
+      ));
+    }
+
+    return chips;
+  }
+
+  // Show filter dialog
+  void _showFilterDialog() {
+    // Initialize temp variables with current values
+    _tempFilterStatus = _filterStatus;
+    _tempFilterPosStatus = _filterPosStatus;
+    _tempFilterItemGroup = _filterItemGroup;
+    _tempFilterVariantGroup = _filterVariantGroup;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text(
+                'Filter Items',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Colors.white,
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Status filter
+                    const Text('Status:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Radio<String>(
+                          value: 'active',
+                          groupValue: _tempFilterStatus,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempFilterStatus = value;
+                            });
+                          },
+                        ),
+                        const Text('Active'),
+                        Radio<String>(
+                          value: 'inactive',
+                          groupValue: _tempFilterStatus,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempFilterStatus = value;
+                            });
+                          },
+                        ),
+                        const Text('Inactive'),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // POS Status filter
+                    const Text('POS Status:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Radio<String>(
+                          value: 'pos',
+                          groupValue: _tempFilterPosStatus,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempFilterPosStatus = value;
+                            });
+                          },
+                        ),
+                        const Text('POS Items'),
+                        Radio<String>(
+                          value: 'non-pos',
+                          groupValue: _tempFilterPosStatus,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempFilterPosStatus = value;
+                            });
+                          },
+                        ),
+                        const Text('Non-POS Items'),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Item Group filter
+                    const Text('Item Group:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    DropdownButton<String>(
+                      value: _tempFilterItemGroup,
+                      isExpanded: true,
+                      hint: const Text('All Groups'),
+                      items: [
+                        const DropdownMenuItem(
+                            value: null, child: Text('All Groups')),
+                        ...itemGroups.map((group) {
+                          return DropdownMenuItem(
+                            value: group.name,
+                            child: Text(group.name),
+                          );
+                        }).toList(),
+                      ],
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          _tempFilterItemGroup = value;
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Variant Group filter
+                    const Text('Variant Group:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    DropdownButton<String>(
+                      value: _tempFilterVariantGroup,
+                      isExpanded: true,
+                      hint: const Text('All Variant Groups'),
+                      items: [
+                        const DropdownMenuItem(
+                            value: null, child: Text('All Variant Groups')),
+                        ...variantGroups.map((group) {
+                          return DropdownMenuItem(
+                            value: group.variantGroup,
+                            child: Text(group.variantGroup),
+                          );
+                        }).toList(),
+                      ],
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          _tempFilterVariantGroup = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Apply the filters from temp variables
+                    setState(() {
+                      _filterStatus = _tempFilterStatus;
+                      _filterPosStatus = _tempFilterPosStatus;
+                      _filterItemGroup = _tempFilterItemGroup;
+                      _filterVariantGroup = _tempFilterVariantGroup;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Apply Filters',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Show sort dialog
+  void _showSortDialog() {
+    // Initialize temp variables with current values
+    _tempSortBy = _sortBy;
+    _tempSortAscending = _sortAscending;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text(
+                'Sort Items',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Colors.white,
+              content: SizedBox(
+                width: 300,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sort by options
+                    const Text('Sort by:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text('Name'),
+                          value: 'name',
+                          groupValue: _tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortBy = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Code'),
+                          value: 'code',
+                          groupValue: _tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortBy = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Price'),
+                          value: 'price',
+                          groupValue: _tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortBy = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Status'),
+                          value: 'status',
+                          groupValue: _tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortBy = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('POS Status'),
+                          value: 'posStatus',
+                          groupValue: _tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortBy = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Item Group'),
+                          value: 'group',
+                          groupValue: _tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortBy = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Sort order
+                    const Text('Order:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Radio<bool>(
+                          value: true,
+                          groupValue: _tempSortAscending,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortAscending = value;
+                            });
+                          },
+                        ),
+                        const Text('Ascending'),
+                        Radio<bool>(
+                          value: false,
+                          groupValue: _tempSortAscending,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              _tempSortAscending = value;
+                            });
+                          },
+                        ),
+                        const Text('Descending'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Apply the sort options from temp variables
+                    setState(() {
+                      _sortBy = _tempSortBy!;
+                      _sortAscending = _tempSortAscending!;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Apply Sort',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
