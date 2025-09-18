@@ -654,6 +654,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showCreateVariantGroupDialog() {
     final nameController = TextEditingController();
     bool isRequired = false;
+    int optionRequiredNo = 1;
+    int maximumSelection = 1; 
 
     showDialog(
       context: context,
@@ -691,6 +693,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                // Minimum selection (existing)
+                Row(
+                  children: [
+                    const Text('Minimum selection:'),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 80,
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        controller: TextEditingController(
+                            text: optionRequiredNo.toString()),
+                        onChanged: (value) =>
+                            optionRequiredNo = int.tryParse(value) ?? 1,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Maximum selection (new)
+                Row(
+                  children: [
+                    const Text('Maximum selection:'),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 80,
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                        controller: TextEditingController(
+                            text: maximumSelection.toString()),
+                        onChanged: (value) =>
+                            maximumSelection = int.tryParse(value) ?? 1,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -713,8 +757,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                   return;
                 }
+
+                // Validate that maximum is not less than minimum
+                if (maximumSelection < optionRequiredNo) {
+                  Fluttertoast.showToast(
+                    msg:
+                        'Maximum selection cannot be less than minimum selection',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
                 await _createVariantGroup(
-                    nameController.text.trim(), isRequired);
+                  nameController.text.trim(),
+                  isRequired,
+                );
                 Navigator.pop(context);
               },
               child: const Text(
@@ -823,6 +882,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         variantInfoTable: [],
         required: isRequired ? 1 : 0,
         optionRequiredNo: 1,
+        maximumSelection: 1,
       );
 
       if (response['success'] == true) {
@@ -867,11 +927,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       });
 
       final response = await PosService().updateVariantGroup(
-        name: group.variantGroup,
-        variantInfoTable: updatedVariants,
-        required: group.required,
-        optionRequiredNo: group.optionRequiredNo,
-      );
+          name: group.variantGroup,
+          variantInfoTable: updatedVariants,
+          required: group.required,
+          optionRequiredNo: group.optionRequiredNo,
+          maximumSelection: group.maximumSelection);
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -898,7 +958,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final nameController = TextEditingController(text: group.variantGroup);
     final descriptionController = TextEditingController();
 
-    // ✅ SCOPED to this dialog and initialized from THIS group
     List<Map<String, dynamic>> confirmedOptions = (group.options ?? [])
         .map((o) => {
               "option": (o.option ?? "").toString(),
@@ -908,6 +967,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     bool isRequired = (group.required ?? 0) == 1;
     int optionRequiredNo = group.optionRequiredNo ?? 1;
+    int maximumSelection = group.maximumSelection ?? 1; // Add this variable
 
     showDialog(
       context: context,
@@ -959,10 +1019,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Option required no
+                    // Minimum selection
                     Row(
                       children: [
-                        const Text('Option Required Number:'),
+                        const Text('Minimum selection:'),
                         const SizedBox(width: 16),
                         SizedBox(
                           width: 80,
@@ -974,6 +1034,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 text: optionRequiredNo.toString()),
                             onChanged: (value) =>
                                 optionRequiredNo = int.tryParse(value) ?? 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Maximum selection (new)
+                    Row(
+                      children: [
+                        const Text('Maximum selection:'),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 80,
+                          child: TextField(
+                            decoration: const InputDecoration(
+                                border: OutlineInputBorder()),
+                            keyboardType: TextInputType.number,
+                            controller: TextEditingController(
+                                text: maximumSelection.toString()),
+                            onChanged: (value) =>
+                                maximumSelection = int.tryParse(value) ?? 1,
                           ),
                         ),
                       ],
@@ -996,8 +1077,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             );
                             if (result != null) {
                               setDialogState(() {
-                                confirmedOptions =
-                                    result; // ✅ reflect confirmed changes locally
+                                confirmedOptions = result;
                               });
                             }
                           },
@@ -1049,19 +1129,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   return;
                 }
 
+                // Validate that maximum is not less than minimum
+                if (maximumSelection < optionRequiredNo) {
+                  Fluttertoast.showToast(
+                    msg:
+                        'Maximum selection cannot be less than minimum selection',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
                 await PosService().updateVariantGroup(
                   name: nameController.text.trim(),
                   required: isRequired ? 1 : 0,
                   optionRequiredNo: optionRequiredNo,
+                  maximumSelection: maximumSelection, // Add this parameter
                   variantInfoTable: confirmedOptions,
                 );
 
-                Navigator.pop(context); // close dialog
-
-                // ✅ refresh settings list so next group shows fresh data
+                Navigator.pop(context);
                 if (mounted) {
                   setState(() {
-                    _loadVariantGroups(); // make sure this refreshes from backend
+                    _loadVariantGroups();
                   });
                 }
               },
@@ -1159,6 +1250,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     String newTitle,
     bool isRequired,
     int optionRequiredNo,
+    int maximumSelection
   ) async {
     try {
       final response = await PosService().updateVariantGroup(
@@ -1171,6 +1263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             .toList(),
         required: isRequired ? 1 : 0,
         optionRequiredNo: optionRequiredNo,
+        maximumSelection: maximumSelection
       );
 
       if (response['success'] == true) {
@@ -1249,6 +1342,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         variantInfoTable: updatedVariants,
         required: group.required,
         optionRequiredNo: group.optionRequiredNo,
+        maximumSelection: group.maximumSelection
       );
 
       if (response['success'] == true) {
@@ -1293,6 +1387,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         variantInfoTable: updatedVariants,
         required: group.required,
         optionRequiredNo: group.optionRequiredNo,
+        maximumSelection: group.maximumSelection
       );
 
       if (response['success'] == true) {

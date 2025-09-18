@@ -61,6 +61,12 @@ class PosService {
     );
   }
 
+  Future<Map<String, dynamic>> getItems() async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_items?is_pos_item=1&disabled=0',
+    );
+  }
+
   Future<Map<String, dynamic>> getItemGroups() async {
     return makeRequest(
       endpoint: 'shiok_pos.api.get_item_groups',
@@ -445,43 +451,47 @@ class PosService {
     );
   }
 
-  // Create Variant Group
-  Future<Map<String, dynamic>> createVariantGroup({
-    required String title,
-    required List<Map<String, dynamic>> variantInfoTable,
-    required int required,
-    required int optionRequiredNo,
-  }) async {
-    return await makeRequest(
-      endpoint: 'shiok_pos.api.create_variant_group',
-      method: 'POST',
-      body: {
-        "title": title,
-        "variant_info_table": variantInfoTable,
-        "required": required,
-        "option_required_no": optionRequiredNo,
-      },
-    );
-  }
+  // Update createVariantGroup method
+Future<Map<String, dynamic>> createVariantGroup({
+  required String title,
+  required List<Map<String, dynamic>> variantInfoTable,
+  required int required,
+  required int optionRequiredNo,
+  required int maximumSelection, // Add this parameter
+}) async {
+  return await makeRequest(
+    endpoint: 'shiok_pos.api.create_variant_group',
+    method: 'POST',
+    body: {
+      "title": title,
+      "variant_info_table": variantInfoTable,
+      "required": required,
+      "option_required_no": optionRequiredNo,
+      "maximum_selection": maximumSelection, // Add this field
+    },
+  );
+}
 
-// Update Variant Group
-  Future<Map<String, dynamic>> updateVariantGroup({
-    required String name,
-    required List<Map<String, dynamic>> variantInfoTable,
-    required int required,
-    required int optionRequiredNo,
-  }) async {
-    return await makeRequest(
-      endpoint: 'shiok_pos.api.update_variant_group',
-      method: 'POST',
-      body: {
-        "name": name,
-        "variant_info_table": variantInfoTable,
-        "required": required,
-        "option_required_no": optionRequiredNo,
-      },
-    );
-  }
+// Update updateVariantGroup method
+Future<Map<String, dynamic>> updateVariantGroup({
+  required String name,
+  required List<Map<String, dynamic>> variantInfoTable,
+  required int required,
+  required int optionRequiredNo,
+  required int maximumSelection, // Add this parameter
+}) async {
+  return await makeRequest(
+    endpoint: 'shiok_pos.api.update_variant_group',
+    method: 'POST',
+    body: {
+      "name": name,
+      "variant_info_table": variantInfoTable,
+      "required": required,
+      "option_required_no": optionRequiredNo,
+      "maximum_selection": maximumSelection, // Add this field
+    },
+  );
+}
 
 // Item Methods
   Future<Map<String, dynamic>> getItem(String itemCode) async {
