@@ -65,48 +65,49 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     }
   }
 
-  List<Widget> _buildVariantText(Map<String, dynamic> item) {
-    dynamic variantInfo = item['custom_variant_info'];
-    if (variantInfo == null) return [];
+ List<Widget> _buildVariantText(Map<String, dynamic> item) {
+  dynamic variantInfo = item['custom_variant_info'];
+  print("Raw Variant Info: $variantInfo (${variantInfo.runtimeType})");
 
-    // Handle case where variantInfo is a JSON string
-    if (variantInfo is String) {
-      try {
-        variantInfo = jsonDecode(variantInfo);
-      } catch (e) {
-        debugPrint('Error parsing variant info: $e');
-        return [];
-      }
+  if (variantInfo == null) return [];
+
+  // If it's a string, try decode until it becomes a List
+  while (variantInfo is String) {
+    try {
+      variantInfo = jsonDecode(variantInfo);
+    } catch (e) {
+      debugPrint('Error parsing variant info: $e');
+      return [];
     }
-
-    // Handle case where variantInfo is a List
-    if (variantInfo is List) {
-      return variantInfo.expand((variant) {
-        if (variant is Map && variant['options'] is List) {
-          return (variant['options'] as List).map((option) {
-            return Text(
-              '• ${variant['variant_group']}: ${option['option']}'
-              '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
-              style: TextStyle(fontSize: 12, color: Colors.black),
-            );
-          }).toList();
-        }
-        return <Widget>[];
-      }).toList();
-    }
-
-    // Handle case where variantInfo is a Map (old format)
-    if (variantInfo is Map) {
-      return variantInfo.entries.map((entry) {
-        return Text(
-          '• ${entry.key}: ${entry.value}',
-          style: TextStyle(fontSize: 12, color: Colors.black),
-        );
-      }).toList();
-    }
-
-    return [];
   }
+
+  if (variantInfo is List) {
+    return variantInfo.expand((variant) {
+      if (variant is Map && variant['options'] is List) {
+        return (variant['options'] as List).map((option) {
+          return Text(
+            '• ${variant['variant_group']}: ${option['option']}'
+            '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
+            style: TextStyle(fontSize: 12, color: Colors.black),
+          );
+        }).toList();
+      }
+      return <Widget>[];
+    }).toList();
+  }
+
+  if (variantInfo is Map) {
+    return variantInfo.entries.map((entry) {
+      return Text(
+        '• ${entry.key}: ${entry.value}',
+        style: TextStyle(fontSize: 12, color: Colors.black),
+      );
+    }).toList();
+  }
+
+  return [];
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -116,8 +117,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder) {
         return Scaffold(
           body: Row(
             children: [
@@ -461,15 +473,15 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                   
+
+                    if (order['remarks'] != null &&
+                        order['remarks'].toString().isNotEmpty)
                       Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
                           'Remarks: ${order['remarks']}',
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                       ),
                   ],

@@ -593,6 +593,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final method = _paymentMethods[index];
           final isSelected = _selectedPaymentMethod == method['name'];
           final isCash = method['name'] == 'Cash';
+          final isOfflinePayment = method['custom_fiuu_m1_value'] == '-1';
 
           return GestureDetector(
             onTap: () async {
@@ -609,8 +610,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     _selectedPaymentMethod = '';
                   });
                 }
+              } else if (isOfflinePayment) {
+                // For offline payment methods (m1_value = -1), select immediately
+                // No POS terminal communication needed
+                setState(() {
+                  _selectedPaymentMethod = method['name'];
+                });
               } else {
-                // For non-cash methods, select immediately
+                // For other non-cash methods that require POS terminal, select immediately
                 setState(() {
                   _selectedPaymentMethod = method['name'];
                 });
@@ -1597,9 +1604,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Future<void> _completePayment({bool payLater = false}) async {
     setState(() => _isProcessingPayment = true);
 
-    // Show processing dialog for non-cash payments
+    // Check if this is an offline payment method (m1_value = -1)
+    final selectedMethod = _paymentMethods.firstWhere(
+      (method) => method['name'] == _selectedPaymentMethod,
+      orElse: () => {'custom_fiuu_m1_value': '01'},
+    );
+    final m1Value = selectedMethod['custom_fiuu_m1_value']?.toString() ?? '01';
+    final isOfflinePayment = m1Value == '-1';
+
+    // Show processing dialog for non-cash payments that require POS terminal
     Completer<void>? dialogCompleter;
-    if (_selectedPaymentMethod != 'Cash' && mounted && !payLater) {
+    if (_selectedPaymentMethod != 'Cash' &&
+        !isOfflinePayment &&
+        mounted &&
+        !payLater) {
       dialogCompleter = Completer<void>();
       _showPaymentProcessingDialog(context).then((_) {
         if (!dialogCompleter!.isCompleted) {
@@ -1647,13 +1665,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             orElse: () => false,
           );
 
-      if (_selectedPaymentMethod != 'Cash' && !payLater) {
+      // Only process POS terminal communication for non-cash, non-offline payments
+      if (_selectedPaymentMethod != 'Cash' && !isOfflinePayment && !payLater) {
         // 1. Get the selected payment method's m1 value
-        final selectedMethod = _paymentMethods.firstWhere(
-          (method) => method['name'] == _selectedPaymentMethod,
-          orElse: () =>
-              {'custom_fiuu_m1_value': '01'}, // Fallback to '01' if not found
-        );
         final m1Value =
             selectedMethod['custom_fiuu_m1_value']?.toString() ?? '01';
 
@@ -1695,6 +1709,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         } finally {
           socket.destroy();
         }
+      } else if (isOfflinePayment && !payLater) {
+        // For offline payments, add a simple reference number
+        payments[0]['reference_no'] =
+            'OFFLINE-${DateTime.now().millisecondsSinceEpoch}';
       }
 
       // For Pay Later, we just submit the order without processing payment

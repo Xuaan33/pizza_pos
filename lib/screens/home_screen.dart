@@ -161,7 +161,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     try {
       final posService = PosService();
-      final response = await posService.getAvailableItems();
+      final response = await posService.getItems();
 
       if (response['success'] == true) {
         if (mounted) {
