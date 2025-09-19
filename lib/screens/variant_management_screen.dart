@@ -23,6 +23,7 @@ class _VariantManagementScreenState
   bool _isRequired = true;
   int _optionRequiredNo = 1; // Changed from bool to int
   int _maximumSelection = 1; // Added maximum selection
+  bool _allowMultipleSelection = false;
 
   @override
   void initState() {
@@ -99,6 +100,7 @@ class _VariantManagementScreenState
         _isRequired = data['required'] == 1;
         _optionRequiredNo = data['option_required_no'];
         _maximumSelection = data['maximum_selection'];
+        _allowMultipleSelection = data['allow_multiple_selection'];
       });
     } catch (e) {
       _showError('Failed to load variant group details: $e');
@@ -128,6 +130,7 @@ class _VariantManagementScreenState
           required: _isRequired ? 1 : 0,
           optionRequiredNo: _optionRequiredNo,
           maximumSelection: _maximumSelection,
+          allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
         );
         _showSuccess('Variant group created successfully');
       } else {
@@ -138,6 +141,7 @@ class _VariantManagementScreenState
           required: _isRequired ? 1 : 0,
           optionRequiredNo: _optionRequiredNo,
           maximumSelection: _maximumSelection,
+          allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
         );
         _showSuccess('Variant group updated successfully');
       }
@@ -195,6 +199,7 @@ class _VariantManagementScreenState
       _isRequired = true;
       _optionRequiredNo = 0;
       _maximumSelection = 1;
+      _allowMultipleSelection = false;
     });
   }
 

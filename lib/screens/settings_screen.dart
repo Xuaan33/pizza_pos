@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/item.dart';
 import 'package:shiok_pos_android_app/components/item_group.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/option_dialog.dart';
 import 'package:shiok_pos_android_app/components/stock_item_card.dart';
@@ -599,55 +600,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildVariantSection() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with Add Record button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Variant Groups',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-              ),
-              ElevatedButton(
-                onPressed: _showCreateVariantGroupDialog,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text(
-                  'Add Variant Group',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Variant Groups List
-          if (isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (variantGroups.isEmpty)
-            const Center(child: Text('No variant groups found'))
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: variantGroups.length,
-              itemBuilder: (context, index) {
-                final group = variantGroups[index];
-                return VariantGroupCard(
-                  variantGroup: group,
-                  onEdit: () => _showEditVariantGroupDialog(group),
-                  onStatusToggle: (value) =>
-                      _toggleVariantGroupStatus(group, value),
-                );
-              },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with Add Record button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Variant Groups',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
             ),
-        ],
-      ),
+            ElevatedButton(
+              onPressed: _showCreateVariantGroupDialog,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Add Variant Group',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Body expands with scrollable list
+        Expanded(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : variantGroups.isEmpty
+                  ? const Center(child: Text('No variant groups found'))
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: variantGroups.length,
+                      itemBuilder: (context, index) {
+                        final group = variantGroups[index];
+                        return VariantGroupCard(
+                          variantGroup: group,
+                          onEdit: () => _showEditVariantGroupDialog(group),
+                          onStatusToggle: (value) =>
+                              _toggleVariantGroupStatus(group, value),
+                        );
+                      },
+                    ),
+        ),
+      ],
     );
   }
 
@@ -655,7 +654,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final nameController = TextEditingController();
     bool isRequired = false;
     int optionRequiredNo = 1;
-    int maximumSelection = 1; 
+    int maximumSelection = 1;
 
     showDialog(
       context: context,
@@ -883,6 +882,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         required: isRequired ? 1 : 0,
         optionRequiredNo: 1,
         maximumSelection: 1,
+        allowMultipleSelection: 0,
       );
 
       if (response['success'] == true) {
@@ -931,7 +931,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           variantInfoTable: updatedVariants,
           required: group.required,
           optionRequiredNo: group.optionRequiredNo,
-          maximumSelection: group.maximumSelection);
+          maximumSelection: group.maximumSelection,
+          allowMultipleSelection: group.allowMultipleSelection);
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -967,7 +968,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     bool isRequired = (group.required ?? 0) == 1;
     int optionRequiredNo = group.optionRequiredNo ?? 1;
-    int maximumSelection = group.maximumSelection ?? 1; // Add this variable
+    int maximumSelection = group.maximumSelection ?? 1;
+    bool allowMultipleSelection = (group.allowMultipleSelection ?? 0) == 1;
 
     showDialog(
       context: context,
@@ -978,15 +980,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: 400,
-            child: SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.7,
-                ),
+            height: MediaQuery.of(context).size.height * 0.8, // Fixed height
+            child: ScrollConfiguration(
+              behavior: NoStretchScrollBehavior(),
+              child: SingleChildScrollView(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    SizedBox(
+                      height: 7,
+                    ),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(
@@ -1019,6 +1022,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
 
+                    // Allow Multiple Selection toggle
+                    Row(
+                      children: [
+                        const Text('Allow Multiple Selection?'),
+                        const SizedBox(width: 16),
+                        Switch(
+                          value: allowMultipleSelection,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              allowMultipleSelection = value;
+                              // If disabling multiple selection, ensure max selection is 1
+                              if (!value && maximumSelection > 1) {
+                                maximumSelection = 1;
+                              }
+                              // If enabling multiple selection and min is > 1, ensure max >= min
+                              if (value &&
+                                  maximumSelection < optionRequiredNo) {
+                                maximumSelection = optionRequiredNo;
+                              }
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
                     // Minimum selection
                     Row(
                       children: [
@@ -1032,15 +1061,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             keyboardType: TextInputType.number,
                             controller: TextEditingController(
                                 text: optionRequiredNo.toString()),
-                            onChanged: (value) =>
-                                optionRequiredNo = int.tryParse(value) ?? 1,
+                            onChanged: (value) {
+                              final newValue = int.tryParse(value) ?? 1;
+                              setDialogState(() {
+                                optionRequiredNo = newValue;
+                                // Ensure maximum is not less than minimum
+                                if (maximumSelection < newValue) {
+                                  maximumSelection = newValue;
+                                }
+                                // If min > 1, automatically enable multiple selection
+                                if (newValue > 1 && !allowMultipleSelection) {
+                                  allowMultipleSelection = true;
+                                  Fluttertoast.showToast(
+                                    msg:
+                                        'Multiple selection enabled automatically',
+                                    gravity: ToastGravity.BOTTOM,
+                                    backgroundColor: Colors.blue,
+                                    textColor: Colors.white,
+                                  );
+                                }
+                              });
+                            },
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
 
-                    // Maximum selection (new)
+                    // Maximum selection
                     Row(
                       children: [
                         const Text('Maximum selection:'),
@@ -1053,8 +1101,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             keyboardType: TextInputType.number,
                             controller: TextEditingController(
                                 text: maximumSelection.toString()),
-                            onChanged: (value) =>
-                                maximumSelection = int.tryParse(value) ?? 1,
+                            onChanged: (value) {
+                              final newValue = int.tryParse(value) ?? 1;
+                              setDialogState(() {
+                                maximumSelection = newValue;
+                                // Ensure minimum is not more than maximum
+                                if (optionRequiredNo > newValue) {
+                                  optionRequiredNo = newValue;
+                                }
+                                // If max > 1, automatically enable multiple selection
+                                if (newValue > 1 && !allowMultipleSelection) {
+                                  allowMultipleSelection = true;
+                                  Fluttertoast.showToast(
+                                    msg:
+                                        'Multiple selection enabled automatically',
+                                    gravity: ToastGravity.BOTTOM,
+                                    backgroundColor: Colors.blue,
+                                    textColor: Colors.white,
+                                  );
+                                }
+                              });
+                            },
                           ),
                         ),
                       ],
@@ -1087,11 +1154,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Scrollable list of current variants
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.3,
-                      ),
+                    // Scrollable list of current variants with fixed height
+                    SizedBox(
+                      height: 200, // Fixed height for the variants list
                       child: ListView.builder(
                         shrinkWrap: true,
                         itemCount: confirmedOptions.length,
@@ -1101,7 +1166,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             dense: true,
                             title: Text(opt["option"]?.toString() ?? ""),
                             subtitle: Text(
-                                "RM ${opt["additional_cost"].toStringAsFixed(2) ?? 0}"),
+                              "RM ${(opt["additional_cost"] as double).toStringAsFixed(2)}",
+                            ),
                           );
                         },
                       ),
@@ -1141,11 +1207,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   return;
                 }
 
+                // Validate that if optionRequiredNo > 1, multiple selection must be allowed
+                if (optionRequiredNo > 1 && !allowMultipleSelection) {
+                  Fluttertoast.showToast(
+                    msg:
+                        'Multiple selection must be enabled when minimum selection is greater than 1',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
+                // Validate that if multiple selection is not allowed, max should be 1
+                if (!allowMultipleSelection && maximumSelection > 1) {
+                  Fluttertoast.showToast(
+                    msg:
+                        'Maximum selection must be 1 when multiple selection is disabled',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
                 await PosService().updateVariantGroup(
                   name: nameController.text.trim(),
                   required: isRequired ? 1 : 0,
                   optionRequiredNo: optionRequiredNo,
-                  maximumSelection: maximumSelection, // Add this parameter
+                  maximumSelection: maximumSelection,
+                  allowMultipleSelection: allowMultipleSelection ? 1 : 0,
                   variantInfoTable: confirmedOptions,
                 );
 
@@ -1246,25 +1337,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _updateVariantGroup(
-    VariantGroup group,
-    String newTitle,
-    bool isRequired,
-    int optionRequiredNo,
-    int maximumSelection
-  ) async {
+      VariantGroup group,
+      String newTitle,
+      bool isRequired,
+      int optionRequiredNo,
+      int maximumSelection,
+      bool allowMultipleSelection) async {
     try {
       final response = await PosService().updateVariantGroup(
-        name: group.variantGroup,
-        variantInfoTable: group.options
-            .map((option) => {
-                  'option': option.option,
-                  'additional_cost': option.additionalCost,
-                })
-            .toList(),
-        required: isRequired ? 1 : 0,
-        optionRequiredNo: optionRequiredNo,
-        maximumSelection: maximumSelection
-      );
+          name: group.variantGroup,
+          variantInfoTable: group.options
+              .map((option) => {
+                    'option': option.option,
+                    'additional_cost': option.additionalCost,
+                  })
+              .toList(),
+          required: isRequired ? 1 : 0,
+          optionRequiredNo: optionRequiredNo,
+          maximumSelection: maximumSelection,
+          allowMultipleSelection: allowMultipleSelection ? 0 : 1);
 
       if (response['success'] == true) {
         _loadVariantGroups();
@@ -1338,12 +1429,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
 
       final response = await PosService().updateVariantGroup(
-        name: group.variantGroup,
-        variantInfoTable: updatedVariants,
-        required: group.required,
-        optionRequiredNo: group.optionRequiredNo,
-        maximumSelection: group.maximumSelection
-      );
+          name: group.variantGroup,
+          variantInfoTable: updatedVariants,
+          required: group.required,
+          optionRequiredNo: group.optionRequiredNo,
+          maximumSelection: group.maximumSelection,
+          allowMultipleSelection: group.allowMultipleSelection);
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -1383,12 +1474,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           .toList();
 
       final response = await PosService().updateVariantGroup(
-        name: group.variantGroup,
-        variantInfoTable: updatedVariants,
-        required: group.required,
-        optionRequiredNo: group.optionRequiredNo,
-        maximumSelection: group.maximumSelection
-      );
+          name: group.variantGroup,
+          variantInfoTable: updatedVariants,
+          required: group.required,
+          optionRequiredNo: group.optionRequiredNo,
+          maximumSelection: group.maximumSelection,
+          allowMultipleSelection: group.allowMultipleSelection);
 
       if (response['success'] == true) {
         Fluttertoast.showToast(

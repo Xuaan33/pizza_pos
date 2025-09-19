@@ -171,6 +171,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _isLoadingItems = false;
           });
         }
+        await _loadVariantGroupsForItems();
+
         // Check stock after items are loaded
         _checkStockForItems();
       } else {
@@ -186,6 +188,59 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+    }
+  }
+
+  Future<void> _loadVariantGroupsForItems() async {
+    try {
+      final response = await PosService().getVariantGroups();
+
+      if (response['success'] == true) {
+        final variantGroups =
+            List<Map<String, dynamic>>.from(response['message']);
+
+        // Enrich each item with variant group configuration
+        for (var item in availableItems) {
+          if (item['structured_variant_info'] != null &&
+              item['structured_variant_info'] is List) {
+            final variants = List<Map<String, dynamic>>.from(
+                item['structured_variant_info']);
+
+            for (var variant in variants) {
+              final variantGroupName = variant['variant_group'];
+              final matchingGroup = variantGroups.firstWhere(
+                (group) => group['variant_group'] == variantGroupName,
+                orElse: () => {},
+              );
+
+              if (matchingGroup.isNotEmpty) {
+                // Add the configuration values to the variant
+                variant['required'] = matchingGroup['required'] ?? 0;
+                variant['option_required_no'] =
+                    matchingGroup['option_required_no'] ?? 1;
+                variant['maximum_selection'] =
+                    matchingGroup['maximum_selection'] ?? 1;
+                variant['allow_multiple_selection'] =
+                    matchingGroup['allow_multiple_selection'] ?? 0;
+                print('allow? ${variant['allow_multiple_selection']}');
+              } else {
+                // Default values if variant group not found
+                variant['required'] = 0;
+                variant['option_required_no'] = 1;
+                variant['maximum_selection'] = 1;
+                variant['allow_multiple_selection'] = 0;
+              }
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading variant groups for items: $e');
+      // Don't show error toast as this is a background process
     }
   }
 
@@ -669,7 +724,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _showItemOptionsDialog(Map<String, dynamic> item) async {
     List<Map<String, dynamic>> variants =
         List.from(item['structured_variant_info'] ?? []);
-    Map<String, String?> selectedOptions = {};
+
+    // Track selected options for each variant group
+    Map<String, List<String?>> selectedOptions = {};
+    Map<String, int> currentSelections = {};
 
     return showDialog(
       context: context,
@@ -705,19 +763,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             )),
                       SizedBox(height: 16),
                       ...variants.map((variant) {
+                        final variantGroup = variant['variant_group'];
+                        final isRequired = variant['required'] == 1;
+                        final minSelection =
+                            (variant['option_required_no'] ?? 1) as int;
+                        final maxSelection =
+                            (variant['maximum_selection'] ?? 1) as int;
+                        final allowMultiple =
+                            (variant['allow_multiple_selection'] ?? 0) == 1;
+
+                        // Initialize selected options for this variant group
+                        selectedOptions[variantGroup] ??= [];
+                        currentSelections[variantGroup] ??= 0;
+
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              variant['variant_group'],
+                              variantGroup,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
                             ),
-                            if (variant['required'] == 1)
+                            if (isRequired)
                               Text(
-                                '(Required)',
+                                '(Required - Select ${minSelection} to ${maxSelection})',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            if (!isRequired && allowMultiple)
+                              Text(
+                                '(Select up to ${maxSelection})',
                                 style: TextStyle(
                                   color: Colors.red,
                                   fontWeight: FontWeight.bold,
@@ -726,19 +806,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             SizedBox(height: 8),
                             ...(variant['options'] as List).map((option) {
+                              final isSelected = selectedOptions[variantGroup]!
+                                  .contains(option['option']);
+
                               return Container(
                                 margin: EdgeInsets.only(bottom: 4),
                                 decoration: BoxDecoration(
                                   border: Border.all(
-                                    color: selectedOptions[
-                                                variant['variant_group']] ==
-                                            option['option']
+                                    color: isSelected
                                         ? Color(0xFFE732A0)
                                         : Colors.grey.shade300,
                                   ),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: RadioListTile<String>(
+                                child: CheckboxListTile(
                                   title: Text(
                                     option['option'],
                                     style: TextStyle(
@@ -754,16 +835,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                         )
                                       : null,
-                                  value: option['option'],
-                                  groupValue:
-                                      selectedOptions[variant['variant_group']],
+                                  value: isSelected,
                                   activeColor: Color(0xFFE732A0),
                                   onChanged: (value) {
                                     setState(() {
-                                      selectedOptions[
-                                          variant['variant_group']] = value;
+                                      if (value == true) {
+                                        // Multiple selection allowed
+                                        if (allowMultiple) {
+                                          if (currentSelections[variantGroup]! <
+                                              maxSelection) {
+                                            selectedOptions[variantGroup]!
+                                                .add(option['option']);
+                                            currentSelections[variantGroup] =
+                                                currentSelections[
+                                                        variantGroup]! +
+                                                    1;
+                                          }
+                                        } else {
+                                          // Single selection: replace the existing
+                                          selectedOptions[variantGroup]!
+                                              .clear();
+                                          selectedOptions[variantGroup]!
+                                              .add(option['option']);
+                                          currentSelections[variantGroup] = 1;
+                                        }
+                                      } else {
+                                        // Remove selection
+                                        selectedOptions[variantGroup]!
+                                            .remove(option['option']);
+                                        currentSelections[variantGroup] =
+                                            (currentSelections[variantGroup]! -
+                                                    1)
+                                                .clamp(0, maxSelection);
+                                      }
                                     });
                                   },
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
                                   dense: true,
                                 ),
                               );
@@ -790,23 +898,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ElevatedButton(
                   onPressed: () {
                     // Validate required options
-                    bool allRequiredSelected = true;
+                    bool allRequirementsMet = true;
+                    String errorMessage = '';
+
                     for (var variant in variants) {
-                      if (variant['required'] == 1 &&
-                          (selectedOptions[variant['variant_group']] == null ||
-                              selectedOptions[variant['variant_group']]!
-                                  .isEmpty)) {
-                        allRequiredSelected = false;
+                      final variantGroup = variant['variant_group'];
+                      final isRequired = variant['required'] == 1;
+                      final minSelection = variant['option_required_no'] ?? 1;
+                      print("minimum: $minSelection");
+                      final selectedCount =
+                          selectedOptions[variantGroup]?.length ?? 0;
+
+                      if (isRequired) {
+                        if (selectedCount < minSelection) {
+                          allRequirementsMet = false;
+                          errorMessage =
+                              "Please select at least $minSelection options for ${variant['variant_group']}";
+                          break;
+                        }
+                      }
+
+                      final maxSelection = variant['maximum_selection'] ?? 1;
+                      if (selectedCount > maxSelection) {
+                        allRequirementsMet = false;
+                        errorMessage =
+                            "Cannot select more than $maxSelection options for ${variant['variant_group']}";
                         break;
                       }
                     }
 
-                    if (allRequiredSelected || variants.isEmpty) {
+                    if (allRequirementsMet) {
+                      // Convert to the format expected by _addToOrderWithOptions
+                      Map<String, String?> singleSelectionOptions = {};
+                      for (var variantGroup in selectedOptions.keys) {
+                        final selections = selectedOptions[variantGroup]!;
+                        if (selections.isNotEmpty) {
+                          // For single selection, take the first one
+                          // For multiple selection, we'll handle it differently
+                          singleSelectionOptions[variantGroup] =
+                              selections.first;
+                        }
+                      }
+
                       _addToOrderWithOptions(item, selectedOptions);
                       Navigator.pop(context);
                     } else {
                       Fluttertoast.showToast(
-                        msg: "Please select all required options",
+                        msg: errorMessage,
                         gravity: ToastGravity.BOTTOM,
                         backgroundColor: Colors.red,
                         textColor: Colors.white,
@@ -838,7 +976,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _addToOrderWithOptions(
     Map<String, dynamic> item,
-    Map<String, String?> selectedOptions,
+    Map<String, List<String?>> selectedOptions,
   ) {
     final itemCode = item['item_code'];
     final availableStock = _itemStockQuantities[itemCode] ?? 999;
@@ -899,24 +1037,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (selectedOptions.isNotEmpty &&
           item['structured_variant_info'] != null) {
         for (var variantGroup in item['structured_variant_info']) {
-          final selectedOption = selectedOptions[variantGroup['variant_group']];
-          if (selectedOption != null) {
-            for (var option in variantGroup['options']) {
-              if (option['option'] == selectedOption) {
-                double optionCost =
-                    (option['additional_cost'] as num).toDouble();
-                totalAdditionalCost += optionCost;
+          final selectedOptionList =
+              selectedOptions[variantGroup['variant_group']] ?? [];
+          if (selectedOptionList.isNotEmpty) {
+            for (var selectedOptionName in selectedOptionList) {
+              for (var option in variantGroup['options']) {
+                if (option['option'] == selectedOptionName) {
+                  double optionCost =
+                      (option['additional_cost'] as num).toDouble();
+                  totalAdditionalCost += optionCost;
 
-                variantInfo.add({
-                  'variant_group': variantGroup['variant_group'],
-                  'options': [
-                    {
-                      'option': selectedOption,
-                      'additional_cost': optionCost,
-                    }
-                  ],
-                });
-                break;
+                  variantInfo.add({
+                    'variant_group': variantGroup['variant_group'],
+                    'options': [
+                      {
+                        'option': selectedOptionName,
+                        'additional_cost': optionCost,
+                      }
+                    ],
+                  });
+                  break;
+                }
               }
             }
           }
@@ -932,7 +1073,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'quantity': 1,
           'options': selectedOptions,
           'option_text': selectedOptions.entries
-              .map((e) => '${e.key}: ${e.value}')
+              .map((e) => '${e.key}: ${e.value.join(", ")}')
               .join(', '),
           'custom_serve_later': false,
           'custom_item_remarks': '',
@@ -945,20 +1086,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  bool _compareOptions(dynamic options1, Map<String, String?> options2) {
+  bool _compareOptions(dynamic options1, Map<String, List<String?>> options2) {
     if (options1 == null || options2 == null) return false;
-    if (options1 is! Map || options2 is! Map) return false;
 
-    var map1 = Map<String, String?>.from(options1);
-    var map2 = Map<String, String?>.from(options2);
+    // Handle both single selection (Map) and multiple selection (Map with Lists)
+    if (options1 is Map<String, dynamic> &&
+        options2 is Map<String, List<String?>>) {
+      // Convert single selection to multiple selection format for comparison
+      Map<String, List<String?>> convertedOptions1 = {};
 
-    if (map1.length != map2.length) return false;
+      options1.forEach((key, value) {
+        if (value is String) {
+          convertedOptions1[key] = [value];
+        } else if (value is List<String>) {
+          convertedOptions1[key] = value;
+        }
+      });
 
-    for (var key in map1.keys) {
-      if (map1[key] != map2[key]) return false;
+      if (convertedOptions1.length != options2.length) return false;
+
+      for (var key in convertedOptions1.keys) {
+        final list1 = convertedOptions1[key]!;
+        final list2 = options2[key];
+
+        if (list2 == null || list1.length != list2.length) return false;
+
+        // Check if both lists contain the same options (order doesn't matter)
+        if (!list1.every((option) => list2.contains(option)) ||
+            !list2.every((option) => list1.contains(option))) {
+          return false;
+        }
+      }
+
+      return true;
     }
 
-    return true;
+    return false;
   }
 
   Future<bool> _onWillPop() async {
