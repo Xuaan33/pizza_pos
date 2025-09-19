@@ -171,12 +171,12 @@ class _VariantGroupCardState extends State<VariantGroupCard> {
 }
 
 // Data Models
-// Update VariantGroup model
 class VariantGroup {
   final String variantGroup;
   final int required;
   final int optionRequiredNo;
-  final int maximumSelection; // Add this field
+  final int maximumSelection;
+  final int allowMultipleSelection;
   final List<VariantOption> options;
   final int disabled;
 
@@ -184,7 +184,8 @@ class VariantGroup {
     required this.variantGroup,
     required this.required,
     required this.optionRequiredNo,
-    required this.maximumSelection, // Add to constructor
+    required this.maximumSelection,
+    required this.allowMultipleSelection,
     required this.options,
     this.disabled = 0,
   });
@@ -194,7 +195,9 @@ class VariantGroup {
       variantGroup: json['variant_group'] ?? '',
       required: json['required'] ?? 0,
       optionRequiredNo: json['option_required_no'] ?? 0,
-      maximumSelection: json['maximum_selection'] ?? 0, // Add this line
+      maximumSelection: json['maximum_selection'] ?? 0,
+      allowMultipleSelection:
+          json['allow_multiple_selection'] ?? 0, // Add this line
       options: (json['options'] as List<dynamic>? ?? [])
           .map((o) => VariantOption.fromJson(o))
           .toList(),
