@@ -277,8 +277,11 @@ class _ItemManagementState extends State<ItemManagement> {
   Future<void> _toggleItemStatus(Item item, bool isActive) async {
     try {
       setState(() => isLoading = true);
+
+      // Refresh the item details first to get the latest data
       await _refreshItemDetails(item);
       final currentItem = _detailedItemsCache[item.itemCode] ?? item;
+
       await PosService().updateItem(
         itemCode: item.itemCode,
         itemName: currentItem.itemName,
@@ -291,7 +294,20 @@ class _ItemManagementState extends State<ItemManagement> {
             .toList(),
         disabled: isActive ? 0 : 1,
       );
-      await _loadData();
+
+      // Instead of reloading all data, just update this specific item
+      await _refreshItemDetails(item); // Refresh the cached item
+
+      // Update the item in the local list
+      setState(() {
+        final index = items.indexWhere((i) => i.itemCode == item.itemCode);
+        if (index != -1) {
+          final updatedItem = _detailedItemsCache[item.itemCode] ??
+              item.copyWith(disabled: isActive ? 0 : 1);
+          items[index] = updatedItem;
+        }
+      });
+
       _showSuccessToast(
           'Item ${isActive ? 'activated' : 'deactivated'} successfully');
     } catch (e) {
@@ -920,13 +936,13 @@ class ItemCard extends StatefulWidget {
 
 class _ItemCardState extends State<ItemCard> {
   bool isExpanded = false;
-  bool isActive = true;
+  bool get isActive => widget.item.disabled == 0;
   bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    isActive = widget.item.disabled == 0;
+    //isActive = widget.item.disabled == 0;
   }
 
   Future<void> _toggleActiveStatus(bool value) async {
@@ -935,9 +951,7 @@ class _ItemCardState extends State<ItemCard> {
     setState(() => isLoading = true);
     try {
       await widget.onStatusToggle(value);
-      if (mounted) {
-        setState(() => isActive = value);
-      }
+      // No need to set local state here since parent will refresh the data
       Fluttertoast.showToast(
         msg: '${widget.item.itemName} ${value ? 'activated' : 'deactivated'}',
         gravity: ToastGravity.BOTTOM,
@@ -951,6 +965,8 @@ class _ItemCardState extends State<ItemCard> {
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+      // If there's an error, we might want to revert the UI state
+      // But since the parent will refresh, we don't need to do anything
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
