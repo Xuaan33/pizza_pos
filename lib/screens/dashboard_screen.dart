@@ -6,6 +6,8 @@ import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:intl/intl.dart';
 
+enum _TimeGrouping { hourly, daily, weekly, monthly }
+
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
 
@@ -62,12 +64,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           case 'Daily':
             fromDate = toDate;
             break;
-          case 'Weekly':
-            fromDate = toDate.subtract(Duration(days: toDate.weekday - 1));
-            break;
-          case 'Monthly':
-            fromDate = DateTime(toDate.year, toDate.month, 1);
-            break;
           case 'Custom':
             if (_customDateRange != null) {
               fromDate = _customDateRange!.start;
@@ -88,54 +84,62 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           limit = int.parse(_selectedPopularItemsLimit);
         }
 
-        // Fetch all data concurrently
+        final grouping = _determineTimeGrouping(fromDate, toDate);
+        final xaxisParam = _getXAxisParameter(grouping);
+
+        // Fetch all data concurrently - CORRECTED: Now only 6 futures
         final results = await Future.wait([
+          // 0: Total sales
           PosService().makeRequest(
             endpoint:
                 'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
+          // 1: Peak time
           PosService().makeRequest(
             endpoint:
                 'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
           ),
+          // 2: Today info
           PosService().getTodayInfo(),
+          // 3: Revenue data (NEW - using the new endpoint)
           PosService().makeRequest(
-            endpoint: 'shiok_pos.api.get_ltm_revenue?pos_profile=$posProfile',
+            endpoint: 'shiok_pos.api.get_revenue?'
+                'pos_profile=$posProfile&'
+                'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
+                'xaxis=$xaxisParam',
           ),
-          PosService().makeRequest(
-            endpoint:
-                'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-          ),
+          // 4: Popular items
           PosService().makeRequest(
             endpoint:
                 'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
           ),
+          // 5: Payment methods
           PosService().getPaymentMethodDistribution(
-            // Add this new call
             posProfile: posProfile,
             fromDate: dateFormat.format(fromDate),
             toDate: dateFormat.format(toDate),
           ),
         ]);
 
+        print(
+            'http://shiokpos.byondwave.com/shiok_pos.api.get_revenue?pos_profile=$posProfile&daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&xaxis=$xaxisParam');
+
         final peakTimes = _convertListToProperType(results[1]['message']);
         final totalOrders = peakTimes.fold(0, (sum, timeData) {
           return sum + _convertToInt(timeData['invoice_count']);
         });
 
-        // After getting peakTimes data
-        print('Peak times data: $peakTimes');
-        print('Calculated total orders: $totalOrders');
-
-        // Convert to proper types
+        // Convert to proper types - CORRECTED: Now using proper indices
         return <String, dynamic>{
           'totalSales': _convertToDouble(results[0]['message']),
           'totalOrders': totalOrders,
           'todayInfo': _convertMapToStringDynamic(results[2]['message']),
-          'revenueData': _convertListToProperType(results[3]['message']),
-          'peakTimes': _convertListToProperType(results[4]['message']),
-          'topItems': _convertListToProperType(results[5]['message']),
-          'paymentMethods': _convertListToProperType(results[6]['message']),
+          'revenueData': _convertListToProperType(
+              results[3]['message'] ?? []), // Index 3 is now revenue
+          'peakTimes': _convertListToProperType(
+              results[1]['message']), // Peak times from index 1
+          'topItems': _convertListToProperType(results[4]['message']),
+          'paymentMethods': _convertListToProperType(results[5]['message']),
           'fromDate': fromDate,
           'toDate': toDate,
         };
@@ -333,7 +337,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 20),
                     _buildSummaryCards(totalSales, totalOrders, todayInfo),
                     const SizedBox(height: 30),
-                    _buildRevenueChart(revenueData),
+                    _buildRevenueChart(revenueData, fromDate, toDate),
                     const SizedBox(height: 30),
                     _buildPaymentMethodChart(paymentMethods),
                     const SizedBox(height: 30),
@@ -387,8 +391,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 color: Colors.black,
               ),
               dropdownColor: Colors.white,
-              items:
-                  ['Daily', 'Weekly', 'Monthly', 'Custom'].map((String value) {
+              items: ['Daily', 'Custom'].map((String value) {
                 return DropdownMenuItem<String>(
                   value: value,
                   child: Text(value),
@@ -417,8 +420,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             Text(
               dateRangeText,
               style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+                  fontSize: 18,
+                  color: Colors.black,
                   fontWeight: FontWeight.bold),
             ),
           ],
@@ -510,68 +513,78 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildRevenueChart(List<Map<String, dynamic>> revenueData) {
+  Widget _buildRevenueChart(List<Map<String, dynamic>> revenueData,
+      DateTime fromDate, DateTime toDate) {
+    final grouping = _determineTimeGrouping(fromDate, toDate);
+
     // Process revenue data for chart
-    final chartData = revenueData.map((monthData) {
-      final monthName =
-          DateFormat('MMM').format(DateTime.parse('${monthData['month']}-01'));
-      final dineIn = _convertToDouble(monthData['Dine In']);
-      final takeAway = _convertToDouble(monthData['Take Away']);
-      final delivery = _convertToDouble(monthData['Delivery']);
+    final chartData = revenueData.map((periodData) {
+      final xaxisValue = periodData['xaxis'] as String? ?? '';
+      final dineIn = _convertToDouble(periodData['Dine In']);
+      final takeAway = _convertToDouble(periodData['Take Away']);
+      final delivery = _convertToDouble(periodData['Delivery']);
       final totalRevenue = dineIn + takeAway + delivery;
 
       return <String, dynamic>{
-        'month': monthName,
-        'monthDate': DateTime.parse('${monthData['month']}-01'),
+        'period': _formatXAxisLabel(xaxisValue, grouping),
+        'rawPeriod': xaxisValue,
         'revenue': totalRevenue,
         'dineIn': dineIn,
         'takeAway': takeAway,
         'delivery': delivery,
+        'grouping': grouping,
       };
     }).toList();
 
-    // Sort by date to ensure proper order
-    chartData.sort((a, b) =>
-        (a['monthDate'] as DateTime).compareTo(b['monthDate'] as DateTime));
-
-    // Find current month index or closest to current date
-    final currentDate = DateTime.now();
-    int currentMonthIndex = chartData.indexWhere((data) {
-      final monthDate = data['monthDate'] as DateTime;
-      return monthDate.year == currentDate.year &&
-          monthDate.month == currentDate.month;
+    // Sort data chronologically
+    chartData.sort((a, b) {
+      switch (grouping) {
+        case _TimeGrouping.hourly:
+          return (a['rawPeriod'] as String).compareTo(b['rawPeriod'] as String);
+        case _TimeGrouping.daily:
+          return DateTime.parse(a['rawPeriod'] as String)
+              .compareTo(DateTime.parse(b['rawPeriod'] as String));
+        case _TimeGrouping.weekly:
+          // Handle format "2025-07-21 - 2025-07-27"
+          if ((a['rawPeriod'] as String).contains(' - ')) {
+            final aDates = (a['rawPeriod'] as String).split(' - ');
+            final bDates = (b['rawPeriod'] as String).split(' - ');
+            if (aDates.length == 2 && bDates.length == 2) {
+              return DateTime.parse(aDates[0])
+                  .compareTo(DateTime.parse(bDates[0]));
+            }
+          }
+          return (a['rawPeriod'] as String).compareTo(b['rawPeriod'] as String);
+        case _TimeGrouping.monthly:
+          return DateTime.parse('${a['rawPeriod'] as String}-01')
+              .compareTo(DateTime.parse('${b['rawPeriod'] as String}-01'));
+      }
     });
 
-    // If current month not found, find the closest month
-    if (currentMonthIndex == -1) {
-      int closestIndex = 0;
-      int minDifference = (chartData[0]['monthDate'] as DateTime)
-          .difference(currentDate)
-          .inDays
-          .abs();
-
-      for (int i = 1; i < chartData.length; i++) {
-        int difference = (chartData[i]['monthDate'] as DateTime)
-            .difference(currentDate)
-            .inDays
-            .abs();
-        if (difference < minDifference) {
-          minDifference = difference;
-          closestIndex = i;
-        }
-      }
-      currentMonthIndex = closestIndex;
-    }
-
-    // Calculate initial visible range (latest 3 months)
-    int startIndex = (chartData.length - 3).clamp(0, chartData.length - 3);
-    int endIndex = chartData.length - 1;
-
-    // Adjust if we don't have enough data
-    if (chartData.length < 3) {
-      startIndex = 0;
-      endIndex = chartData.length - 1;
-    }
+    // Build stacked column series for better visualization
+    final series = <CartesianSeries>[
+      StackedColumnSeries<Map<String, dynamic>, String>(
+        dataSource: chartData,
+        xValueMapper: (data, _) => data['period'] as String,
+        yValueMapper: (data, _) => data['dineIn'] as double,
+        name: 'Dine In',
+        color: Colors.blue,
+      ),
+      StackedColumnSeries<Map<String, dynamic>, String>(
+        dataSource: chartData,
+        xValueMapper: (data, _) => data['period'] as String,
+        yValueMapper: (data, _) => data['takeAway'] as double,
+        name: 'Take Away',
+        color: Colors.green,
+      ),
+      StackedColumnSeries<Map<String, dynamic>, String>(
+        dataSource: chartData,
+        xValueMapper: (data, _) => data['period'] as String,
+        yValueMapper: (data, _) => data['delivery'] as double,
+        name: 'Delivery',
+        color: Colors.orange,
+      ),
+    ];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -590,197 +603,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Total Revenue',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Revenue Breakdown',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Chip(
+                label: Text(
+                  _getGroupingLabel(grouping),
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                backgroundColor: Colors.white,
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 200,
+            height: grouping == _TimeGrouping.weekly
+                ? 300
+                : 250, // Increase height for weekly
             child: SfCartesianChart(
               primaryXAxis: CategoryAxis(
-                // Show all data but allow scrolling
-                autoScrollingDelta: 3, // Show 3 months at a time
-                autoScrollingMode:
-                    AutoScrollingMode.end, // Start from the end (latest months)
+                labelRotation: (chartData.length > 10 ? 45 : 0),
+                labelIntersectAction: AxisLabelIntersectAction.wrap,
+                interval: grouping == _TimeGrouping.weekly ? 1 : null,
               ),
               primaryYAxis: NumericAxis(
-                  // Dynamic Y-axis
-                  ),
-              // Enable zooming and panning
-              zoomPanBehavior: ZoomPanBehavior(
-                enablePinching: true,
-                enablePanning: true,
-                enableDoubleTapZooming: true,
-                enableMouseWheelZooming: true,
-                enableSelectionZooming: false,
-                zoomMode: ZoomMode.x, // Only allow horizontal zooming/panning
+                numberFormat: NumberFormat.compactCurrency(symbol: 'RM '),
               ),
-              tooltipBehavior: TooltipBehavior(
-                enable: true,
-                canShowMarker: true,
-                activationMode: ActivationMode.singleTap,
-                builder: (data, point, series, pointIndex, seriesIndex) {
-                  if (pointIndex < 0 || pointIndex >= chartData.length) {
-                    return const SizedBox.shrink();
-                  }
-                  final item = chartData[pointIndex];
-                  return Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.3),
-                          spreadRadius: 1,
-                          blurRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${item['month']}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text('Total: RM ${item['revenue'].toStringAsFixed(2)}'),
-                        if (item['dineIn'] > 0)
-                          Text(
-                              'Dine In: RM ${item['dineIn'].toStringAsFixed(2)}'),
-                        if (item['takeAway'] > 0)
-                          Text(
-                              'Take Away: RM ${item['takeAway'].toStringAsFixed(2)}'),
-                        if (item['delivery'] > 0)
-                          Text(
-                              'Delivery: RM ${item['delivery'].toStringAsFixed(2)}'),
-                      ],
-                    ),
-                  );
-                },
+              legend: Legend(
+                isVisible: true,
+                position: LegendPosition.bottom,
               ),
-              trackballBehavior: TrackballBehavior(
-                enable: true,
-                activationMode: ActivationMode.longPress,
-                tooltipDisplayMode: TrackballDisplayMode.groupAllPoints,
-                builder: (BuildContext context, TrackballDetails details) {
-                  if (details.pointIndex != null &&
-                      details.pointIndex! >= 0 &&
-                      details.pointIndex! < chartData.length) {
-                    final item = chartData[details.pointIndex!];
-                    return Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${item['month']}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                              'Total: RM ${item['revenue'].toStringAsFixed(2)}'),
-                          if (item['dineIn'] > 0)
-                            Text(
-                                'Dine In: RM ${item['dineIn'].toStringAsFixed(2)}'),
-                          if (item['takeAway'] > 0)
-                            Text(
-                                'Take Away: RM ${item['takeAway'].toStringAsFixed(2)}'),
-                          if (item['delivery'] > 0)
-                            Text(
-                                'Delivery: RM ${item['delivery'].toStringAsFixed(2)}'),
-                        ],
-                      ),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-              // Load event to set initial visible range
-              onChartTouchInteractionUp: (ChartTouchInteractionArgs args) {
-                // You can add custom logic here if needed
-              },
-              series: <ColumnSeries<Map<String, dynamic>, String>>[
-                ColumnSeries<Map<String, dynamic>, String>(
-                  dataSource: chartData,
-                  xValueMapper: (data, _) => data['month'] as String,
-                  yValueMapper: (data, _) => data['revenue'] as double,
-                  color: const Color(0xFFE732A0),
-                  borderRadius: BorderRadius.circular(5),
-                  width: 0.2,
-                  name: 'Revenue',
-                  dataLabelSettings: const DataLabelSettings(
-                    isVisible: false,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Add instruction text with better styling
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.swipe_left,
-                  size: 16,
-                  color: Colors.grey[500],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Swipe to explore',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Icon(
-                  Icons.pinch,
-                  size: 16,
-                  color: Colors.grey[500],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Pinch to zoom',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+              tooltipBehavior: TooltipBehavior(enable: true),
+              series: series,
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _getGroupingLabel(_TimeGrouping grouping) {
+    switch (grouping) {
+      case _TimeGrouping.hourly:
+        return 'Hourly';
+      case _TimeGrouping.daily:
+        return 'Daily';
+      case _TimeGrouping.weekly:
+        return 'Weekly';
+      case _TimeGrouping.monthly:
+        return 'Monthly';
+    }
   }
 
   Widget _buildPeakTimeChart(List<Map<String, dynamic>> peakTimes) {
@@ -1100,11 +980,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     width: 40,
                                     height: 40,
                                     margin: const EdgeInsets.only(right: 12),
-                                    decoration: BoxDecoration(
+                                    child: ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
-                                      image: DecorationImage(
-                                        image: NetworkImage(imageUrl),
+                                      child: Image.network(
+                                        imageUrl,
+                                        width: 40,
+                                        height: 40,
                                         fit: BoxFit.contain,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return Container(
+                                            color: _getPaymentMethodColor(
+                                                methodName),
+                                            child: const Icon(Icons.payment,
+                                                color: Colors.white, size: 20),
+                                          );
+                                        },
                                       ),
                                     ),
                                   )
@@ -1185,6 +1076,67 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  _TimeGrouping _determineTimeGrouping(DateTime fromDate, DateTime toDate) {
+    final difference = toDate.difference(fromDate).inDays;
+
+    if (difference == 0) {
+      // Same day - show hourly
+      return _TimeGrouping.hourly;
+    } else if (difference <= 21) {
+      // Up to 3 weeks - show daily
+      return _TimeGrouping.daily;
+    } else if (difference <= 60) {
+      // Up to 2 months - show weekly
+      return _TimeGrouping.weekly;
+    } else {
+      // More than 2 months - show monthly
+      return _TimeGrouping.monthly;
+    }
+  }
+
+  String _getXAxisParameter(_TimeGrouping grouping) {
+    switch (grouping) {
+      case _TimeGrouping.hourly:
+        return 'hour';
+      case _TimeGrouping.daily:
+        return 'day';
+      case _TimeGrouping.weekly:
+        return 'week';
+      case _TimeGrouping.monthly:
+        return 'month';
+    }
+  }
+
+  String _formatXAxisLabel(String xaxisValue, _TimeGrouping grouping) {
+    switch (grouping) {
+      case _TimeGrouping.hourly:
+        // Format: "HH:00" (e.g., "14:00")
+        final time = xaxisValue.split(' ').last;
+        return time.substring(0, 5); // Get "HH:MM"
+      case _TimeGrouping.daily:
+        // Format: "DD MMM" (e.g., "15 Jan")
+        return DateFormat('dd MMM').format(DateTime.parse(xaxisValue));
+      case _TimeGrouping.weekly:
+        // Handle the format "2025-07-21 - 2025-07-27"
+        if (xaxisValue.contains(' - ')) {
+          final dates = xaxisValue.split(' - ');
+          if (dates.length == 2) {
+            try {
+              final startDate = DateTime.parse(dates[0]);
+              final endDate = DateTime.parse(dates[1]);
+              return '${DateFormat('dd MMM').format(startDate)} - ${DateFormat('dd MMM').format(endDate)}';
+            } catch (e) {
+              return xaxisValue;
+            }
+          }
+        }
+        return xaxisValue;
+      case _TimeGrouping.monthly:
+        // Format: "MMM YY" (e.g., "Jan 23")
+        return DateFormat('MMM yy').format(DateTime.parse('$xaxisValue-01'));
+    }
   }
 
   // Helper method to assign colors based on payment method

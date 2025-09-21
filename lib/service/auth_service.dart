@@ -17,6 +17,7 @@ class AuthService {
     );
 
     final responseData = jsonDecode(response.body);
+    print("LOGIN: $responseData");
 
     if (response.statusCode == 200 && responseData['success'] == true) {
       final message = responseData['message'];
