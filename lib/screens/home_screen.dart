@@ -222,7 +222,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     matchingGroup['maximum_selection'] ?? 1;
                 variant['allow_multiple_selection'] =
                     matchingGroup['allow_multiple_selection'] ?? 0;
-                print('allow? ${variant['allow_multiple_selection']}');
               } else {
                 // Default values if variant group not found
                 variant['required'] = 0;

@@ -530,7 +530,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return _buildItemSection();
       case 'Variant':
         return _buildVariantSection();
-      case 'Stock':
+      case 'Finished Goods':
         return _buildStockSection();
       case 'Employee Management':
         return _buildEmployeeManagementSection();
@@ -1509,7 +1509,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Stock Management',
+          'Finished Goods',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
