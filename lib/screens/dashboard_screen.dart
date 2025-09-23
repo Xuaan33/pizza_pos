@@ -52,7 +52,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) async {
+          printKitchenOrder,
+          openingDate,) async {
         _posProfile = posProfile;
         final dateFormat = DateFormat('yyyy-MM-dd');
 
@@ -294,7 +295,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) {
+          printKitchenOrder,
+          openingDate,) {
         return FutureBuilder<Map<String, dynamic>>(
           future: _dashboardData,
           builder: (context, snapshot) {
@@ -948,7 +950,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             taxes,
                             hasOpening,
                             tier,
-                            printKitchenOrder) {
+                            printKitchenOrder,
+                            openingDate,) {
                           return paymentMethods.firstWhere(
                             (pm) => pm['name'] == methodName,
                             orElse: () => {},

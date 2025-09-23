@@ -44,7 +44,8 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) {
+          printKitchenOrder,
+          openingDate,) {
         // Initialize controllers if not done yet
         if (_amountControllers.isEmpty) {
           _amountControllers.addAll(
@@ -214,7 +215,10 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
 
       //to be confirmed
       if (response['message']["status"] == "Open") {
-        ref.read(authProvider.notifier).markOpeningCreated();
+        // Save the opening date when creating opening entry
+        ref
+            .read(authProvider.notifier)
+            .markOpeningCreated(openingDate: DateTime.now());
         if (mounted) {
           Navigator.pop(context);
           Fluttertoast.showToast(

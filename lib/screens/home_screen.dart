@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
@@ -134,7 +135,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // Filter out disabled item groups (where disabled != 0)
             itemGroups = List<Map<String, dynamic>>.from(
                     response['message']['item_groups'])
-                .where((group) => (group['disabled'] ?? 1) == 0)
+                .where((group) =>
+                    (group['disabled'] ?? 1) == 0 &&
+                    group['name'] != 'All Item Groups')
                 .toList();
 
             _isLoadingItemGroups = false;
@@ -284,7 +287,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) async {
+          printKitchenOrder,
+          openingDate) async {
         try {
           final newStockQuantities = <String, int>{};
 
@@ -334,19 +338,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder) {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+        ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
             CustomerDisplayController.updateOrderDisplay(
@@ -417,14 +424,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                   height: 40),
                                               const SizedBox(width: 10),
                                             ],
-                                            Text(
-                                              widget.isTier1
-                                                  ? 'Instant Order'
-                                                  : 'Table ${widget.tableNumber}',
-                                              style: const TextStyle(
-                                                fontSize: 24,
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  widget.isTier1
+                                                      ? 'Instant Order'
+                                                      : 'Table ${widget.tableNumber}',
+                                                  style: const TextStyle(
+                                                    fontSize: 24,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                // Add opening status - access directly from auth state
+                                                Consumer(
+                                                  builder:
+                                                      (context, ref, child) {
+                                                    final authState =
+                                                        ref.watch(authProvider);
+                                                    return authState.when(
+                                                      initial: () =>
+                                                          Container(), // Hide while loading
+                                                      unauthenticated: () =>
+                                                          Container(), // Hide if not authenticated
+                                                      authenticated: (sid,
+                                                          apiKey,
+                                                          apiSecret,
+                                                          username,
+                                                          email,
+                                                          fullName,
+                                                          posProfile,
+                                                          branch,
+                                                          paymentMethods,
+                                                          taxes,
+                                                          hasOpening,
+                                                          tier,
+                                                          printKitchenOrder,
+                                                          openingDate) {
+                                                        return Container(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  horizontal: 8,
+                                                                  vertical: 8),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: hasOpening
+                                                                ? Colors.green
+                                                                : Colors.red,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        30),
+                                                          ),
+                                                          child: Text(
+                                                            hasOpening
+                                                                ? 'Opening Entry: ${DateFormat('dd MMM yyyy').format(openingDate ?? DateTime.now())}'
+                                                                : 'No Opening Entry',
+                                                            style:
+                                                                const TextStyle(
+                                                              color:
+                                                                  Colors.white,
+                                                              fontSize: 14,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
@@ -1133,19 +1207,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<bool> _onBackPressed() async {
     final authState = ref.read(authProvider);
     final isTier1 = authState.maybeWhen(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder) {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        opneingDate,
+      ) {
         return tier.toLowerCase() == 'tier1';
       },
       orElse: () => false,
@@ -1289,19 +1366,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!confirmed) return;
 
     authState.whenOrNull(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder) async {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+      ) async {
         setState(() => _isLoading = true);
 
         try {
@@ -1455,19 +1535,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     try {
       final authState = ref.read(authProvider);
-      await authState.whenOrNull(authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder) async {
+      await authState.whenOrNull(authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+      ) async {
         if (tier.toLowerCase() == "tier1") {
           if (!hasOpening) {
             // Show dialog if no opening entry exists
@@ -1641,7 +1724,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           const BorderRadius.vertical(top: Radius.circular(15)),
                       child: Padding(
                         padding: const EdgeInsets.all(
-                            8.0), // Adjust the value as needed
+                            12.0), // Adjust the value as needed
                         child: item['image'] != null
                             ? Image.network(
                                 '$baseImageUrl${item['image']}',
@@ -1653,9 +1736,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     : Colors.grey.withOpacity(0.5),
                                 colorBlendMode: BlendMode.saturation,
                                 errorBuilder: (context, error, stackTrace) =>
-                                    Image.network(
-                                  item['image'],
+                                    Image.asset(
+                                  'assets/pizza.png',
                                   fit: BoxFit.cover,
+                                  height: 70,
+                                  width: double.infinity,
                                 ),
                               )
                             : Image.asset(
@@ -1781,8 +1866,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         height: 60,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
-                            Image.network(
-                          '${item['image']}',
+                            Image.asset(
+                          'assets/pizza.png',
                           width: 60,
                           height: 60,
                           fit: BoxFit.cover,
@@ -2281,19 +2366,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid,
-              apiKey,
-              apiSecret,
-              username,
-              email,
-              fullName,
-              posProfile,
-              branch,
-              paymentMethods,
-              taxes,
-              hasOpening,
-              tier,
-              printKitchenOrder) {
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+          ) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,

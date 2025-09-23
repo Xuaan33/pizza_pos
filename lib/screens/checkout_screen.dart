@@ -101,7 +101,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) {
+          printKitchenOrder,
+          openingDate,) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
             return {
@@ -167,6 +168,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     hasOpening,
                     tier,
                     printKitchenOrder,
+                    openingDate,
                   ) {
                     return posProfile;
                   },
@@ -280,7 +282,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) async {
+          printKitchenOrder,
+          openingDate,) async {
         try {
           final newStockQuantities = <String, int>{};
 
@@ -335,7 +338,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) {
+            printKitchenOrder,
+            openingDate,) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.updateOrderDisplay(
               items: orderItems.map((item) {
@@ -1442,6 +1446,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     hasOpening,
                     tier,
                     printKitchenOrder,
+                    openingDate,
                   ) {
                     return posProfile;
                   },
@@ -1659,6 +1664,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               hasOpening,
               tier,
               printKitchenOrder,
+              openingDate,
             ) {
               return printKitchenOrder == 1;
             },
@@ -2125,7 +2131,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) {
+          printKitchenOrder,
+          openingDate,) {
         return tier.toLowerCase() == 'tier1';
       },
       orElse: () => false,
@@ -3179,6 +3186,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     hasOpening,
                     tier,
                     printKitchenOrder,
+                    openingDate,
                   ) {
                     return posProfile;
                   },
@@ -3260,7 +3268,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       taxes,
                       hasOpening,
                       tier,
-                      printKitchenOrder) {
+                      printKitchenOrder,
+                      openingDate,) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3349,7 +3358,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           taxes,
                           hasOpening,
                           tier,
-                          printKitchenOrder) =>
+                          printKitchenOrder,
+                          openingDate,) =>
                       posProfile,
                   orElse: () => null,
                 ) ??
@@ -3466,7 +3476,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       taxes,
                       hasOpening,
                       tier,
-                      printKitchenOrder) {
+                      printKitchenOrder,
+                      openingDate,) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3555,7 +3566,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               taxes,
               hasOpening,
               tier,
-              printKitchenOrder) {
+              printKitchenOrder,
+              openingDate,) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -3839,7 +3851,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       taxes,
                       hasOpening,
                       tier,
-                      printKitchenOrder) {
+                      printKitchenOrde,
+                      openingDate,) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -4011,7 +4024,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) {
+            printKitchenOrder,
+            openingDate,) {
           return posProfile;
         },
         orElse: () => null,
@@ -4293,7 +4307,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) {
+            printKitchenOrder,
+            openingDate,) {
           return posProfile;
         },
         orElse: () => null,
