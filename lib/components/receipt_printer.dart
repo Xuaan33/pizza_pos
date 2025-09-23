@@ -8,10 +8,53 @@ import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:image/image.dart' as img;
 
 class ReceiptPrinter {
+  static Future<bool> canPrint() async {
+    try {
+      final printers = await Printing.listPrinters();
+      return printers.isNotEmpty;
+    } catch (e) {
+      print('Printer detection error: $e');
+      return false;
+    }
+  }
+
+  static Future<Printer?> getDefaultPrinter() async {
+    try {
+      final printers = await Printing.listPrinters();
+      if (printers.isEmpty) {
+        return null;
+      }
+      
+      // Look for a default printer
+      final defaultPrinter = printers.firstWhere(
+        (printer) => printer.isDefault,
+        orElse: () => printers.first,
+      );
+      
+      return defaultPrinter;
+    } catch (e) {
+      print('Error getting default printer: $e');
+      return null;
+    }
+  }
+
   static Future<void> printReceipt(Uint8List bytes, {bool isPdf = true}) async {
     try {
+      // Check if printers are available first
+      final canPrint = await ReceiptPrinter.canPrint();
+      if (!canPrint) {
+        throw Exception('No printer detected');
+      }
+
+      // Get the default printer
+      final printer = await getDefaultPrinter();
+      if (printer == null) {
+        throw Exception('No printer available');
+      }
+
       if (isPdf) {
-        await Printing.layoutPdf(
+        await Printing.directPrintPdf(
+          printer: printer,
           onLayout: (PdfPageFormat format) async => bytes,
           usePrinterSettings: true,
         );
@@ -36,7 +79,8 @@ class ReceiptPrinter {
           );
           
           final pdfBytes = await pdf.save();
-          await Printing.layoutPdf(
+          await Printing.directPrintPdf(
+            printer: printer,
             onLayout: (PdfPageFormat format) async => pdfBytes,
             usePrinterSettings: true,
           );
@@ -83,13 +127,24 @@ class ReceiptPrinter {
     }
   }
 
-  static Future<void> showPrintDialog(
+  static Future<void> autoPrintReceipt(
     BuildContext context, 
     String orderName, {
     bool shouldPrintKitchenOrder = false,
   }) async {
-    ScaffoldMessenger.of(context);
     try {
+      // Check if printer is available first
+      final canPrint = await ReceiptPrinter.canPrint();
+      if (!canPrint) {
+        Fluttertoast.showToast(
+          msg: "No printer detected",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.orange,
+          textColor: Colors.white,
+        );
+        return;
+      }
+
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -102,8 +157,8 @@ class ReceiptPrinter {
               const SizedBox(height: 16),
               Text(
                 shouldPrintKitchenOrder 
-                  ? 'Preparing receipt and kitchen order for printing...'
-                  : 'Preparing receipt for printing...',
+                  ? 'Printing receipt and kitchen order...'
+                  : 'Printing receipt...',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
@@ -138,5 +193,17 @@ class ReceiptPrinter {
         textColor: Colors.white,
       );
     }
+  }
+
+  // Keep the original showPrintDialog for manual printing if needed
+  static Future<void> showPrintDialog(
+    BuildContext context, 
+    String orderName, {
+    bool shouldPrintKitchenOrder = false,
+  }) async {
+    // This can remain the same as your original implementation
+    // or you can redirect to autoPrintReceipt if you prefer
+    await autoPrintReceipt(context, orderName, 
+      shouldPrintKitchenOrder: shouldPrintKitchenOrder);
   }
 }
