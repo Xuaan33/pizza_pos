@@ -129,7 +129,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) {
+          printKitchenOrder,
+          openingDate,) {
         return Scaffold(
           body: Row(
             children: [

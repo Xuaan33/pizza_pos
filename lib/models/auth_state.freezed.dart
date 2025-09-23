@@ -32,7 +32,8 @@ mixin _$AuthState {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)
+            int printKitchenOrder,
+            DateTime? openingDate)
         authenticated,
     required TResult Function() unauthenticated,
   }) =>
@@ -53,7 +54,8 @@ mixin _$AuthState {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) =>
@@ -74,7 +76,8 @@ mixin _$AuthState {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -179,7 +182,8 @@ class _$InitialImpl implements _Initial {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)
+            int printKitchenOrder,
+            DateTime? openingDate)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -203,7 +207,8 @@ class _$InitialImpl implements _Initial {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -227,7 +232,8 @@ class _$InitialImpl implements _Initial {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -296,7 +302,8 @@ abstract class _$$AuthenticatedImplCopyWith<$Res> {
       List<Map<String, dynamic>> taxes,
       bool hasOpening,
       String tier,
-      int printKitchenOrder});
+      int printKitchenOrder,
+      DateTime? openingDate});
 }
 
 /// @nodoc
@@ -325,6 +332,7 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
     Object? hasOpening = null,
     Object? tier = null,
     Object? printKitchenOrder = null,
+    Object? openingDate = freezed,
   }) {
     return _then(_$AuthenticatedImpl(
       sid: null == sid
@@ -379,6 +387,10 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
           ? _value.printKitchenOrder
           : printKitchenOrder // ignore: cast_nullable_to_non_nullable
               as int,
+      openingDate: freezed == openingDate
+          ? _value.openingDate
+          : openingDate // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 }
@@ -399,7 +411,8 @@ class _$AuthenticatedImpl implements _Authenticated {
       required final List<Map<String, dynamic>> taxes,
       required this.hasOpening,
       required this.tier,
-      required this.printKitchenOrder})
+      required this.printKitchenOrder,
+      required this.openingDate})
       : _paymentMethods = paymentMethods,
         _taxes = taxes;
 
@@ -441,10 +454,12 @@ class _$AuthenticatedImpl implements _Authenticated {
   final String tier;
   @override
   final int printKitchenOrder;
+  @override
+  final DateTime? openingDate;
 
   @override
   String toString() {
-    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening, tier: $tier, printKitchenOrder: $printKitchenOrder)';
+    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening, tier: $tier, printKitchenOrder: $printKitchenOrder, openingDate: $openingDate)';
   }
 
   @override
@@ -471,7 +486,9 @@ class _$AuthenticatedImpl implements _Authenticated {
                 other.hasOpening == hasOpening) &&
             (identical(other.tier, tier) || other.tier == tier) &&
             (identical(other.printKitchenOrder, printKitchenOrder) ||
-                other.printKitchenOrder == printKitchenOrder));
+                other.printKitchenOrder == printKitchenOrder) &&
+            (identical(other.openingDate, openingDate) ||
+                other.openingDate == openingDate));
   }
 
   @override
@@ -489,7 +506,8 @@ class _$AuthenticatedImpl implements _Authenticated {
       const DeepCollectionEquality().hash(_taxes),
       hasOpening,
       tier,
-      printKitchenOrder);
+      printKitchenOrder,
+      openingDate);
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -516,7 +534,8 @@ class _$AuthenticatedImpl implements _Authenticated {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)
+            int printKitchenOrder,
+            DateTime? openingDate)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -533,7 +552,8 @@ class _$AuthenticatedImpl implements _Authenticated {
         taxes,
         hasOpening,
         tier,
-        printKitchenOrder);
+        printKitchenOrder,
+        openingDate);
   }
 
   @override
@@ -553,7 +573,8 @@ class _$AuthenticatedImpl implements _Authenticated {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -570,7 +591,8 @@ class _$AuthenticatedImpl implements _Authenticated {
         taxes,
         hasOpening,
         tier,
-        printKitchenOrder);
+        printKitchenOrder,
+        openingDate);
   }
 
   @override
@@ -590,7 +612,8 @@ class _$AuthenticatedImpl implements _Authenticated {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -609,7 +632,8 @@ class _$AuthenticatedImpl implements _Authenticated {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder);
+          printKitchenOrder,
+          openingDate);
     }
     return orElse();
   }
@@ -663,7 +687,8 @@ abstract class _Authenticated implements AuthState {
       required final List<Map<String, dynamic>> taxes,
       required final bool hasOpening,
       required final String tier,
-      required final int printKitchenOrder}) = _$AuthenticatedImpl;
+      required final int printKitchenOrder,
+      required final DateTime? openingDate}) = _$AuthenticatedImpl;
 
   String get sid;
   String get apiKey;
@@ -678,6 +703,7 @@ abstract class _Authenticated implements AuthState {
   bool get hasOpening;
   String get tier;
   int get printKitchenOrder;
+  DateTime? get openingDate;
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -741,7 +767,8 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)
+            int printKitchenOrder,
+            DateTime? openingDate)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -765,7 +792,8 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -789,7 +817,8 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             List<Map<String, dynamic>> taxes,
             bool hasOpening,
             String tier,
-            int printKitchenOrder)?
+            int printKitchenOrder,
+            DateTime? openingDate)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),

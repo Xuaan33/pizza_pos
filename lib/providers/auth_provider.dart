@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/models/auth_state.dart';
@@ -26,6 +27,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final hasOpening = prefs.getBool('has_opening') ?? false;
     final tier = prefs.getString('tier');
     final printKitchenOrder = prefs.getInt('print_kitchen_order');
+    final openingDateString = prefs.getString('opening_date');
+
+    // Parse opening date if it exists
+    DateTime? openingDate;
+    if (openingDateString != null) {
+      try {
+        openingDate = DateTime.parse(openingDateString);
+      } catch (e) {
+        debugPrint('Error parsing opening date: $e');
+      }
+    }
 
     // Add session expiration (e.g., 7 days)
     if (lastLogin != null) {
@@ -60,6 +72,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         hasOpening: hasOpening,
         tier: tier ?? '',
         printKitchenOrder: printKitchenOrder ?? 1,
+        openingDate: openingDate, // Use the parsed opening date
       );
     } else {
       state = const AuthState.unauthenticated();
@@ -89,6 +102,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
             response['tier'] ?? 'tier2'); // Default to tier2 if not provided
         await prefs.setString('last_login', DateTime.now().toIso8601String());
 
+        DateTime? openingDate;
+
+        // First, check if opening date is provided in the login response
+        if (response['opening_date'] != null) {
+          try {
+            openingDate = DateTime.parse(response['opening_date']);
+            await prefs.setString('opening_date', response['opening_date']);
+          } catch (e) {
+            debugPrint('Error parsing opening date from response: $e');
+          }
+        }
+
+        // If not in response but hasOpening is true, try to load from prefs
+        if (openingDate == null && response['has_opening'] == true) {
+          final existingOpeningDate = prefs.getString('opening_date');
+          if (existingOpeningDate != null) {
+            try {
+              openingDate = DateTime.parse(existingOpeningDate);
+            } catch (e) {
+              debugPrint('Error parsing existing opening date: $e');
+            }
+          }
+        }
+
+        // If still no date but hasOpening is true, use current date as fallback
+        if (openingDate == null && response['has_opening'] == true) {
+          openingDate = DateTime.now();
+          await prefs.setString('opening_date', openingDate.toIso8601String());
+        }
+
         state = AuthState.authenticated(
           sid: response['sid'],
           apiKey: response['api_key'],
@@ -104,6 +147,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           hasOpening: response['has_opening'],
           tier: response['tier'] ?? 'tier2', // Default to tier2 if not provided
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
+          openingDate: openingDate, // Add the opening date here
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -115,14 +159,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> updateOpeningStatus(bool hasOpening) async {
+  Future<void> updateOpeningStatus(bool hasOpening,
+      {DateTime? openingDate}) async {
     state.maybeWhen(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, _, tier, printKitchenOrder) async {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          _,
+          tier,
+          printKitchenOrder,
+          oldOpeningDate) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
 
-        // Update state
+        final newOpeningDate = openingDate ?? oldOpeningDate;
+        if (hasOpening && newOpeningDate != null) {
+          await prefs.setString(
+              'opening_date', newOpeningDate.toIso8601String());
+        } else if (!hasOpening) {
+          await prefs.remove('opening_date');
+        }
+
+        // Update state with the new opening date
         state = AuthState.authenticated(
           sid: sid,
           apiKey: apiKey,
@@ -136,21 +201,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
           taxes: taxes,
           hasOpening: hasOpening,
           tier: tier,
-          printKitchenOrder: printKitchenOrder
+          printKitchenOrder: printKitchenOrder,
+          openingDate: hasOpening ? newOpeningDate : null,
         );
       },
       orElse: () {},
     );
   }
 
-  // Add method to mark opening as created
-  Future<void> markOpeningCreated() async {
-    await updateOpeningStatus(true);
+  Future<void> markOpeningCreated({DateTime? openingDate}) async {
+    await updateOpeningStatus(true, openingDate: openingDate ?? DateTime.now());
   }
 
-  // Add method to mark opening as closed (for next day)
   Future<void> markOpeningClosed() async {
     await updateOpeningStatus(false);
+  }
+
+// Add method to get opening date
+  Future<DateTime?> getOpeningDate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final openingDateString = prefs.getString('opening_date');
+    if (openingDateString != null) {
+      return DateTime.parse(openingDateString);
+    }
+    return null;
   }
 
   Future<void> logout() async {

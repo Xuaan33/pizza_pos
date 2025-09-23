@@ -29,7 +29,8 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
           taxes,
           hasOpening,
           tier,
-          printKitchenOrder) {
+          printKitchenOrder,
+          openingDate,) {
         return Container(
           color: Colors.grey[100],
           padding: const EdgeInsets.all(20),
