@@ -173,7 +173,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
     authState.when(
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder,openingDate,) {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
           _showOpeningRequiredDialog();
@@ -272,7 +272,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder) {
+            posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder,openingDate,) {
           return Container(
             color: Colors.grey[100],
             padding: const EdgeInsets.all(20),
@@ -312,7 +312,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
       authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder) {
+          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder,openingDate,) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Row(

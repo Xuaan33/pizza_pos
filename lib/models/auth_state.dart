@@ -18,7 +18,8 @@ class AuthState with _$AuthState {
     required List<Map<String, dynamic>> taxes,
     required bool hasOpening,
     required String tier,
-    required int printKitchenOrder, // Add this field
+    required int printKitchenOrder,
+    required DateTime? openingDate, 
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }

@@ -37,7 +37,8 @@ class MyApp extends ConsumerWidget {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) {
+            printKitchenOrder,
+            openingDate,) {
           return MainLayout();
         },
       ),

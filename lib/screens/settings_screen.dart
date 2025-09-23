@@ -147,7 +147,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) async {
+            printKitchenOrder,
+            openingDate,) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
@@ -240,7 +241,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) async {
+            printKitchenOrder,
+            openingDate,) async {
           final itemsToStockIn = items.map((item) {
             return {
               'item_code': item['item_code'],
@@ -352,7 +354,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) async {
+            printKitchenOrder,
+            openingDate,) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
             if (mounted) {
@@ -470,6 +473,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         hasOpening,
         tier,
         printKitchenOrder,
+        openingDate,
       ) {
         final sections = _getSections(tier);
 
@@ -1687,7 +1691,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                             taxes,
                                             hasOpening,
                                             tier,
-                                            printKitchenOrder) {
+                                            printKitchenOrder,
+                                            openingDate,) {
                                           _employeeCheckIn(
                                               employee['name'], branch);
                                         },
@@ -1716,7 +1721,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                             taxes,
                                             hasOpening,
                                             tier,
-                                            printKitchenOrder) {
+                                            printKitchenOrder,
+                                            openingDate,) {
                                           _employeeCheckOut(
                                               employee['name'], branch);
                                         },
@@ -1844,7 +1850,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) async {
+            printKitchenOrder,
+            openingDate,) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,
           );
@@ -2123,7 +2130,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             taxes,
             hasOpening,
             tier,
-            printKitchenOrder) async {
+            printKitchenOrder,
+            openingDate,) async {
           final itemsToAdjust = items.map((item) {
             // Calculate the new quantity by subtracting from current
             final currentQty = (item['actual_qty'] ?? 0).toDouble();
