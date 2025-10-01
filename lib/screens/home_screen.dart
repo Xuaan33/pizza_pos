@@ -344,7 +344,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             disable: 0,
           );
 
-          debugPrint('Stock API Response: $response');
 
           if (response['success'] == true) {
             final newStockQuantities = <String, int>{};
