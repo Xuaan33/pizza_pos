@@ -65,49 +65,48 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     }
   }
 
- List<Widget> _buildVariantText(Map<String, dynamic> item) {
-  dynamic variantInfo = item['custom_variant_info'];
-  print("Raw Variant Info: $variantInfo (${variantInfo.runtimeType})");
+  List<Widget> _buildVariantText(Map<String, dynamic> item) {
+    dynamic variantInfo = item['custom_variant_info'];
+    print("Raw Variant Info: $variantInfo (${variantInfo.runtimeType})");
 
-  if (variantInfo == null) return [];
+    if (variantInfo == null) return [];
 
-  // If it's a string, try decode until it becomes a List
-  while (variantInfo is String) {
-    try {
-      variantInfo = jsonDecode(variantInfo);
-    } catch (e) {
-      debugPrint('Error parsing variant info: $e');
-      return [];
-    }
-  }
-
-  if (variantInfo is List) {
-    return variantInfo.expand((variant) {
-      if (variant is Map && variant['options'] is List) {
-        return (variant['options'] as List).map((option) {
-          return Text(
-            '• ${variant['variant_group']}: ${option['option']}'
-            '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
-            style: TextStyle(fontSize: 12, color: Colors.black),
-          );
-        }).toList();
+    // If it's a string, try decode until it becomes a List
+    while (variantInfo is String) {
+      try {
+        variantInfo = jsonDecode(variantInfo);
+      } catch (e) {
+        debugPrint('Error parsing variant info: $e');
+        return [];
       }
-      return <Widget>[];
-    }).toList();
+    }
+
+    if (variantInfo is List) {
+      return variantInfo.expand((variant) {
+        if (variant is Map && variant['options'] is List) {
+          return (variant['options'] as List).map((option) {
+            return Text(
+              '• ${variant['variant_group']}: ${option['option']}'
+              '${option['additional_cost'] > 0 ? ' (+RM${option['additional_cost'].toStringAsFixed(2)})' : ''}',
+              style: TextStyle(fontSize: 12, color: Colors.black),
+            );
+          }).toList();
+        }
+        return <Widget>[];
+      }).toList();
+    }
+
+    if (variantInfo is Map) {
+      return variantInfo.entries.map((entry) {
+        return Text(
+          '• ${entry.key}: ${entry.value}',
+          style: TextStyle(fontSize: 12, color: Colors.black),
+        );
+      }).toList();
+    }
+
+    return [];
   }
-
-  if (variantInfo is Map) {
-    return variantInfo.entries.map((entry) {
-      return Text(
-        '• ${entry.key}: ${entry.value}',
-        style: TextStyle(fontSize: 12, color: Colors.black),
-      );
-    }).toList();
-  }
-
-  return [];
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -117,20 +116,23 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) {
         return Scaffold(
           body: Row(
             children: [

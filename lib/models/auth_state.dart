@@ -20,6 +20,7 @@ class AuthState with _$AuthState {
     required String tier,
     required int printKitchenOrder,
     required DateTime? openingDate, 
+    required List<dynamic> itemsGroups,
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }
