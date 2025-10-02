@@ -6,6 +6,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -38,7 +39,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<TextEditingController> _itemRemarkControllers = [];
   bool _isLoading = false;
   Map<String, dynamic>? _existingOrder;
-  String baseImageUrl = 'http://shiokpos.byondwave.com';
+  String baseImageUrl = '';
   Map<String, int> _itemStockQuantities =
       {}; // key: item_code, value: available stock
   bool _isLoadingStock = false;
@@ -46,9 +47,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadBaseUrl();
     _loadItemGroups();
     _loadAvailableItems();
     _initializeOrderItems();
+  }
+
+  Future<void> _loadBaseUrl() async {
+    baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
+    setState(() {}); // Refresh UI
   }
 
   void _initializeOrderItems() {
@@ -143,7 +150,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           tier,
           printKitchenOrder,
           openingDate,
-          itemsGroups, // Add this parameter
+          itemsGroups,
+          baseUrl,
+          merchantId,
         ) {
           if (mounted) {
             setState(() {
@@ -195,7 +204,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           username,
           email,
           fullName,
-          posProfile, // This is available here
+          posProfile,
           branch,
           paymentMethods,
           taxes,
@@ -204,6 +213,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           final posService = PosService();
           final response =
@@ -336,6 +347,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) async {
         try {
           final response = await PosService().getStockBalanceSummary(
@@ -343,7 +356,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             isPosItem: 1,
             disable: 0,
           );
-
 
           if (response['success'] == true) {
             final newStockQuantities = <String, int>{};
@@ -461,6 +473,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
@@ -573,6 +587,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                         printKitchenOrder,
                                                         openingDate,
                                                         itemsGroups,
+                                                        baseUrl,
+                                                        merchantId,
                                                       ) {
                                                         return Container(
                                                           padding:
@@ -1334,6 +1350,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         printKitchenOrder,
         opneingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         return tier.toLowerCase() == 'tier1';
       },
@@ -1494,6 +1512,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) async {
         setState(() => _isLoading = true);
 
@@ -1664,6 +1684,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) async {
         if (tier.toLowerCase() == "tier1") {
           if (!hasOpening) {
@@ -2496,6 +2518,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
+            baseUrl,
+            merchantId,
           ) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(

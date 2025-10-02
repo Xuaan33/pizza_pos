@@ -26,7 +26,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  static const String baseUrl = 'https://shiokpos.byondwave.com';
   int _selectedIndex = 0;
   bool _isPosConnected = false;
   bool _isTesting = false;
@@ -151,6 +150,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
@@ -248,6 +249,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           final itemsToStockIn = items.map((item) {
             return {
@@ -364,6 +367,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
@@ -484,6 +489,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         final sections = _getSections(tier);
 
@@ -1705,6 +1712,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                           printKitchenOrder,
                                           openingDate,
                                           itemsGroups,
+                                          baseUrl,
+                                          merchantId,
                                         ) {
                                           _employeeCheckIn(
                                               employee['name'], branch);
@@ -1738,6 +1747,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                           printKitchenOrder,
                                           openingDate,
                                           itemsGroups,
+                                          baseUrl,
+                                          merchantId,
                                         ) {
                                           _employeeCheckOut(
                                               employee['name'], branch);
@@ -1870,6 +1881,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,
@@ -2153,6 +2166,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           final itemsToAdjust = items.map((item) {
             // Calculate the new quantity by subtracting from current

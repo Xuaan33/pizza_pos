@@ -101,6 +101,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         return Scaffold(
           body: Row(
@@ -144,6 +146,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) async {
           try {
             final future = PosService().getOrders(posProfile: posProfile);
@@ -511,6 +515,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         if (tier.toLowerCase() == 'tier1') {
           return [
@@ -641,6 +647,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         return Container(
           width: 100,

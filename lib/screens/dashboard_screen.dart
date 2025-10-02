@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -18,7 +19,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   late Future<Map<String, dynamic>> _dashboardData;
   late String _posProfile;
-  String baseImageUrl = 'http://shiokpos.byondwave.com';
+  String baseImageUrl = '';
   String _selectedTimeRange = 'Daily'; // 'Daily', 'Weekly', 'Monthly', 'Custom'
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
@@ -28,7 +29,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _loadBaseUrl();
     _loadData();
+  }
+
+  Future<void> _loadBaseUrl() async {
+    baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
+    setState(() {}); // Refresh UI
   }
 
   void _loadData() {
@@ -56,6 +63,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) async {
         _posProfile = posProfile;
         final dateFormat = DateFormat('yyyy-MM-dd');
@@ -126,7 +135,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ]);
 
         print(
-            'http://shiokpos.byondwave.com/shiok_pos.api.get_revenue?pos_profile=$posProfile&daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&xaxis=$xaxisParam');
+            '$baseUrl.api.get_revenue?pos_profile=$posProfile&daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&xaxis=$xaxisParam');
 
         final peakTimes = _convertListToProperType(results[1]['message']);
         final totalOrders = peakTimes.fold(0, (sum, timeData) {
@@ -302,6 +311,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         return FutureBuilder<Map<String, dynamic>>(
           future: _dashboardData,
@@ -960,6 +971,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           printKitchenOrder,
                           openingDate,
                           itemsGroups,
+                          baseUrl,
+                          merchantId,
                         ) {
                           return paymentMethods.firstWhere(
                             (pm) => pm['name'] == methodName,
@@ -972,7 +985,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       final imageUrl = paymentMethodData[
                                   'custom_payment_mode_image'] !=
                               null
-                          ? 'https://shiokpos.byondwave.com${paymentMethodData['custom_payment_mode_image']}'
+                          ? '$baseImageUrl${paymentMethodData['custom_payment_mode_image']}'
                           : null;
 
                       return Container(

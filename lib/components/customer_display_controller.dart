@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/service/auth_service.dart';
 
 class CustomerDisplayController {
@@ -6,7 +7,11 @@ class CustomerDisplayController {
 
   static Future<void> showCustomerScreen() async {
     try {
-      await _channel.invokeMethod('showCustomerScreen', {'authToken': await AuthService.getAuthToken()});
+      final baseUrl = await ImageUrlHelper.getBaseImageUrl();
+      await _channel.invokeMethod('showCustomerScreen', {
+        'authToken': await AuthService.getAuthToken(),
+        'baseUrl': baseUrl,
+      });
     } catch (e) {
       print('Error showing customer screen: $e');
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/item_group.dart';
 import 'package:shiok_pos_android_app/components/variant_group.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -35,10 +36,12 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
   String? _tempFilterVariantGroup;
   String? _tempSortBy;
   bool? _tempSortAscending;
+  String baseImageUrl = '';
 
   @override
   void initState() {
     super.initState();
+    _loadBaseUrl();
     _loadData();
 
     _tempFilterStatus = _filterStatus;
@@ -47,6 +50,11 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
     _tempFilterVariantGroup = _filterVariantGroup;
     _tempSortBy = _sortBy;
     _tempSortAscending = _sortAscending;
+  }
+
+  Future<void> _loadBaseUrl() async {
+    baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
+    setState(() {}); // Refresh UI
   }
 
   Future<void> _loadData() async {
@@ -72,6 +80,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) =>
             posProfile,
         orElse: () => null,
@@ -93,7 +103,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
         // First create basic items
         final basicItems =
-            itemsData.map((item) => Item.fromJson(item)).toList();
+            itemsData.map((item) => Item.fromJson(item, baseUrl: baseImageUrl)).toList();
 
         // Then fetch detailed information for each item
         final detailedItems = await _fetchDetailedItems(basicItems);
@@ -144,7 +154,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         final response = await PosService().getItem(basicItem.itemCode);
 
         if (response['success'] == true) {
-          final detailedItem = Item.fromDetailedJson(response['message']);
+          final detailedItem = Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
           _detailedItemsCache[basicItem.itemCode] = detailedItem;
           detailedItems.add(detailedItem);
         } else {
@@ -171,7 +181,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       final response = await PosService().getItem(item.itemCode);
 
       if (response['success'] == true) {
-        final updatedItem = Item.fromDetailedJson(response['message']);
+        final updatedItem = Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
         _detailedItemsCache[item.itemCode] = updatedItem;
 
         // Update the item in the list
@@ -2079,15 +2089,13 @@ class Item {
   }
 
   // Factory method for basic item list response
-  factory Item.fromJson(Map<String, dynamic> json) {
+  factory Item.fromJson(Map<String, dynamic> json, {required String baseUrl}) {
     return Item(
       itemCode: json['item_code'] ?? '',
       itemName: json['item_name'] ?? '',
       itemGroup: json['item_group'] ?? '',
       price: (json['price_list_rate'] as num?)?.toDouble() ?? 0.0,
-      imageUrl: json['image'] != null
-          ? 'https://shiokpos.byondwave.com${json['image']}'
-          : null,
+      imageUrl: json['image'] != null ? '$baseUrl${json['image']}' : null,
       description: json['description'] as String?,
       variantGroups: (json['structured_variant_info'] as List<dynamic>?)
               ?.map((e) => e['variant_group'].toString())
@@ -2100,15 +2108,14 @@ class Item {
   }
 
   // Factory method for detailed item response
-  factory Item.fromDetailedJson(Map<String, dynamic> json) {
+  factory Item.fromDetailedJson(Map<String, dynamic> json,
+      {required String baseUrl}) {
     return Item(
       itemCode: json['item_code'] ?? '',
       itemName: json['item_name'] ?? '',
       itemGroup: json['item_group'] ?? '',
       price: (json['price_list_rate'] as num?)?.toDouble() ?? 0.0,
-      imageUrl: json['image'] != null
-          ? 'https://shiokpos.byondwave.com${json['image']}'
-          : null,
+      imageUrl: json['image'] != null ? '$baseUrl${json['image']}' : null,
       description: json['description'] as String?,
       variantGroups: (json['custom_variant_group_table'] as List<dynamic>?)
               ?.map((e) => e['variant_group'].toString())

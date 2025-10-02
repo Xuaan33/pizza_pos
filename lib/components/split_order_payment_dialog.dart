@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -38,7 +39,7 @@ class _SplitOrderPaymentDialogState
   double _amountGiven = 0.0;
   bool _isProcessingPayment = false;
   bool _isCashPayment = false;
-  String baseImageUrl = 'http://shiokpos.byondwave.com';
+  String baseImageUrl = '';
   bool _isDeletingOrder = false;
   bool _isLoading = true;
   Map<String, dynamic> _orderDetails = {};
@@ -47,6 +48,12 @@ class _SplitOrderPaymentDialogState
   void initState() {
     super.initState();
     _fetchOrderDetails();
+    _loadBaseUrl();
+  }
+
+  Future<void> _loadBaseUrl() async {
+    baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
+    setState(() {}); // Refresh UI
   }
 
   Future<void> _fetchOrderDetails() async {
@@ -69,6 +76,8 @@ class _SplitOrderPaymentDialogState
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },

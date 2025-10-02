@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
@@ -38,6 +39,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _filterStatus = 'All'; // 'All', 'Draft', 'Paid'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   Map<String, dynamic>? _selectedOrder;
+    String baseImageUrl = '';
+
 
   @override
   bool get wantKeepAlive => true;
@@ -46,9 +49,15 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   void initState() {
     super.initState();
     // Initial load
+    _loadBaseUrl();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
     });
+  }
+
+  Future<void> _loadBaseUrl() async {
+    baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
+    setState(() {}); // Refresh UI
   }
 
   Future<void> _refreshOrders() async {
@@ -132,6 +141,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         return Scaffold(
           body: Row(
@@ -930,7 +941,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         // Ensure image URL is properly formatted
         final image = convertedItem['image']?.toString() ?? '';
         if (image.isNotEmpty && !image.startsWith('http')) {
-          convertedItem['image'] = 'https://shiokpos.byondwave.com$image';
+          convertedItem['image'] = '$baseImageUrl$image';
         }
 
         formattedItems.add(convertedItem);

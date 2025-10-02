@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -15,7 +16,27 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   String enteredPin = "";
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _merchantIdController = TextEditingController();
   bool _isLoading = false;
+  bool _showMerchantIdField = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStoredMerchantId();
+  }
+
+  Future<void> _checkStoredMerchantId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final storedMerchantId = prefs.getString('merchant_id');
+
+    if (storedMerchantId != null && storedMerchantId.isNotEmpty) {
+      setState(() {
+        _merchantIdController.text = storedMerchantId;
+        _showMerchantIdField = false;
+      });
+    }
+  }
 
   void _onKeyPress(String value) {
     if (enteredPin.length < 4) {
@@ -27,10 +48,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Future<void> _validateCredentials() async {
     final username = _usernameController.text.trim();
+    final merchantId = _merchantIdController.text.trim();
 
-    if (username.isEmpty || enteredPin.isEmpty) {
+    if (username.isEmpty || enteredPin.isEmpty || merchantId.isEmpty) {
       Fluttertoast.showToast(
-        msg: "Please enter both username and PIN",
+        msg: "Please enter username, PIN and merchant ID",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
@@ -40,7 +62,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     setState(() => _isLoading = true);
     try {
-      await ref.read(authProvider.notifier).login(username, enteredPin);
+      await ref
+          .read(authProvider.notifier)
+          .login(username, enteredPin, merchantId);
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -66,9 +90,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     setState(() => enteredPin = "");
   }
 
+  void _showMerchantIdInput() {
+    setState(() {
+      _showMerchantIdField = true;
+    });
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
+    _merchantIdController.dispose();
     super.dispose();
   }
 
@@ -108,6 +139,67 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 15),
+
+                  // Merchant ID field - conditionally shown
+                  if (_showMerchantIdField) ...[
+                    TextField(
+                      controller: _merchantIdController,
+                      decoration: InputDecoration(
+                        labelText: 'Merchant ID',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                  ] else ...[
+                    // Show merchant ID as read-only with edit option
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Merchant ID',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  _merchantIdController.text,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            onPressed: _showMerchantIdInput,
+                            tooltip: 'Change Merchant ID',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                  ],
 
                   const Text("Enter your PIN",
                       style:

@@ -67,6 +67,8 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) =>
             posProfile,
         orElse: () => null,

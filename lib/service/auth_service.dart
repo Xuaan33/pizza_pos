@@ -3,71 +3,103 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String _baseUrl = 'https://shiokpos.byondwave.com/api/method/shiok_pos.api.login';
-  
-  Future<Map<String, dynamic>> login(String username, String password) async {
-  try {
-    final response = await http.post(
-      Uri.parse(_baseUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
-    );
+  // Remove hardcoded baseUrl since it will come from response
+  Future<Map<String, dynamic>> login(
+      String username, String password, String merchantId) async {
+    try {
+      // Use the original URL for login
+      final response = await http.post(
+        Uri.parse(
+            'https://shiokpos.byondwave.com/api/method/shiok_pos_admin.api.v1.login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': username,
+          'password': password,
+          'merchant_id': merchantId,
+        }),
+      );
 
-    final responseData = jsonDecode(response.body);
-    print("LOGIN: $responseData");
+      final responseData = jsonDecode(response.body);
+      print("LOGIN: $responseData");
 
-    if (response.statusCode == 200 && responseData['success'] == true) {
-      final message = responseData['message'];
-      return {
-        'success': true,
-        'message': message['message'] ?? 'Login successful',
-        'sid': message['sid'] ?? '',
-        'api_key': message['api_key'] ?? '',
-        'api_secret': message['api_secret'] ?? '',
-        'username': message['username'] ?? '',
-        'email': message['email'] ?? '',
-        'full_name': message['full_name'] ?? message['username'] ?? '',
-        'pos_profile': message['pos_profile'] ?? '',
-        'branch': message['branch'] ?? '',
-        'mode_of_payment': message['mode_of_payment'] ?? [],
-        'taxes': message['taxes'] ?? [],
-        'has_opening': message['has_opening'] ?? false,
-        'tier': message['tier'],
-        'print_kitchen_order': message['print_kitchen_order'] ?? 1, 
-        'item_groups': message['item_groups'] ?? []
-      };
-    } else {
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        final message = responseData['message'];
+        return {
+          'success': true,
+          'message': message['message'] ?? 'Login successful',
+          'sid': message['sid'] ?? '',
+          'api_key': message['api_key'] ?? '',
+          'api_secret': message['api_secret'] ?? '',
+          'username': message['username'] ?? '',
+          'email': message['email'] ?? '',
+          'full_name': message['full_name'] ?? message['username'] ?? '',
+          'pos_profile': message['pos_profile'] ?? '',
+          'branch': message['branch'] ?? '',
+          'mode_of_payment': message['mode_of_payment'] ?? [],
+          'taxes': message['taxes'] ?? [],
+          'has_opening': message['has_opening'] ?? false,
+          'tier': message['tier'],
+          'print_kitchen_order': message['print_kitchen_order'] ?? 1,
+          'item_groups': message['item_groups'] ?? [],
+          'base_url':
+              message['url'] ?? 'https://asdf.byondwave.com', // Store base URL
+          'merchant_id':
+              message['merchant_id'] ?? merchantId, // Store merchant ID
+        };
+      } else {
+        return {
+          'success': false,
+          'message': responseData['message']['message'] ??
+              responseData['message'] ??
+              'Login failed',
+        };
+      }
+    } catch (e) {
       return {
         'success': false,
-        'message': responseData['message']['message'] ?? 
-                  responseData['message'] ?? 
-                  'Login failed',
+        'message': 'Connection error: $e',
       };
     }
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'Connection error: $e',
-    };
   }
-}
 
   static Future<String?> getAuthToken() async {
     final prefs = await SharedPreferences.getInstance();
     final apiKey = prefs.getString('api_key');
     final apiSecret = prefs.getString('api_secret');
-    
+
     if (apiKey != null && apiSecret != null) {
       return 'token $apiKey:$apiSecret';
     }
     return null;
   }
 
+  static Future<String?> getBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+  }
+
+  static Future<String?> getMerchantId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('merchant_id');
+  }
+
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await prefs.remove('sid');
+    await prefs.remove('api_key');
+    await prefs.remove('api_secret');
+    await prefs.remove('username');
+    await prefs.remove('email');
+    await prefs.remove('full_name');
+    await prefs.remove('pos_profile');
+    await prefs.remove('branch');
+    await prefs.remove('payment_methods');
+    await prefs.remove('taxes');
+    await prefs.remove('has_opening');
+    await prefs.remove('tier');
+    await prefs.remove('print_kitchen_order');
+    await prefs.remove('item_groups');
+    await prefs.remove('last_login');
+    await prefs.remove('base_url');
   }
 }

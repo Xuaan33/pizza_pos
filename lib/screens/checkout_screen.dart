@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
@@ -65,6 +66,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isRemarksEditing = false;
   bool _isSavingRemarks = false;
   String _currentRemarks = '';
+    String baseImageUrl = '';
+
 
   @override
   void dispose() {
@@ -77,6 +80,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    _loadBaseUrl();
     _loadPaymentMethods();
     _loadTodayInfo();
     _fetchOrderDetails();
@@ -84,6 +88,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     // Initialize remarks
     _currentRemarks = widget.order['remarks'] ?? '';
     _remarksController.text = _currentRemarks;
+  }
+
+  Future<void> _loadBaseUrl() async {
+    baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
+    setState(() {}); // Refresh UI
   }
 
   void _loadPaymentMethods() {
@@ -105,6 +114,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
@@ -173,6 +184,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },
@@ -290,6 +303,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) async {
         try {
           final newStockQuantities = <String, int>{};
@@ -300,8 +315,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             isPosItem: 1,
             disable: 0,
           );
-
-          debugPrint('Stock API Response: $response');
 
           if (response['success'] == true) {
             final message = response['message'];
@@ -415,6 +428,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.updateOrderDisplay(
@@ -717,7 +732,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    'https://shiokpos.byondwave.com${method['custom_payment_mode_image']}',
+                    '$baseImageUrl${method['custom_payment_mode_image']}',
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
@@ -1524,6 +1539,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },
@@ -1743,6 +1760,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               printKitchenOrder,
               openingDate,
               itemsGroups,
+              baseUrl,
+              merchantId,
             ) {
               return printKitchenOrder == 1;
             },
@@ -2213,6 +2232,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
+        baseUrl,
+        merchantId,
       ) {
         return tier.toLowerCase() == 'tier1';
       },
@@ -3269,6 +3290,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },
@@ -3354,6 +3377,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },
@@ -3447,6 +3472,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) =>
                       posProfile,
                   orElse: () => null,
@@ -3568,6 +3595,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },
@@ -3645,23 +3674,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (
-            sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,
-            itemsGroups,
-          ) {
+          authenticated: (sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -3949,6 +3978,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrde,
                     openingDate,
                     itemsGroups,
+                    baseUrl,
+                    merchantId,
                   ) {
                     return posProfile;
                   },
@@ -4125,6 +4156,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) {
           return posProfile;
         },
@@ -4333,11 +4366,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'https://shiokpos.byondwave.com$imagePath';
+      return '$baseImageUrl$imagePath';
     }
 
     if (!imagePath.startsWith('assets/')) {
-      return 'https://shiokpos.byondwave.com/$imagePath';
+      return '$baseImageUrl/$imagePath';
     }
 
     return imagePath; // local asset
@@ -4411,6 +4444,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
+          baseUrl,
+          merchantId,
         ) {
           return posProfile;
         },

@@ -29,6 +29,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final printKitchenOrder = prefs.getInt('print_kitchen_order');
     final openingDateString = prefs.getString('opening_date');
     final itemsGroupsJson = prefs.getString('item_groups');
+    final baseUrl =
+        prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+    final merchantId = prefs.getString('merchant_id');
 
     // Parse opening date if it exists
     DateTime? openingDate;
@@ -63,7 +66,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         apiSecret != null &&
         username != null &&
         posProfile != null &&
-        branch != null) {
+        branch != null &&
+        merchantId != null) {
       state = AuthState.authenticated(
         sid: sid,
         apiKey: apiKey,
@@ -84,15 +88,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
         printKitchenOrder: printKitchenOrder ?? 1,
         openingDate: openingDate,
         itemsGroups: itemsGroups,
+        baseUrl: baseUrl,
+        merchantId: merchantId,
       );
     } else {
       state = const AuthState.unauthenticated();
     }
   }
 
-  Future<void> login(String username, String password) async {
+  Future<void> login(
+      String username, String password, String merchantId) async {
     try {
-      final response = await AuthService().login(username, password);
+      final response =
+          await AuthService().login(username, password, merchantId);
 
       if (response['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
@@ -114,6 +122,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setString('last_login', DateTime.now().toIso8601String());
         await prefs.setString(
             'item_groups', jsonEncode(response['item_groups'] ?? []));
+        await prefs.setString('base_url',
+            response['base_url'] ?? 'https://asdf.byondwave.com');
+        await prefs.setString(
+            'merchant_id', response['merchant_id'] ?? merchantId);
 
         DateTime? openingDate;
 
@@ -162,6 +174,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
           openingDate: openingDate,
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
+          baseUrl: response['base_url'] ?? 'https://asdf.byondwave.com',
+          merchantId: response['merchant_id'] ?? merchantId,
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -176,21 +190,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> updateOpeningStatus(bool hasOpening,
       {DateTime? openingDate}) async {
     state.maybeWhen(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          _,
-          tier,
-          printKitchenOrder,
-          oldOpeningDate,
-          itemsGroups) async {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        _,
+        tier,
+        printKitchenOrder,
+        oldOpeningDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+      ) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
 
@@ -219,6 +237,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           printKitchenOrder: printKitchenOrder,
           openingDate: hasOpening ? newOpeningDate : null,
           itemsGroups: itemsGroups,
+          baseUrl: baseUrl,
+          merchantId: merchantId,
         );
       },
       orElse: () {},

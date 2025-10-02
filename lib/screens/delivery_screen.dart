@@ -31,7 +31,10 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
           tier,
           printKitchenOrder,
           openingDate,
-          itemsGroups,) {
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          ) {
         return Container(
           color: Colors.grey[100],
           padding: const EdgeInsets.all(20),

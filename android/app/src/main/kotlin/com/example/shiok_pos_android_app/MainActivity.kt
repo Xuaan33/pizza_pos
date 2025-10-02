@@ -1,4 +1,4 @@
-package com.example.shiok_pos_android_app
+package com.nicholas.shiok_pos_android_app
 
 import android.view.View
 import android.widget.ImageView
@@ -23,9 +23,15 @@ import java.util.Scanner
 import org.json.JSONObject
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import java.util.concurrent.Executors
+import android.content.SharedPreferences
 
 
-class CustomerDisplay(context: Context, display: Display,  private val authToken: String?) : Presentation(context, display) {
+class CustomerDisplay(
+    context: Context, 
+    display: Display,  
+    private val authToken: String?,
+    private val baseUrl: String  // Add baseUrl parameter
+) : Presentation(context, display) {
     private lateinit var orderItemsList: ListView
     private lateinit var orderSubtotal: TextView
     private lateinit var orderTax: TextView
@@ -68,14 +74,12 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
         showDefaultView()
     }
 
-    // In CustomerDisplay.kt
     private fun loadImage(url: String) {
         Glide.with(context)
         .load(url)
         .diskCacheStrategy(DiskCacheStrategy.ALL)
-        .override(800, 600) // scale down instead of decoding full-size
+        .override(800, 600)
         .into(slideshowView)
-
     }
 
     override fun onStop() {
@@ -141,45 +145,47 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
     }
 
     fun showDefaultView() {
-            // Fetch images from API
-            executor.execute {
-                try {
-                    val url = URL("https://shiokpos.byondwave.com/api/method/shiok_pos.api.get_customer_facing_images")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "GET"
+        // Fetch images from API using the dynamic baseUrl
+        executor.execute {
+            try {
+                // Use the baseUrl passed from MainActivity
+                val apiUrl = "$baseUrl/api/method/shiok_pos.api.get_customer_facing_images"
+                val url = URL(apiUrl)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
 
-                     // Add authorization header if token exists
-                    authToken?.let { token ->
-                        connection.setRequestProperty("Authorization", token)
-                    }
+                 // Add authorization header if token exists
+                authToken?.let { token ->
+                    connection.setRequestProperty("Authorization", token)
+                }
+                
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val inputStream = connection.inputStream
+                    val scanner = Scanner(inputStream).useDelimiter("\\A")
+                    val response = if (scanner.hasNext()) scanner.next() else ""
                     
-                    val responseCode = connection.responseCode
-                    if (responseCode == HttpURLConnection.HTTP_OK) {
-                        val inputStream = connection.inputStream
-                        val scanner = Scanner(inputStream).useDelimiter("\\A")
-                        val response = if (scanner.hasNext()) scanner.next() else ""
-                        
-                        val json = JSONObject(response)
-                        if (json.getBoolean("success")) {
-                            val imagesArray = json.getJSONArray("message")
-                            imageUrls.clear()
-                            for (i in 0 until imagesArray.length()) {
-                                imageUrls.add(imagesArray.getString(i))
-                            }
-                            handler.removeCallbacks(imageChangeRunnable) 
-                            if (imageUrls.isNotEmpty()) {
-                                handler.post {
-                                    loadImage(imageUrls[0])
-                                    handler.postDelayed(imageChangeRunnable, imageChangeInterval)
-                                }
+                    val json = JSONObject(response)
+                    if (json.getBoolean("success")) {
+                        val imagesArray = json.getJSONArray("message")
+                        imageUrls.clear()
+                        for (i in 0 until imagesArray.length()) {
+                            imageUrls.add(imagesArray.getString(i))
+                        }
+                        handler.removeCallbacks(imageChangeRunnable) 
+                        if (imageUrls.isNotEmpty()) {
+                            handler.post {
+                                loadImage(imageUrls[0])
+                                handler.postDelayed(imageChangeRunnable, imageChangeInterval)
                             }
                         }
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
+    }
 }
 
 class MainActivity : FlutterActivity() {
@@ -202,17 +208,16 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "updateOrderDisplay" -> {
-                    val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
-                    val subtotal = call.argument<Double>("subtotal") ?: 0.0
-                    val tax = call.argument<Double>("tax") ?: 0.0
-                    val discount = call.argument<Double>("discount") ?: 0.0
-                    val rounding = call.argument<Double>("rounding") ?: 0.0
-                    val total = call.argument<Double>("total") ?: 0.0
+                        val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
+                        val subtotal = call.argument<Double>("subtotal") ?: 0.0
+                        val tax = call.argument<Double>("tax") ?: 0.0
+                        val discount = call.argument<Double>("discount") ?: 0.0
+                        val rounding = call.argument<Double>("rounding") ?: 0.0
+                        val total = call.argument<Double>("total") ?: 0.0
 
-                    customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total)
-                    result.success(null)
+                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total)
+                        result.success(null)
                     }
-
                     "showDefaultDisplay" -> {
                         customerDisplay?.showDefaultView()
                         result.success(null)
@@ -230,7 +235,12 @@ class MainActivity : FlutterActivity() {
         val displays = displayManager.displays
         if (displays.size > 1) {
             val secondaryDisplay = displays[1]
-            customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken)
+            
+            // Get base URL from SharedPreferences
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val baseUrl = prefs.getString("flutter.base_url", "https://asdf.byondwave.com") ?: "https://asdf.byondwave.com"
+            
+            customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken, baseUrl)
             customerDisplay?.show()
         }
     }

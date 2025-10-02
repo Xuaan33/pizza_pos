@@ -19,8 +19,10 @@ class AuthState with _$AuthState {
     required bool hasOpening,
     required String tier,
     required int printKitchenOrder,
-    required DateTime? openingDate, 
+    required DateTime? openingDate,
     required List<dynamic> itemsGroups,
+    required String baseUrl, // Add baseUrl
+    required String merchantId, // Add merchantId
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }

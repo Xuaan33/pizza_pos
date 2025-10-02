@@ -4,7 +4,10 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class PosService {
-  static const String _baseUrl = 'https://shiokpos.byondwave.com/api/method';
+  // Remove hardcoded baseUrl and get it dynamically
+  Future<String> _getBaseUrl() async {
+    return await AuthService.getBaseUrl() ?? 'https://asdf.byondwave.com';
+  }
 
   // Helper method for common request handling
   Future<Map<String, dynamic>> makeRequest({
@@ -17,7 +20,8 @@ class PosService {
       final token = await AuthService.getAuthToken();
       if (token == null) throw Exception('Not authenticated');
 
-      final uri = Uri.parse('$_baseUrl/$endpoint');
+      final baseUrl = await _getBaseUrl();
+      final uri = Uri.parse('$baseUrl/api/method/$endpoint');
       final headers = {
         'Authorization': token,
         if (method != 'GET') 'Content-Type': 'application/json',
@@ -50,22 +54,22 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getAvailableItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
+    );
+  }
 
   Future<Map<String, dynamic>> getAllItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
+    );
+  }
 
   Future<Map<String, dynamic>> getItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
+    );
+  }
 
   Future<Map<String, dynamic>> getItemGroups() async {
     return makeRequest(
@@ -138,6 +142,7 @@ class PosService {
       final token = await AuthService.getAuthToken();
       if (token == null) throw Exception('Not authenticated');
 
+      final baseUrl = await _getBaseUrl();
       final requestBody = {
         'pos_profile': posProfile,
         if (search != null) 'search': search,
@@ -154,10 +159,11 @@ class PosService {
       print(
           'Sending request to get orders with body: ${jsonEncode(requestBody)}');
       print('Using token: $token');
+      print('Using base URL: $baseUrl');
 
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/shiok_pos.api.get_pos_invoice_list'),
+            Uri.parse('$baseUrl/api/method/shiok_pos.api.get_pos_invoice_list'),
             headers: {
               'Authorization': token,
               'Content-Type': 'application/json',
@@ -296,8 +302,8 @@ class PosService {
       final token = await AuthService.getAuthToken();
       if (token == null) throw Exception('Not authenticated');
 
-      final uri =
-          Uri.parse('$_baseUrl/shiok_pos.api.delete_order?name=$orderName');
+      final baseUrl = await _getBaseUrl();
+      final uri = Uri.parse('$baseUrl/api/method/shiok_pos.api.delete_order?name=$orderName');
       final headers = {
         'Authorization': token,
       };
@@ -328,8 +334,8 @@ class PosService {
       final token = await AuthService.getAuthToken();
       if (token == null) throw Exception('Not authenticated');
 
-      final uri =
-          Uri.parse('$_baseUrl/shiok_pos.api.print_receipt?name=$orderName');
+      final baseUrl = await _getBaseUrl();
+      final uri = Uri.parse('$baseUrl/api/method/shiok_pos.api.print_receipt?name=$orderName');
       final headers = {
         'Authorization': token,
       };
@@ -363,6 +369,7 @@ class PosService {
       final token = await AuthService.getAuthToken();
       if (token == null) throw Exception('Not authenticated');
 
+      final baseUrl = await _getBaseUrl();
       final params = {
         'name': orderName,
         if (onlyAdditionalItems != null)
@@ -370,8 +377,7 @@ class PosService {
       };
 
       final queryString = Uri(queryParameters: params).query;
-      final uri =
-          Uri.parse('$_baseUrl/shiok_pos.api.print_kitchen_order?$queryString');
+      final uri = Uri.parse('$baseUrl/api/method/shiok_pos.api.print_kitchen_order?$queryString');
 
       final headers = {
         'Authorization': token,

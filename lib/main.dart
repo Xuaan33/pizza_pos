@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
@@ -25,21 +24,25 @@ class MyApp extends ConsumerWidget {
         initial: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         unauthenticated: () => const LoginPage(),
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,
-            itemsGroups) {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl, 
+          merchantId,
+        ) {
           return MainLayout();
         },
       ),
