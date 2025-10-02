@@ -75,12 +75,18 @@ class CustomerDisplay(
     }
 
     private fun loadImage(url: String) {
+    handler.post {
         Glide.with(context)
-        .load(url)
-        .diskCacheStrategy(DiskCacheStrategy.ALL)
-        .override(800, 600)
-        .into(slideshowView)
+            .load(url)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .override(800, 600)
+            .thumbnail(0.1f) // Load a low-res thumbnail first
+            .placeholder(android.R.color.transparent) // Add placeholder
+            .error(android.R.drawable.ic_menu_report_image) // Add error image
+            .dontAnimate() // Skip animations for better performance
+            .into(slideshowView)
     }
+}
 
     override fun onStop() {
         super.onStop()
@@ -145,46 +151,52 @@ class CustomerDisplay(
     }
 
     fun showDefaultView() {
-        // Fetch images from API using the dynamic baseUrl
-        executor.execute {
-            try {
-                // Use the baseUrl passed from MainActivity
-                val apiUrl = "$baseUrl/api/method/shiok_pos.api.get_customer_facing_images"
-                val url = URL(apiUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
+    executor.execute {
+        try {
+            val apiUrl = "$baseUrl/api/method/shiok_pos.api.get_customer_facing_images"
+            val url = URL(apiUrl)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000 // 10 seconds
+            connection.readTimeout = 10000
 
-                 // Add authorization header if token exists
-                authToken?.let { token ->
-                    connection.setRequestProperty("Authorization", token)
-                }
+            authToken?.let { token ->
+                connection.setRequestProperty("Authorization", token)
+            }
+            
+            val responseCode = connection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val inputStream = connection.inputStream
+                val scanner = Scanner(inputStream).useDelimiter("\\A")
+                val response = if (scanner.hasNext()) scanner.next() else ""
                 
-                val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    val inputStream = connection.inputStream
-                    val scanner = Scanner(inputStream).useDelimiter("\\A")
-                    val response = if (scanner.hasNext()) scanner.next() else ""
+                val json = JSONObject(response)
+                if (json.getBoolean("success")) {
+                    val imagesArray = json.getJSONArray("message")
+                    val newImageUrls = mutableListOf<String>()
+                    for (i in 0 until imagesArray.length()) {
+                        newImageUrls.add(imagesArray.getString(i))
+                    }
                     
-                    val json = JSONObject(response)
-                    if (json.getBoolean("success")) {
-                        val imagesArray = json.getJSONArray("message")
+                    // Update UI on main thread
+                    handler.post {
                         imageUrls.clear()
-                        for (i in 0 until imagesArray.length()) {
-                            imageUrls.add(imagesArray.getString(i))
-                        }
-                        handler.removeCallbacks(imageChangeRunnable) 
+                        imageUrls.addAll(newImageUrls)
+                        handler.removeCallbacks(imageChangeRunnable)
+                        
                         if (imageUrls.isNotEmpty()) {
-                            handler.post {
-                                loadImage(imageUrls[0])
-                                handler.postDelayed(imageChangeRunnable, imageChangeInterval)
-                            }
+                            currentImageIndex = 0
+                            loadImage(imageUrls[0])
+                            handler.postDelayed(imageChangeRunnable, imageChangeInterval)
                         }
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
+            connection.disconnect()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+    }
     }
 }
 
