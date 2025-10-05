@@ -272,7 +272,7 @@ class _SplitOrderPaymentDialogState
                                 (_orderDetails['base_rounding_adjustment'] ?? 0)
                                     .toDouble()),
                             _buildSummaryRow(
-                                'GST (6%)',
+                                'GST (${_getGSTRate()}%)',
                                 ((_orderDetails['total_taxes_and_charges'] ??
                                             0) -
                                         (_orderDetails['discount_amount'] ?? 0))
@@ -1149,5 +1149,37 @@ class _SplitOrderPaymentDialogState
           },
         ) ??
         false;
+  }
+
+  String _getGSTRate() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 0.0},
+            );
+            return (gstTax['rate'] ?? 0.0).toStringAsFixed(0);
+          },
+        ) ??
+        '0';
   }
 }

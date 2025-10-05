@@ -31,7 +31,7 @@
 
             <!-- Video (70% height) -->
             <ImageView
-                android:id="@+id/videoView"  
+                android:id="@+id/videoView"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="7"
@@ -92,10 +92,11 @@
                 android:orientation="horizontal">
 
                 <TextView
+                    android:id="@+id/orderTaxLabel"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="GST (6%):"
+                    android:text="GST:"
                     android:textSize="16sp"
                     android:textStyle="bold" />
 

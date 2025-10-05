@@ -32,6 +32,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
     private lateinit var orderDiscount: TextView
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
+        private lateinit var orderTaxLabel: TextView 
     private lateinit var slideshowView: ImageView
     private lateinit var logoView: ImageView
     private val handler = Handler(Looper.getMainLooper())
@@ -63,6 +64,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
         orderTotal = findViewById(R.id.orderTotal)
         slideshowView = findViewById(R.id.videoView)
         logoView = findViewById(R.id.logoView)
+        orderTaxLabel = findViewById(R.id.orderTaxLabel)
 
        // Start with default view
         showDefaultView()
@@ -98,9 +100,11 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
         tax: Double, 
         discount: Double,
         rounding: Double,
-        total: Double
+        total: Double,
+        taxRate: String
     ) {
         handler.post {
+            orderTaxLabel.text = "GST (${taxRate}%):"
             val adapter = ArrayAdapter(
                 context,
                 android.R.layout.simple_list_item_1,
@@ -212,15 +216,16 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "updateOrderDisplay" -> {
-                    val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
-                    val subtotal = call.argument<Double>("subtotal") ?: 0.0
-                    val tax = call.argument<Double>("tax") ?: 0.0
-                    val discount = call.argument<Double>("discount") ?: 0.0
-                    val rounding = call.argument<Double>("rounding") ?: 0.0
-                    val total = call.argument<Double>("total") ?: 0.0
+                        val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
+                        val subtotal = call.argument<Double>("subtotal") ?: 0.0
+                        val tax = call.argument<Double>("tax") ?: 0.0
+                        val discount = call.argument<Double>("discount") ?: 0.0
+                        val rounding = call.argument<Double>("rounding") ?: 0.0
+                        val total = call.argument<Double>("total") ?: 0.0
+                        val taxRate = call.argument<String>("taxRate") ?: ""
 
-                    customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total)
-                    result.success(null)
+                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total, taxRate)
+                        result.success(null)
                     }
 
                     "showDefaultDisplay" -> {
