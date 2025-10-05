@@ -1170,8 +1170,6 @@ class _SplitOrderPaymentDialogState
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
           ) {
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
