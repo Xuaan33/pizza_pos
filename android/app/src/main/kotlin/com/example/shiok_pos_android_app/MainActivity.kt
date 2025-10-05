@@ -32,6 +32,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
     private lateinit var orderDiscount: TextView
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
+        private lateinit var orderTaxLabel: TextView 
     private lateinit var slideshowView: ImageView
     private lateinit var logoView: ImageView
     private val handler = Handler(Looper.getMainLooper())
@@ -63,20 +64,25 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
         orderTotal = findViewById(R.id.orderTotal)
         slideshowView = findViewById(R.id.videoView)
         logoView = findViewById(R.id.logoView)
+        orderTaxLabel = findViewById(R.id.orderTaxLabel)
 
        // Start with default view
         showDefaultView()
     }
 
-    // In CustomerDisplay.kt
     private fun loadImage(url: String) {
+    handler.post {
         Glide.with(context)
-        .load(url)
-        .diskCacheStrategy(DiskCacheStrategy.ALL)
-        .override(800, 600) // scale down instead of decoding full-size
-        .into(slideshowView)
-
+            .load(url)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .override(800, 600)
+            .thumbnail(0.1f) // Load a low-res thumbnail first
+            .placeholder(android.R.color.transparent) // Add placeholder
+            .error(android.R.drawable.ic_menu_report_image) // Add error image
+            .dontAnimate() // Skip animations for better performance
+            .into(slideshowView)
     }
+}
 
     override fun onStop() {
         super.onStop()
@@ -94,9 +100,11 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
         tax: Double, 
         discount: Double,
         rounding: Double,
-        total: Double
+        total: Double,
+        taxRate: String
     ) {
         handler.post {
+            orderTaxLabel.text = "GST (${taxRate}%):"
             val adapter = ArrayAdapter(
                 context,
                 android.R.layout.simple_list_item_1,
@@ -148,38 +156,44 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
                     val connection = url.openConnection() as HttpURLConnection
                     connection.requestMethod = "GET"
 
-                     // Add authorization header if token exists
-                    authToken?.let { token ->
-                        connection.setRequestProperty("Authorization", token)
+            authToken?.let { token ->
+                connection.setRequestProperty("Authorization", token)
+            }
+            
+            val responseCode = connection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val inputStream = connection.inputStream
+                val scanner = Scanner(inputStream).useDelimiter("\\A")
+                val response = if (scanner.hasNext()) scanner.next() else ""
+                
+                val json = JSONObject(response)
+                if (json.getBoolean("success")) {
+                    val imagesArray = json.getJSONArray("message")
+                    val newImageUrls = mutableListOf<String>()
+                    for (i in 0 until imagesArray.length()) {
+                        newImageUrls.add(imagesArray.getString(i))
                     }
                     
-                    val responseCode = connection.responseCode
-                    if (responseCode == HttpURLConnection.HTTP_OK) {
-                        val inputStream = connection.inputStream
-                        val scanner = Scanner(inputStream).useDelimiter("\\A")
-                        val response = if (scanner.hasNext()) scanner.next() else ""
+                    // Update UI on main thread
+                    handler.post {
+                        imageUrls.clear()
+                        imageUrls.addAll(newImageUrls)
+                        handler.removeCallbacks(imageChangeRunnable)
                         
-                        val json = JSONObject(response)
-                        if (json.getBoolean("success")) {
-                            val imagesArray = json.getJSONArray("message")
-                            imageUrls.clear()
-                            for (i in 0 until imagesArray.length()) {
-                                imageUrls.add(imagesArray.getString(i))
-                            }
-                            handler.removeCallbacks(imageChangeRunnable) 
-                            if (imageUrls.isNotEmpty()) {
-                                handler.post {
-                                    loadImage(imageUrls[0])
-                                    handler.postDelayed(imageChangeRunnable, imageChangeInterval)
-                                }
-                            }
+                        if (imageUrls.isNotEmpty()) {
+                            currentImageIndex = 0
+                            loadImage(imageUrls[0])
+                            handler.postDelayed(imageChangeRunnable, imageChangeInterval)
                         }
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
             }
+            connection.disconnect()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+    }
+    }
 }
 
 class MainActivity : FlutterActivity() {
@@ -202,15 +216,16 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "updateOrderDisplay" -> {
-                    val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
-                    val subtotal = call.argument<Double>("subtotal") ?: 0.0
-                    val tax = call.argument<Double>("tax") ?: 0.0
-                    val discount = call.argument<Double>("discount") ?: 0.0
-                    val rounding = call.argument<Double>("rounding") ?: 0.0
-                    val total = call.argument<Double>("total") ?: 0.0
+                        val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
+                        val subtotal = call.argument<Double>("subtotal") ?: 0.0
+                        val tax = call.argument<Double>("tax") ?: 0.0
+                        val discount = call.argument<Double>("discount") ?: 0.0
+                        val rounding = call.argument<Double>("rounding") ?: 0.0
+                        val total = call.argument<Double>("total") ?: 0.0
+                        val taxRate = call.argument<String>("taxRate") ?: ""
 
-                    customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total)
-                    result.success(null)
+                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total, taxRate)
+                        result.success(null)
                     }
 
                     "showDefaultDisplay" -> {
