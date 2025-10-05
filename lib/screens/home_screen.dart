@@ -500,6 +500,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               discount: 0.00,
               rounding: _getRoundingDifference(),
               total: _getRoundedTotal(),
+              taxRate: _getGSTRate(),
             );
           });
           return FutureBuilder(
@@ -832,7 +833,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       _buildOrderSummaryRow('Sub Total',
                                           'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                                      _buildOrderSummaryRow('GST (6%)',
+                                      _buildOrderSummaryRow(
+                                          'GST (${_getGSTRate()}%)',
                                           'RM ${_calculateGST().toStringAsFixed(2)}'),
                                       _buildOrderSummaryRow(
                                           'Rounding', _getRoundingLabel()),
@@ -2521,15 +2523,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             baseUrl,
             merchantId,
           ) {
-            // Find the GST tax rate
+            // Find the GST tax rate from the taxes array
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
-              orElse: () => {'rate': 6.0}, // Default to 6% if not found
+              orElse: () => {'rate': 0.0}, // Default to 0% if not found
             );
-            return _calculateSubtotal() * (gstTax['rate'] ?? 6.0) / 100;
+            return _calculateSubtotal() * (gstTax['rate'] ?? 0.0) / 100;
           },
         ) ??
-        (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
+        0.0; // Return 0 if not authenticated
   }
 
   double _calculateTotal() {
@@ -2584,5 +2586,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return 'RM 0.00';
     }
     return '';
+  }
+
+  String _getGSTRate() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 0.0},
+            );
+            return (gstTax['rate'] ?? 0.0).toStringAsFixed(0);
+          },
+        ) ??
+        '0';
   }
 }

@@ -32,6 +32,7 @@ class CustomerDisplayController {
     required double discount,
     required double rounding,
     required double total,
+    required String taxRate,
   }) async {
     try {
       await _channel.invokeMethod('showCustomerScreen', {'authToken': await AuthService.getAuthToken()});
@@ -57,6 +58,7 @@ class CustomerDisplayController {
         'discount': discount,
         'rounding': rounding,
         'total': total,
+        'taxRate': taxRate,
       });
     } catch (e) {
       print('Error updating order display: $e');

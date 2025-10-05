@@ -30,7 +30,7 @@ class CustomerDisplay(
     context: Context, 
     display: Display,  
     private val authToken: String?,
-    private val baseUrl: String  // Add baseUrl parameter
+    private val baseUrl: String  
 ) : Presentation(context, display) {
     private lateinit var orderItemsList: ListView
     private lateinit var orderSubtotal: TextView
@@ -38,6 +38,7 @@ class CustomerDisplay(
     private lateinit var orderDiscount: TextView
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
+        private lateinit var orderTaxLabel: TextView 
     private lateinit var slideshowView: ImageView
     private lateinit var logoView: ImageView
     private val handler = Handler(Looper.getMainLooper())
@@ -69,6 +70,7 @@ class CustomerDisplay(
         orderTotal = findViewById(R.id.orderTotal)
         slideshowView = findViewById(R.id.videoView)
         logoView = findViewById(R.id.logoView)
+        orderTaxLabel = findViewById(R.id.orderTaxLabel)
 
        // Start with default view
         showDefaultView()
@@ -104,9 +106,11 @@ class CustomerDisplay(
         tax: Double, 
         discount: Double,
         rounding: Double,
-        total: Double
+        total: Double,
+        taxRate: String
     ) {
         handler.post {
+            orderTaxLabel.text = "GST (${taxRate}%):"
             val adapter = ArrayAdapter(
                 context,
                 android.R.layout.simple_list_item_1,
@@ -226,8 +230,9 @@ class MainActivity : FlutterActivity() {
                         val discount = call.argument<Double>("discount") ?: 0.0
                         val rounding = call.argument<Double>("rounding") ?: 0.0
                         val total = call.argument<Double>("total") ?: 0.0
+                        val taxRate = call.argument<String>("taxRate") ?: ""
 
-                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total)
+                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total, taxRate)
                         result.success(null)
                     }
                     "showDefaultDisplay" -> {

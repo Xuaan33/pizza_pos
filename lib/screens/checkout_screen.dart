@@ -66,8 +66,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isRemarksEditing = false;
   bool _isSavingRemarks = false;
   String _currentRemarks = '';
-    String baseImageUrl = '';
-
+  String baseImageUrl = '';
 
   @override
   void dispose() {
@@ -454,6 +453,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               discount: _discountAmount,
               rounding: _calculateRounding(),
               total: _calculateTotal(),
+              taxRate: _getGSTRate(),
             );
           });
 
@@ -1393,7 +1393,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ],
 
           _buildSummaryRow(
-            'GST (6%)',
+            'GST (${_getGSTRate()}%)',
             "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
           ),
           const SizedBox(height: 8),
@@ -3674,32 +3674,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid,
-              apiKey,
-              apiSecret,
-              username,
-              email,
-              fullName,
-              posProfile,
-              branch,
-              paymentMethods,
-              taxes,
-              hasOpening,
-              tier,
-              printKitchenOrder,
-              openingDate,
-              itemsGroups,
-              baseUrl,
-              merchantId) {
-            // Find the GST tax rate
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            // Find the GST tax rate from the taxes array
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
-              orElse: () => {'rate': 6.0}, // Default to 6% if not found
+              orElse: () => {'rate': 0.0}, // Default to 0% if not found
             );
-            return _calculateSubtotal() * (gstTax['rate'] ?? 6.0) / 100;
+            return _calculateSubtotal() * (gstTax['rate'] ?? 0.0) / 100;
           },
         ) ??
-        (_calculateSubtotal() * 0.06); // Fallback to 6% if not authenticated
+        0.0; // Return 0 if not authenticated
   }
 
   String _formatTime(DateTime time) {
@@ -4519,5 +4521,37 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     // Fallback to simple equality
     return options1 == options2;
+  }
+
+  String _getGSTRate() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 0.0},
+            );
+            return (gstTax['rate'] ?? 0.0).toStringAsFixed(0);
+          },
+        ) ??
+        '0';
   }
 }
