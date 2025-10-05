@@ -2528,7 +2528,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   double _getUnroundedTotal() {
-    return _calculateSubtotal() + (_calculateSubtotal() * 0.06); // GST 6%
+    return _calculateSubtotal() + (_calculateSubtotal() * _calculateGST()); // GST 6%
   }
 
   double _getRoundedTotal() {
