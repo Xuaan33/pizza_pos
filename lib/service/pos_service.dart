@@ -49,23 +49,23 @@ class PosService {
     );
   }
 
-  Future<Map<String, dynamic>> getAvailableItems() async {
-    return makeRequest(
-      endpoint: 'shiok_pos.api.get_available_items',
-    );
-  }
+  Future<Map<String, dynamic>> getAvailableItems(String posProfile) async {
+  return makeRequest(
+    endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
+  );
+}
 
-  Future<Map<String, dynamic>> getAllItems() async {
-    return makeRequest(
-      endpoint: 'shiok_pos.api.get_items',
-    );
-  }
+  Future<Map<String, dynamic>> getAllItems(String posProfile) async {
+  return makeRequest(
+    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
+  );
+}
 
-  Future<Map<String, dynamic>> getItems() async {
-    return makeRequest(
-      endpoint: 'shiok_pos.api.get_items?is_pos_item=1&disabled=0',
-    );
-  }
+  Future<Map<String, dynamic>> getItems(String posProfile) async {
+  return makeRequest(
+    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
+  );
+}
 
   Future<Map<String, dynamic>> getItemGroups() async {
     return makeRequest(
@@ -101,6 +101,25 @@ class PosService {
     final queryString = Uri(queryParameters: params).query;
     return makeRequest(
       endpoint: 'shiok_pos.api.get_stock_qty?$queryString',
+    );
+  }
+
+  Future<Map<String, dynamic>> getStockBalanceSummary({
+    required String posProfile,
+    required int isPosItem,
+    int? disable,
+    String? date,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      'is_pos_item': isPosItem.toString(),
+      if (disable != null)'disable': disable.toString(),
+      if (date != null) 'date': date,
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_stock_balance_summary?$queryString',
     );
   }
 
@@ -638,23 +657,6 @@ class PosService {
         'variant_group': variantGroup,
         'disabled': disabled,
       },
-    );
-  }
-
-  Future<Map<String, dynamic>> getStockBalanceSummary({
-    required String posProfile,
-    int isPosItem = 1,
-    String? date,
-  }) async {
-    final params = {
-      'pos_profile': posProfile,
-      'is_pos_item': isPosItem.toString(),
-      if (date != null) 'date': date,
-    };
-
-    final queryString = Uri(queryParameters: params).query;
-    return makeRequest(
-      endpoint: 'shiok_pos.api.get_stock_balance_summary?$queryString',
     );
   }
 

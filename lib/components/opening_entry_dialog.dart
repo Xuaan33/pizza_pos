@@ -32,20 +32,23 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) {
         // Initialize controllers if not done yet
         if (_amountControllers.isEmpty) {
           _amountControllers.addAll(

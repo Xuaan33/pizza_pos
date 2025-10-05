@@ -53,20 +53,23 @@ class _SplitOrderPaymentDialogState
     try {
       final response = await PosService().getOrders(
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier,
-                      printKitchenOrder,
-                      openingDate,) {
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                  ) {
                     return posProfile;
                   },
                   orElse: () => null,

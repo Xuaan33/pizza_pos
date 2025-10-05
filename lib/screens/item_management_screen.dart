@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class ItemManagementScreen extends ConsumerStatefulWidget {
@@ -46,10 +47,39 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
+      // Get posProfile from auth state or context
+      final authState =
+          ref.read(authProvider); // Assuming you're using Provider
+      final posProfile = authState.maybeWhen(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) =>
+            posProfile,
+        orElse: () => null,
+      );
+
+      if (posProfile == null) {
+        throw Exception('Not authenticated or posProfile not available');
+      }
+
       final [itemsRes, groupsRes, variantsRes] = await Future.wait([
-        PosService().getAllItems(),
-        PosService().getItemGroups(),
-        PosService().getVariantGroups(),
+        PosService().getAllItems(posProfile), // Only this one needs posProfile
+        PosService().getItemGroups(), // No posProfile needed
+        PosService().getVariantGroups(), // No posProfile needed
       ]);
 
       setState(() {

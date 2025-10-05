@@ -36,6 +36,8 @@ class AuthService {
         'taxes': message['taxes'] ?? [],
         'has_opening': message['has_opening'] ?? false,
         'tier': message['tier'],
+        'print_kitchen_order': message['print_kitchen_order'] ?? 1, 
+        'item_groups': message['item_groups'] ?? []
       };
     } else {
       return {
