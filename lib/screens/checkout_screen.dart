@@ -89,20 +89,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void _loadPaymentMethods() {
     final authState = ref.read(authProvider);
     authState.whenOrNull(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
             return {
@@ -169,6 +172,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     tier,
                     printKitchenOrder,
                     openingDate,
+                    itemsGroups,
                   ) {
                     return posProfile;
                   },
@@ -270,49 +274,118 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final authState = ref.read(authProvider);
     await authState.whenOrNull(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) async {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) async {
         try {
           final newStockQuantities = <String, int>{};
 
-          for (var item in orderItems) {
-            try {
-              final response = await PosService().getStockQuantity(
-                posProfile: posProfile,
-                itemCode: item['item_code'],
-              );
+          // Call API once to get all stock data
+          final response = await PosService().getStockBalanceSummary(
+            posProfile: posProfile,
+            isPosItem: 1,
+            disable: 0,
+          );
 
-              if (response['success'] == true) {
-                newStockQuantities[item['item_code']] =
-                    (response['message']['qty'] as num?)?.toInt() ?? 0;
-              } else {
-                newStockQuantities[item['item_code']] =
-                    999; // Assume unlimited if API fails
+          debugPrint('Stock API Response: $response');
+
+          if (response['success'] == true) {
+            final message = response['message'];
+
+            if (message is List) {
+              // Create a map for quick lookup by item name
+              final stockMap = <String, Map<String, dynamic>>{};
+
+              for (var stockItem in message) {
+                if (stockItem is Map<String, dynamic>) {
+                  final itemName = stockItem['item']?.toString();
+                  if (itemName != null) {
+                    stockMap[itemName] = stockItem;
+                  }
+                }
               }
-            } catch (e) {
-              debugPrint('Error checking stock for ${item['item_code']}: $e');
-              newStockQuantities[item['item_code']] =
-                  999; // Assume unlimited on error
+
+              // Map stock quantities to order items
+              for (var item in orderItems) {
+                final itemCode = item['item_code']?.toString();
+
+                if (itemCode != null) {
+                  // Try to find matching stock item by item_code
+                  final stockItem = stockMap[itemCode];
+
+                  if (stockItem != null) {
+                    final qtyValue = stockItem['qty'];
+                    int stockQty = 0;
+
+                    if (qtyValue is num) {
+                      stockQty = qtyValue.toInt();
+                    } else if (qtyValue is String) {
+                      stockQty = int.tryParse(qtyValue) ?? 0;
+                    }
+
+                    newStockQuantities[itemCode] = stockQty;
+                  } else {
+                    // Item not found in stock data
+                    newStockQuantities[itemCode] = 0;
+                  }
+                }
+              }
+            } else {
+              debugPrint(
+                  'Stock API message is not a List: ${message.runtimeType}');
+              // Set default values for all items
+              for (var item in orderItems) {
+                final itemCode = item['item_code']?.toString();
+                if (itemCode != null) {
+                  newStockQuantities[itemCode] = 999;
+                }
+              }
+            }
+          } else {
+            debugPrint(
+                'Stock API returned success=false: ${response['message']}');
+            // Set default values for all items
+            for (var item in orderItems) {
+              final itemCode = item['item_code']?.toString();
+              if (itemCode != null) {
+                newStockQuantities[itemCode] = 999;
+              }
             }
           }
 
           setState(() {
             _itemStockQuantities = newStockQuantities;
           });
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint('Error checking stock: $e');
+          debugPrint('Stack trace: $stackTrace');
+
+          // Set default values for all items on error
+          final newStockQuantities = <String, int>{};
+          for (var item in orderItems) {
+            final itemCode = item['item_code']?.toString();
+            if (itemCode != null) {
+              newStockQuantities[itemCode] = 999;
+            }
+          }
+
+          setState(() {
+            _itemStockQuantities = newStockQuantities;
+          });
         } finally {
           setState(() => _isLoadingStock = false);
         }
@@ -326,20 +399,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.updateOrderDisplay(
               items: orderItems.map((item) {
@@ -1447,6 +1523,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     tier,
                     printKitchenOrder,
                     openingDate,
+                    itemsGroups,
                   ) {
                     return posProfile;
                   },
@@ -1665,6 +1742,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               tier,
               printKitchenOrder,
               openingDate,
+              itemsGroups,
             ) {
               return printKitchenOrder == 1;
             },
@@ -2119,20 +2197,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     // For tier 1, show delete order dialog instead of exit dialog
     final authState = ref.read(authProvider);
     final isTier1 = authState.maybeWhen(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) {
         return tier.toLowerCase() == 'tier1';
       },
       orElse: () => false,
@@ -3187,6 +3268,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     tier,
                     printKitchenOrder,
                     openingDate,
+                    itemsGroups,
                   ) {
                     return posProfile;
                   },
@@ -3256,20 +3338,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier,
-                      printKitchenOrder,
-                      openingDate,) {
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                  ) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3346,20 +3431,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                          apiKey,
-                          apiSecret,
-                          username,
-                          email,
-                          fullName,
-                          posProfile,
-                          branch,
-                          paymentMethods,
-                          taxes,
-                          hasOpening,
-                          tier,
-                          printKitchenOrder,
-                          openingDate,) =>
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                  ) =>
                       posProfile,
                   orElse: () => null,
                 ) ??
@@ -3464,20 +3552,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier,
-                      printKitchenOrder,
-                      openingDate,) {
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                  ) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -3554,20 +3645,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _calculateGST() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid,
-              apiKey,
-              apiSecret,
-              username,
-              email,
-              fullName,
-              posProfile,
-              branch,
-              paymentMethods,
-              taxes,
-              hasOpening,
-              tier,
-              printKitchenOrder,
-              openingDate,) {
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+          ) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -3839,20 +3933,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final response = await PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (sid,
-                      apiKey,
-                      apiSecret,
-                      username,
-                      email,
-                      fullName,
-                      posProfile,
-                      branch,
-                      paymentMethods,
-                      taxes,
-                      hasOpening,
-                      tier,
-                      printKitchenOrde,
-                      openingDate,) {
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrde,
+                    openingDate,
+                    itemsGroups,
+                  ) {
                     return posProfile;
                   },
                   orElse: () => null,
@@ -4012,20 +4109,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     try {
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) {
           return posProfile;
         },
         orElse: () => null,
@@ -4295,20 +4395,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Submit updated order
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) {
           return posProfile;
         },
         orElse: () => null,

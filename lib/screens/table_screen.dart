@@ -172,8 +172,21 @@ class _TableScreenState extends ConsumerState<TableScreen>
     final authState = ref.read(authProvider);
 
     authState.when(
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder,openingDate,) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups) {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
           _showOpeningRequiredDialog();
@@ -271,8 +284,21 @@ class _TableScreenState extends ConsumerState<TableScreen>
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
-        authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-            posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder,openingDate,) {
+        authenticated: (sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups) {
           return Container(
             color: Colors.grey[100],
             padding: const EdgeInsets.all(20),
@@ -311,8 +337,21 @@ class _TableScreenState extends ConsumerState<TableScreen>
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid, apiKey, apiSecret, username, email, fullName,
-          posProfile, branch, paymentMethods, taxes, hasOpening, tier, printKitchenOrder,openingDate,) {
+      authenticated: (sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           child: Row(

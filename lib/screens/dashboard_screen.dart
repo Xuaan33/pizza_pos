@@ -40,20 +40,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<Map<String, dynamic>> _loadDashboardData() async {
     final authState = ref.read(authProvider);
     return authState.maybeWhen(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) async {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) async {
         _posProfile = posProfile;
         final dateFormat = DateFormat('yyyy-MM-dd');
 
@@ -283,20 +286,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return authState.when(
       initial: () => const Center(child: CircularProgressIndicator()),
       unauthenticated: () => const Center(child: Text('Unauthorized')),
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,) {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) {
         return FutureBuilder<Map<String, dynamic>>(
           future: _dashboardData,
           builder: (context, snapshot) {
@@ -938,20 +944,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       // Get payment method image from auth provider
                       final authState = ref.read(authProvider);
                       final paymentMethodData = authState.maybeWhen(
-                        authenticated: (sid,
-                            apiKey,
-                            apiSecret,
-                            username,
-                            email,
-                            fullName,
-                            posProfile,
-                            branch,
-                            paymentMethods,
-                            taxes,
-                            hasOpening,
-                            tier,
-                            printKitchenOrder,
-                            openingDate,) {
+                        authenticated: (
+                          sid,
+                          apiKey,
+                          apiSecret,
+                          username,
+                          email,
+                          fullName,
+                          posProfile,
+                          branch,
+                          paymentMethods,
+                          taxes,
+                          hasOpening,
+                          tier,
+                          printKitchenOrder,
+                          openingDate,
+                          itemsGroups,
+                        ) {
                           return paymentMethods.firstWhere(
                             (pm) => pm['name'] == methodName,
                             orElse: () => {},

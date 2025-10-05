@@ -30,7 +30,8 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
           hasOpening,
           tier,
           printKitchenOrder,
-          openingDate,) {
+          openingDate,
+          itemsGroups,) {
         return Container(
           color: Colors.grey[100],
           padding: const EdgeInsets.all(20),

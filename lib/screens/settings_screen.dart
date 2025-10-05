@@ -60,7 +60,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       'Item Group',
       'Item',
       'Variant',
-      'Stock',
+      'Finished Goods',
     ];
 
     // Only add Employee Management for tier 2 and above
@@ -135,20 +135,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) async {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
@@ -229,20 +232,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) async {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) async {
           final itemsToStockIn = items.map((item) {
             return {
               'item_code': item['item_code'],
@@ -342,20 +348,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) async {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
             if (mounted) {
@@ -474,6 +483,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         tier,
         printKitchenOrder,
         openingDate,
+        itemsGroups,
       ) {
         final sections = _getSections(tier);
 
@@ -1679,20 +1689,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     onPressed: () {
                                       final authState = ref.read(authProvider);
                                       authState.when(
-                                        authenticated: (sid,
-                                            apiKey,
-                                            apiSecret,
-                                            username,
-                                            email,
-                                            fullName,
-                                            posProfile,
-                                            branch,
-                                            paymentMethods,
-                                            taxes,
-                                            hasOpening,
-                                            tier,
-                                            printKitchenOrder,
-                                            openingDate,) {
+                                        authenticated: (
+                                          sid,
+                                          apiKey,
+                                          apiSecret,
+                                          username,
+                                          email,
+                                          fullName,
+                                          posProfile,
+                                          branch,
+                                          paymentMethods,
+                                          taxes,
+                                          hasOpening,
+                                          tier,
+                                          printKitchenOrder,
+                                          openingDate,
+                                          itemsGroups,
+                                        ) {
                                           _employeeCheckIn(
                                               employee['name'], branch);
                                         },
@@ -1709,20 +1722,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     onPressed: () {
                                       final authState = ref.read(authProvider);
                                       authState.when(
-                                        authenticated: (sid,
-                                            apiKey,
-                                            apiSecret,
-                                            username,
-                                            email,
-                                            fullName,
-                                            posProfile,
-                                            branch,
-                                            paymentMethods,
-                                            taxes,
-                                            hasOpening,
-                                            tier,
-                                            printKitchenOrder,
-                                            openingDate,) {
+                                        authenticated: (
+                                          sid,
+                                          apiKey,
+                                          apiSecret,
+                                          username,
+                                          email,
+                                          fullName,
+                                          posProfile,
+                                          branch,
+                                          paymentMethods,
+                                          taxes,
+                                          hasOpening,
+                                          tier,
+                                          printKitchenOrder,
+                                          openingDate,
+                                          itemsGroups,
+                                        ) {
                                           _employeeCheckOut(
                                               employee['name'], branch);
                                         },
@@ -1838,20 +1854,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.whenOrNull(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) async {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,
           );
@@ -2118,20 +2137,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final authState = ref.read(authProvider);
 
       await authState.when(
-        authenticated: (sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,) async {
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) async {
           final itemsToAdjust = items.map((item) {
             // Calculate the new quantity by subtracting from current
             final currentQty = (item['actual_qty'] ?? 0).toDouble();

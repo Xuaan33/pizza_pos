@@ -28,6 +28,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final tier = prefs.getString('tier');
     final printKitchenOrder = prefs.getInt('print_kitchen_order');
     final openingDateString = prefs.getString('opening_date');
+    final itemsGroupsJson = prefs.getString('item_groups');
 
     // Parse opening date if it exists
     DateTime? openingDate;
@@ -36,6 +37,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
         openingDate = DateTime.parse(openingDateString);
       } catch (e) {
         debugPrint('Error parsing opening date: $e');
+      }
+    }
+
+    List<dynamic> itemsGroups = []; // Initialize empty list
+    if (itemsGroupsJson != null) {
+      try {
+        itemsGroups = jsonDecode(itemsGroupsJson);
+      } catch (e) {
+        debugPrint('Error parsing item groups: $e');
       }
     }
 
@@ -72,7 +82,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         hasOpening: hasOpening,
         tier: tier ?? '',
         printKitchenOrder: printKitchenOrder ?? 1,
-        openingDate: openingDate, // Use the parsed opening date
+        openingDate: openingDate,
+        itemsGroups: itemsGroups,
       );
     } else {
       state = const AuthState.unauthenticated();
@@ -99,8 +110,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setString('taxes', jsonEncode(response['taxes']));
         await prefs.setBool('has_opening', response['has_opening']);
         await prefs.setString('tier',
-            response['tier'] ?? 'tier2'); // Default to tier2 if not provided
+            response['tier'] ?? 'tier1'); // Default to tier2 if not provided
         await prefs.setString('last_login', DateTime.now().toIso8601String());
+        await prefs.setString(
+            'item_groups', jsonEncode(response['item_groups'] ?? []));
 
         DateTime? openingDate;
 
@@ -145,9 +158,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
               List<Map<String, dynamic>>.from(response['mode_of_payment']),
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
-          tier: response['tier'] ?? 'tier2', // Default to tier2 if not provided
+          tier: response['tier'] ?? 'tier1', // Default to tier2 if not provided
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
-          openingDate: openingDate, // Add the opening date here
+          openingDate: openingDate,
+          itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -175,7 +189,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           _,
           tier,
           printKitchenOrder,
-          oldOpeningDate) async {
+          oldOpeningDate,
+          itemsGroups) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
 
@@ -203,6 +218,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           tier: tier,
           printKitchenOrder: printKitchenOrder,
           openingDate: hasOpening ? newOpeningDate : null,
+          itemsGroups: itemsGroups,
         );
       },
       orElse: () {},

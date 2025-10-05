@@ -126,26 +126,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!mounted) return;
 
     try {
-      final posService = PosService();
-      final response = await posService.getItemGroups();
-
-      if (response['success'] == true) {
-        if (mounted) {
-          setState(() {
-            // Filter out disabled item groups (where disabled != 0)
-            itemGroups = List<Map<String, dynamic>>.from(
-                    response['message']['item_groups'])
-                .where((group) =>
-                    (group['disabled'] ?? 1) == 0 &&
-                    group['name'] != 'All Item Groups')
-                .toList();
-
-            _isLoadingItemGroups = false;
-          });
-        }
-      } else {
-        throw Exception('Failed to load item groups');
-      }
+      final authState = ref.read(authProvider);
+      authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups, // Add this parameter
+        ) {
+          if (mounted) {
+            setState(() {
+              // Convert the itemsGroups from login response
+              List<Map<String, dynamic>> groups = itemsGroups
+                  .where((group) => group != 'All Item Groups')
+                  .map((groupName) => {
+                        'name': groupName.toString(),
+                        'value': groupName.toString(),
+                        'disabled': 0,
+                      })
+                  .toList();
+              this.itemGroups = [
+                {
+                  'name': 'All',
+                  'value': 'All',
+                  'disabled': 0,
+                },
+                ...groups,
+              ];
+              _isLoadingItemGroups = false;
+            });
+          }
+        },
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingItemGroups = false);
@@ -163,24 +186,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!mounted) return;
 
     try {
-      final posService = PosService();
-      final response = await posService.getItems();
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile, // This is available here
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) async {
+          final posService = PosService();
+          final response =
+              await posService.getItems(posProfile); // Pass posProfile here
 
-      if (response['success'] == true) {
-        if (mounted) {
-          setState(() {
-            availableItems =
-                List<Map<String, dynamic>>.from(response['message']['items']);
-            _isLoadingItems = false;
-          });
-        }
-        await _loadVariantGroupsForItems();
+          if (response['success'] == true) {
+            if (mounted) {
+              setState(() {
+                availableItems = List<Map<String, dynamic>>.from(
+                    response['message']['items']);
+                _isLoadingItems = false;
+              });
+            }
+            await _loadVariantGroupsForItems();
 
-        // Check stock after items are loaded
-        _checkStockForItems();
-      } else {
-        throw Exception('Failed to load available items');
-      }
+            // Check stock after items are loaded
+            _checkStockForItems();
+          } else {
+            throw Exception('Failed to load available items');
+          }
+        },
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingItems = false);
@@ -275,51 +320,101 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final authState = ref.read(authProvider);
     await authState.whenOrNull(
-      authenticated: (sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate) async {
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) async {
         try {
-          final newStockQuantities = <String, int>{};
+          final response = await PosService().getStockBalanceSummary(
+            posProfile: posProfile,
+            isPosItem: 1,
+            disable: 0,
+          );
 
-          for (var item in availableItems) {
-            try {
-              final response = await PosService().getStockQuantity(
-                posProfile: posProfile,
-                itemCode: item['item_code'],
-              );
+          debugPrint('Stock API Response: $response');
 
-              if (response['success'] == true) {
-                newStockQuantities[item['item_code']] =
-                    (response['message']['qty'] as num?)?.toInt() ?? 0;
-              } else {
-                newStockQuantities[item['item_code']] =
-                    999; // Assume unlimited if API fails
+          if (response['success'] == true) {
+            final newStockQuantities = <String, int>{};
+
+            // Safely extract the message
+            final message = response['message'];
+
+            if (message == null) {
+              debugPrint('Stock API returned null message');
+              _setDefaultStockQuantities(newStockQuantities);
+            } else if (message is! List) {
+              debugPrint(
+                  'Stock API message is not a List, type: ${message.runtimeType}');
+              _setDefaultStockQuantities(newStockQuantities);
+            } else {
+              // Message is a List, process it
+              final stockData = message as List;
+
+              // Create a map for quick lookup by item code
+              final stockMap = <String, Map<String, dynamic>>{};
+
+              for (var stockItem in stockData) {
+                if (stockItem is Map<String, dynamic>) {
+                  final itemCode = stockItem['item']?.toString();
+                  if (itemCode != null) {
+                    stockMap[itemCode] = stockItem;
+                  }
+                }
               }
-            } catch (e) {
-              debugPrint('Error checking stock for ${item['item_code']}: $e');
-              newStockQuantities[item['item_code']] =
-                  999; // Assume unlimited on error
-            }
-          }
 
-          if (mounted) {
-            setState(() {
-              _itemStockQuantities = newStockQuantities;
-            });
+              // Update stock quantities for available items
+              for (var item in availableItems) {
+                final itemCode = item['item_code'];
+                final stockItem = stockMap[itemCode];
+
+                if (stockItem != null) {
+                  // Safely extract quantity
+                  final qtyValue = stockItem['qty'];
+                  int stockQty = 0;
+
+                  if (qtyValue != null) {
+                    if (qtyValue is num) {
+                      stockQty = qtyValue.toInt();
+                    } else if (qtyValue is String) {
+                      stockQty = int.tryParse(qtyValue) ?? 0;
+                    }
+                  }
+
+                  newStockQuantities[itemCode] = stockQty;
+                } else {
+                  // Item not found in stock data, assume 0 stock
+                  newStockQuantities[itemCode] = 0;
+                }
+              }
+            }
+
+            if (mounted) {
+              setState(() {
+                _itemStockQuantities = newStockQuantities;
+              });
+            }
+          } else {
+            debugPrint(
+                'Stock API returned success=false: ${response['message']}');
+            _setDefaultStockQuantities(<String, int>{});
           }
-        } catch (e) {
+        } catch (e, stackTrace) {
           debugPrint('Error checking stock: $e');
+          debugPrint('Stack trace: $stackTrace');
+          _setDefaultStockQuantities(<String, int>{});
         } finally {
           if (mounted) {
             setState(() => _isLoadingStock = false);
@@ -327,6 +422,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       },
     );
+  }
+
+// Helper method to set default stock quantities
+  void _setDefaultStockQuantities(Map<String, int> quantities) {
+    for (var item in availableItems) {
+      quantities[item['item_code']] = 999; // Assume unlimited
+    }
+
+    if (mounted) {
+      setState(() {
+        _itemStockQuantities = quantities;
+      });
+    }
   }
 
   @override
@@ -353,6 +461,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           tier,
           printKitchenOrder,
           openingDate,
+          itemsGroups,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
@@ -449,20 +558,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                           Container(), // Hide while loading
                                                       unauthenticated: () =>
                                                           Container(), // Hide if not authenticated
-                                                      authenticated: (sid,
-                                                          apiKey,
-                                                          apiSecret,
-                                                          username,
-                                                          email,
-                                                          fullName,
-                                                          posProfile,
-                                                          branch,
-                                                          paymentMethods,
-                                                          taxes,
-                                                          hasOpening,
-                                                          tier,
-                                                          printKitchenOrder,
-                                                          openingDate) {
+                                                      authenticated: (
+                                                        sid,
+                                                        apiKey,
+                                                        apiSecret,
+                                                        username,
+                                                        email,
+                                                        fullName,
+                                                        posProfile,
+                                                        branch,
+                                                        paymentMethods,
+                                                        taxes,
+                                                        hasOpening,
+                                                        tier,
+                                                        printKitchenOrder,
+                                                        openingDate,
+                                                        itemsGroups,
+                                                      ) {
                                                         return Container(
                                                           padding:
                                                               const EdgeInsets
@@ -1222,6 +1334,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tier,
         printKitchenOrder,
         opneingDate,
+        itemsGroups,
       ) {
         return tier.toLowerCase() == 'tier1';
       },
@@ -1381,6 +1494,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tier,
         printKitchenOrder,
         openingDate,
+        itemsGroups,
       ) async {
         setState(() => _isLoading = true);
 
@@ -1550,6 +1664,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tier,
         printKitchenOrder,
         openingDate,
+        itemsGroups,
       ) async {
         if (tier.toLowerCase() == "tier1") {
           if (!hasOpening) {
@@ -2381,6 +2496,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             tier,
             printKitchenOrder,
             openingDate,
+            itemsGroups,
           ) {
             // Find the GST tax rate
             final gstTax = taxes.firstWhere(

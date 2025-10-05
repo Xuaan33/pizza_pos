@@ -38,7 +38,8 @@ class MyApp extends ConsumerWidget {
             hasOpening,
             tier,
             printKitchenOrder,
-            openingDate,) {
+            openingDate,
+            itemsGroups) {
           return MainLayout();
         },
       ),

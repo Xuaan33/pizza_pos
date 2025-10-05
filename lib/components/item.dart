@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/item_group.dart';
 import 'package:shiok_pos_android_app/components/variant_group.dart';
+import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
-class ItemManagement extends StatefulWidget {
+class ItemManagement extends ConsumerStatefulWidget {
   const ItemManagement({super.key});
 
   @override
-  State<ItemManagement> createState() => _ItemManagementState();
+  ConsumerState<ItemManagement> createState() => _ItemManagementState();
 }
 
-class _ItemManagementState extends State<ItemManagement> {
+class _ItemManagementState extends ConsumerState<ItemManagement> {
   List<Item> items = [];
   List<ItemGroup> itemGroups = [];
   List<VariantGroup> variantGroups = [];
@@ -51,9 +53,37 @@ class _ItemManagementState extends State<ItemManagement> {
     try {
       setState(() => isLoading = true);
 
-      // Load all necessary data in parallel
+      final authState =
+          ref.read(authProvider); // Assuming you're using Provider
+      final posProfile = authState.maybeWhen(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+        ) =>
+            posProfile,
+        orElse: () => null,
+      );
+
+      if (posProfile == null) {
+        throw Exception('Not authenticated or posProfile not available');
+      }
+
+      // Load all necessary data in parallel with posProfile
       final responses = await Future.wait([
-        PosService().getAllItems(),
+        PosService().getAllItems(posProfile),
         PosService().getItemGroups(),
         PosService().getVariantGroups(),
       ]);
