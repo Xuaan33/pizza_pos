@@ -32,7 +32,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
     private lateinit var orderDiscount: TextView
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
-        private lateinit var orderTaxLabel: TextView 
+    private lateinit var orderTaxLabel: TextView 
     private lateinit var slideshowView: ImageView
     private lateinit var logoView: ImageView
     private val handler = Handler(Looper.getMainLooper())
@@ -105,6 +105,13 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
     ) {
         handler.post {
             orderTaxLabel.text = "GST (${taxRate}%):"
+           if (taxRate == "0" || taxRate.isEmpty()) {
+        orderTaxLabel.visibility = View.GONE
+        orderTax.visibility = View.GONE
+    } else {
+        orderTaxLabel.visibility = View.VISIBLE
+        orderTax.visibility = View.VISIBLE
+    }
             val adapter = ArrayAdapter(
                 context,
                 android.R.layout.simple_list_item_1,
