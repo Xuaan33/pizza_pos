@@ -21,6 +21,10 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final Function(Map<String, dynamic>) onEditOrder;
   final Future<void> Function()? onRefresh;
   final bool isLoading;
+  final DateTime selectedDate;
+  final int pageLimit;
+  final Function(DateTime) onDateChanged;
+  final Function(int) onLimitChanged;
 
   const OrdersScreen({
     Key? key,
@@ -29,6 +33,10 @@ class OrdersScreen extends ConsumerStatefulWidget {
     required this.onEditOrder,
     this.onRefresh,
     this.isLoading = false,
+    required this.selectedDate,
+    required this.pageLimit,
+    required this.onDateChanged,
+    required this.onLimitChanged,
   }) : super(key: key);
 
   @override
@@ -38,9 +46,13 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _filterStatus = 'All'; // 'All', 'Draft', 'Paid'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
+  String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
     String baseImageUrl = '';
 
+  // DateTime _selectedDate = DateTime.now();
+  // int _pageLimit = 30;
+  final List<int> _limitOptions = [30, 50, 100];
 
   @override
   bool get wantKeepAlive => true;
@@ -60,17 +72,30 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     setState(() {}); // Refresh UI
   }
 
+  @override
+  void didUpdateWidget(OrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Schedule refresh for after build phase
+    if (oldWidget.selectedDate != widget.selectedDate ||
+        oldWidget.pageLimit != widget.pageLimit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _refreshOrders();
+      });
+    }
+  }
+
   Future<void> _refreshOrders() async {
-    await widget.onRefresh!();
     if (widget.onRefresh != null && mounted) {
-      // Clear the current state to refresh the whole screen
+      await widget.onRefresh!();
+    }
+    if (mounted) {
       setState(() {
         _selectedOrder = null;
         _filterStatus = 'All';
         _filterOrderType = 'All';
+        _searchQuery = '';
       });
-
-      // Call the refresh function to reload data
     }
   }
 
@@ -180,16 +205,138 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Recent Orders',
-                    style:
-                        TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Orders",
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          DateFormat('EEEE, dd MMMM yyyy')
+                              .format(widget.selectedDate),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE732A0).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        onPressed: _selectDate,
+                        icon: Icon(Icons.calendar_month, size: 24),
+                        color: Color(0xFFE732A0),
+                        tooltip: 'Select Date',
+                      ),
+                    ),
+                  ],
+                ),
                 SizedBox(height: 16),
+
+                // Search Bar
+                Row(
+                  children: [
+                    // Search Bar (shortened)
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: TextField(
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search orders...',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            prefixIcon:
+                                Icon(Icons.search, color: Colors.grey.shade600),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+
+                    // Limit Dropdown
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Limit',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.black,
+                                fontWeight: FontWeight.w600),
+                          ),
+                          SizedBox(height: 4),
+                          Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: widget.pageLimit,
+                                isExpanded: true,
+                                items: _limitOptions.map((int value) {
+                                  return DropdownMenuItem<int>(
+                                    value: value,
+                                    child: Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 12),
+                                      child: Text('$value'),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (int? newValue) {
+                                  if (newValue != null) {
+                                    // Call parent callback to update the limit
+                                    widget.onLimitChanged(newValue);
+                                    // The refresh will be triggered by the parent callback
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: 16),
+
                 Row(
                   children: [
                     Expanded(
                       child: _buildFilterDropdown(
                         value: _filterStatus,
-                        items: ['All', 'Draft', 'Paid'],
+                        items: ['All', 'Draft', 'Paid', 'Cancelled'],
                         onChanged: (value) =>
                             setState(() => _filterStatus = value!),
                         label: 'Status',
@@ -284,7 +431,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: 8),
+              SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -304,6 +451,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                   ),
                 ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Remarks: ${order['remarks'] != null && order['remarks'].toString().isNotEmpty ? order['remarks'] : 'N/A'}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -493,7 +651,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
-                          'Remarks: ${order['remarks']}',
+                          'Remarks: ${order['remarks'] != null && order['remarks'].toString().isNotEmpty ? order['remarks'] : 'N/A'}',
                           style: TextStyle(
                               fontSize: 14, fontWeight: FontWeight.bold),
                         ),
@@ -627,7 +785,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   children: [
                     _buildSummaryRow('Subtotal', originalSubtotal),
                     if (totalDiscount > 0)
-                      _buildSummaryRow('Discount Amount', -totalDiscount),
+                      _buildSummaryRow(
+                          'Discount Amount (${order['user_voucher_code']})',
+                          -totalDiscount),
                     if (taxBreakdown != null)
                       _buildSummaryRow(
                         'GST (${taxBreakdown['rate']?.toStringAsFixed(0) ?? '6.0'}%)',
@@ -915,13 +1075,39 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {
     return orders.where((order) {
+      // Search filter
+      final searchMatch = _searchQuery.isEmpty ||
+          (order['orderId']?.toString().toLowerCase() ?? '')
+              .contains(_searchQuery.toLowerCase()) ||
+          (order['customerName']?.toString().toLowerCase() ?? '')
+              .contains(_searchQuery.toLowerCase()) ||
+          (order['remarks']?.toString().toLowerCase() ?? '')
+              .contains(_searchQuery.toLowerCase());
+
+      // Determine the actual status of the order
+      final isCancelled =
+          order['status']?.toString().toLowerCase() == 'cancelled';
+      final isDraft = !isCancelled &&
+          (order['status']?.toString().toLowerCase() == 'draft');
+      final isPaid = !isCancelled && !isDraft;
+
+      final String orderStatus;
+      if (isCancelled) {
+        orderStatus = 'Cancelled';
+      } else if (isDraft) {
+        orderStatus = 'Draft';
+      } else {
+        orderStatus = 'Paid';
+      }
+
       final statusMatch = _filterStatus == 'All' ||
-          (order['status']?.toString().toLowerCase() ==
-              _filterStatus.toLowerCase());
+          orderStatus.toLowerCase() == _filterStatus.toLowerCase();
+
       final typeMatch = _filterOrderType == 'All' ||
           (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
               _filterOrderType.toLowerCase();
-      return statusMatch && typeMatch;
+
+      return searchMatch && statusMatch && typeMatch;
     }).toList();
   }
 
@@ -960,6 +1146,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             'discount_amount': order['discount_amount'] ?? 0.0,
             'coupon_code': order['coupon_code'],
             'custom_user_voucher': order['custom_user_voucher'],
+            'user_voucher_code': order['user_voucher_code'],
             'total_taxes_and_charges': order['total_taxes_and_charges'] ?? 0.0,
             'base_rounding_adjustment':
                 order['base_rounding_adjustment'] ?? 0.0,
@@ -1318,6 +1505,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         date.day == now.day;
   }
 
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: widget.selectedDate, // Use widget.selectedDate
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+
+    if (picked != null && picked != widget.selectedDate) {
+      // Call parent callback instead of setting local state
+      widget.onDateChanged(picked);
+    }
+  }
+
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     final items = (order['items'] as List?) ?? [];
     return items.fold(0.0, (sum, item) {
@@ -1381,6 +1582,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   String _formatDate(DateTime date) {
-    return DateFormat('HH:mm, dd MMM').format(date);
+    return DateFormat('HH:mm, dd MMM yyyy').format(date);
   }
 }
