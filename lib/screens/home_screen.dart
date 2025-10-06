@@ -344,7 +344,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             disable: 0,
           );
 
-
           if (response['success'] == true) {
             final newStockQuantities = <String, int>{};
 
@@ -817,9 +816,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       _buildOrderSummaryRow('Sub Total',
                                           'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                                      _buildOrderSummaryRow(
-                                          'GST (${_getGSTRate()}%)',
-                                          'RM ${_calculateGST().toStringAsFixed(2)}'),
+                                      if (_getGSTRate() != '0')
+                                        _buildOrderSummaryRow(
+                                            'GST (${_getGSTRate()}%)',
+                                            'RM ${_calculateGST().toStringAsFixed(2)}'),
                                       _buildOrderSummaryRow(
                                           'Rounding', _getRoundingLabel()),
                                       const SizedBox(height: 10),
@@ -2528,7 +2528,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   double _getUnroundedTotal() {
-    return _calculateSubtotal() + (_calculateSubtotal() * _calculateGST()); // GST 6%
+    return _calculateSubtotal() +
+        (_calculateSubtotal() * _calculateGST()); // GST 6%
   }
 
   double _getRoundedTotal() {
@@ -2567,23 +2568,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _getGSTRate() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (
-            sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,
-            itemsGroups
-          ) {
+          authenticated: (sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups) {
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
               orElse: () => {'rate': 0.0},

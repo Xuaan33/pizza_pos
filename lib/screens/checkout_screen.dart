@@ -1377,11 +1377,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(height: 8),
           ],
-
-          _buildSummaryRow(
-            'GST (${_getGSTRate()}%)',
-            "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
-          ),
+          if (_getGSTRate() != '0')
+            _buildSummaryRow(
+              'GST (${_getGSTRate()}%)',
+              "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
+            ),
           const SizedBox(height: 8),
 
           _buildSummaryRow(
