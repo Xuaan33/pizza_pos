@@ -1761,6 +1761,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             builder: (context) => CheckoutScreen(
               order: {
                 'tableNumber': widget.tableNumber,
+                'tableFullName': tableFullName,
                 'items': List<Map<String, dynamic>>.from(currentOrderItems),
                 'entryTime': hasExistingOrder
                     ? (widget.existingOrder!['entryTime'] ?? DateTime.now())

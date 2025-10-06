@@ -271,6 +271,7 @@ class _SplitOrderPaymentDialogState
                                 'Rounding',
                                 (_orderDetails['base_rounding_adjustment'] ?? 0)
                                     .toDouble()),
+                            if(_getGSTRate() != '0')
                             _buildSummaryRow(
                                 'GST (${_getGSTRate()}%)',
                                 ((_orderDetails['total_taxes_and_charges'] ??

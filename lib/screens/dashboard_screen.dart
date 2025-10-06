@@ -424,7 +424,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 icon: const Icon(Icons.calendar_today, size: 20),
                 onPressed: () => _selectDate(context),
               ),
-            const Spacer(),
+            const SizedBox(width: 10),
             Text(
               dateRangeText,
               style: TextStyle(
@@ -835,13 +835,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.grey[200],
                                   borderRadius: BorderRadius.circular(8),
-                                  image: item['image'] != null
-                                      ? DecorationImage(
-                                          image: NetworkImage(
-                                              '$baseImageUrl${item['image'] as String}'),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: item['image'] != null
+                                      ? Image.network(
+                                          '$baseImageUrl${item['image'] as String}',
+                                          width: 40,
+                                          height: 40,
                                           fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Image.asset(
+                                              'assets/pizza.png',
+                                              width: 40,
+                                              height: 40,
+                                              fit: BoxFit.cover,
+                                            );
+                                          },
                                         )
-                                      : null,
+                                      : Image.asset(
+                                          'assets/pizza.png',
+                                          width: 40,
+                                          height: 40,
+                                          fit: BoxFit.cover,
+                                        ),
                                 ),
                               ),
                               const SizedBox(width: 10),

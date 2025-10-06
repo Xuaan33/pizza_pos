@@ -903,16 +903,31 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {
-    return orders.where((order) {
-      final statusMatch = _filterStatus == 'All' ||
-          (order['status']?.toString().toLowerCase() ==
-              _filterStatus.toLowerCase());
-      final typeMatch = _filterOrderType == 'All' ||
-          (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
-              _filterOrderType.toLowerCase();
-      return statusMatch && typeMatch;
-    }).toList();
-  }
+  return orders.where((order) {
+    // Determine the actual status of the order
+    final isCancelled = order['status']?.toString().toLowerCase() == 'cancelled';
+    final isDraft = !isCancelled && (order['status']?.toString().toLowerCase() == 'draft');
+    final isPaid = !isCancelled && !isDraft; // If not cancelled and not draft, it's paid
+    
+    final String orderStatus;
+    if (isCancelled) {
+      orderStatus = 'Cancelled';
+    } else if (isDraft) {
+      orderStatus = 'Draft';
+    } else {
+      orderStatus = 'Paid';
+    }
+
+    final statusMatch = _filterStatus == 'All' || 
+        orderStatus.toLowerCase() == _filterStatus.toLowerCase();
+    
+    final typeMatch = _filterOrderType == 'All' ||
+        (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
+            _filterOrderType.toLowerCase();
+    
+    return statusMatch && typeMatch;
+  }).toList();
+}
 
   void _goToCheckout(Map<String, dynamic> order) {
     // Safely convert items to the correct type

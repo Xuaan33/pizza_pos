@@ -557,7 +557,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 Text(
                   widget.order['tableNumber'] == 0
                       ? 'Instant Order'
-                      : 'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
+                      : '${widget.order['tableFullName'] ?? "Take Away"}',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -619,7 +619,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           child: Text(
             widget.order['tableNumber'] == 0
                 ? 'Instant Order'
-                : 'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
+                : '${widget.order['tableFullName'] ?? "Take Away"}',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -765,7 +765,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   )
                 else
                   Expanded(
-                    child: _buildPayNowButton(),
+                    child: _buildPayLaterButton(),
                   ),
                 const SizedBox(width: 10),
                 if (_isSplitting)
@@ -778,7 +778,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   )
                 else
                   Expanded(
-                    child: _buildPayLaterButton(),
+                    child: _buildPayNowButton(),
                   ),
               ],
             ),
@@ -3576,6 +3576,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: 'Dine In',
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -3590,6 +3592,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: couponCode,
         custom_user_voucher: voucherName,
       );
+      print("SOHAI: $response['message']['custom_user_voucher']");
+      print("SOHAI: $response['message']['discount_amount']");
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -4149,7 +4153,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       'custom_variant_info': item['custom_variant_info'],
                   })
               .toList(),
-          table: "MK-Floor 1-Take Away",
+          table: widget.order['tableFullName'],
           orderChannel: "Dine In");
 
       if (response['success'] == true) {
@@ -4435,7 +4439,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'custom_variant_info': item['custom_variant_info'],
             };
           }).toList(),
-          table: "MK-Floor 1-Take Away");
+          table: widget.order['tableFullName']);
 
       // Update local state
       if (mounted) {
