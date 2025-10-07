@@ -1327,6 +1327,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _navigateToHomeScreen() {
+    final currentCouponCode = widget.order['coupon_code'];
+    final currentVoucherName = _voucherCode;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1337,6 +1339,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'items': widget.order['items'],
             'orderId': widget.order['invoiceNumber'],
             'invoiceNumber': widget.order['invoiceNumber'],
+            'coupon_code': currentCouponCode,
+            'custom_user_voucher': currentVoucherName,
           },
           isTier1: true,
         ),
@@ -1355,6 +1359,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return sum + (item['price'] * item['quantity']);
     });
 
+    final String? voucherName = _voucherCode.isNotEmpty
+        ? _voucherCode
+        : '';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1372,7 +1380,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
           if (_discountAmount > 0) ...[
             _buildSummaryRow(
-              'Discount',
+              // Show voucher name if available, otherwise just "Discount"
+              voucherName != null && voucherName.isNotEmpty
+                  ? 'Discount ($voucherName)'
+                  : 'Discount',
               "-RM ${_discountAmount.toStringAsFixed(2)}",
             ),
             const SizedBox(height: 8),
@@ -1544,7 +1555,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           };
         }).toList(),
         couponCode: widget.order['coupon_code'],
-        custom_user_voucher: widget.order['custom_user_voucher'],
+        custom_user_voucher: _voucherCode,
         remarks: _remarksController.text, // Add remarks parameter
       );
 
@@ -3497,19 +3508,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _showLoadingOverlay(true);
 
     try {
-      final response = await PosService().validateVoucher(voucherCode);
+      // Convert user input to uppercase
+      final uppercaseVoucherCode = voucherCode.toUpperCase();
+
+      final response = await PosService().validateVoucher(uppercaseVoucherCode);
 
       if (response['success'] == true) {
         final voucherData = response['message'];
-        final voucherName = voucherData['name'];
         final couponCode = voucherData['coupon_code'];
 
         setState(() {
-          _voucherCode = voucherName;
+          _voucherCode = uppercaseVoucherCode; // Use the uppercase user input
         });
 
-        // Update the order with the voucher
-        await _updateOrderWithVoucher(voucherName, couponCode);
+        // Update the order with the voucher using the user's input (uppercase)
+        await _updateOrderWithVoucher(uppercaseVoucherCode, couponCode);
 
         Fluttertoast.showToast(
           msg: "Voucher applied successfully",
@@ -3592,8 +3605,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: couponCode,
         custom_user_voucher: voucherName,
       );
-      print("SOHAI: $response['message']['custom_user_voucher']");
-      print("SOHAI: $response['message']['discount_amount']");
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -3973,7 +3984,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           };
         }).toList(),
         couponCode: widget.order['coupon_code'],
-        custom_user_voucher: widget.order['custom_user_voucher'],
+        custom_user_voucher: _voucherCode,
       );
 
       if (response['success'] == true) {

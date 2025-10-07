@@ -37,6 +37,7 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _filterStatus = 'All'; // 'All', 'Draft', 'Paid'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
+  String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
 
   @override
@@ -59,9 +60,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         _selectedOrder = null;
         _filterStatus = 'All';
         _filterOrderType = 'All';
+        _searchQuery = '';
       });
-
-      // Call the refresh function to reload data
     }
   }
 
@@ -173,12 +173,40 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     style:
                         TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
                 SizedBox(height: 16),
+
+                // Search Bar
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search by order ID, customer name...',
+                      hintStyle: TextStyle(color: Colors.grey.shade600),
+                      prefixIcon:
+                          Icon(Icons.search, color: Colors.grey.shade600),
+                      border: InputBorder.none,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 16),
+
                 Row(
                   children: [
                     Expanded(
                       child: _buildFilterDropdown(
                         value: _filterStatus,
-                        items: ['All', 'Draft', 'Paid'],
+                        items: ['All', 'Draft', 'Paid', 'Cancelled'],
                         onChanged: (value) =>
                             setState(() => _filterStatus = value!),
                         label: 'Status',
@@ -272,6 +300,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                   ),
                 ],
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Remarks: ${order['remarks']}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               SizedBox(height: 8),
               Row(
@@ -903,31 +942,40 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {
-  return orders.where((order) {
-    // Determine the actual status of the order
-    final isCancelled = order['status']?.toString().toLowerCase() == 'cancelled';
-    final isDraft = !isCancelled && (order['status']?.toString().toLowerCase() == 'draft');
-    final isPaid = !isCancelled && !isDraft; // If not cancelled and not draft, it's paid
-    
-    final String orderStatus;
-    if (isCancelled) {
-      orderStatus = 'Cancelled';
-    } else if (isDraft) {
-      orderStatus = 'Draft';
-    } else {
-      orderStatus = 'Paid';
-    }
+    return orders.where((order) {
+      // Search filter
+      final searchMatch = _searchQuery.isEmpty ||
+          (order['orderId']?.toString().toLowerCase() ?? '')
+              .contains(_searchQuery.toLowerCase()) ||
+          (order['customerName']?.toString().toLowerCase() ?? '')
+              .contains(_searchQuery.toLowerCase());
 
-    final statusMatch = _filterStatus == 'All' || 
-        orderStatus.toLowerCase() == _filterStatus.toLowerCase();
-    
-    final typeMatch = _filterOrderType == 'All' ||
-        (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
-            _filterOrderType.toLowerCase();
-    
-    return statusMatch && typeMatch;
-  }).toList();
-}
+      // Determine the actual status of the order
+      final isCancelled =
+          order['status']?.toString().toLowerCase() == 'cancelled';
+      final isDraft = !isCancelled &&
+          (order['status']?.toString().toLowerCase() == 'draft');
+      final isPaid = !isCancelled && !isDraft;
+
+      final String orderStatus;
+      if (isCancelled) {
+        orderStatus = 'Cancelled';
+      } else if (isDraft) {
+        orderStatus = 'Draft';
+      } else {
+        orderStatus = 'Paid';
+      }
+
+      final statusMatch = _filterStatus == 'All' ||
+          orderStatus.toLowerCase() == _filterStatus.toLowerCase();
+
+      final typeMatch = _filterOrderType == 'All' ||
+          (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
+              _filterOrderType.toLowerCase();
+
+      return searchMatch && statusMatch && typeMatch;
+    }).toList();
+  }
 
   void _goToCheckout(Map<String, dynamic> order) {
     // Safely convert items to the correct type
@@ -1385,6 +1433,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   String _formatDate(DateTime date) {
-    return DateFormat('HH:mm, dd MMM').format(date);
+    return DateFormat('HH:mm, dd MMM yyyy').format(date);
   }
 }

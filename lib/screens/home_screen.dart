@@ -592,7 +592,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                           ),
                                                           child: Text(
                                                             hasOpening
-                                                                ? 'Opening Entry: ${DateFormat('dd MMM yyyy').format(openingDate ?? DateTime.now())}'
+                                                                ? 'Opening Entry: ${DateFormat('hh:mm a dd MMM yyyy').format(openingDate ?? DateTime.now())}'
                                                                 : 'No Opening Entry',
                                                             style:
                                                                 const TextStyle(
@@ -1713,7 +1713,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             'price_list_rate': itemPrice,
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
+            'custom_variant_info': variantInfo,
           };
         }).toList();
 
@@ -1723,14 +1723,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (hasExistingOrder) {
           // Update existing order
           final response = await PosService().submitOrder(
-            posProfile: posProfile,
-            customer: 'Guest',
-            items: items,
-            table: tableFullName,
-            orderChannel: 'Dine In',
-            name: widget
-                .existingOrder!['orderId'], // Pass existing order ID to update
-          );
+              posProfile: posProfile,
+              customer: 'Guest',
+              items: items,
+              table: tableFullName,
+              orderChannel: 'Dine In',
+              name: widget.existingOrder!['orderId'],
+              couponCode: widget.existingOrder!['coupon_code'],
+              custom_user_voucher:
+                  widget.existingOrder!['custom_user_voucher']);
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
