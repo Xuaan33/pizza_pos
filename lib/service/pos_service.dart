@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class PosService {
-  static const String _baseUrl = 'https://mejaa.joydivisionpadel.com//api/method';
+  static const String _baseUrl =
+      'https://mejaa.joydivisionpadel.com//api/method';
 
   // Helper method for common request handling
   Future<Map<String, dynamic>> makeRequest({
@@ -50,22 +51,23 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getAvailableItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
+    );
+  }
 
   Future<Map<String, dynamic>> getAllItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
+    );
+  }
 
   Future<Map<String, dynamic>> getItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
-  );
-}
+    return makeRequest(
+      endpoint:
+          'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
+    );
+  }
 
   Future<Map<String, dynamic>> getItemGroups() async {
     return makeRequest(
@@ -113,7 +115,7 @@ class PosService {
     final params = {
       'pos_profile': posProfile,
       'is_pos_item': isPosItem.toString(),
-      if (disable != null)'disable': disable.toString(),
+      if (disable != null) 'disable': disable.toString(),
       if (date != null) 'date': date,
     };
 
@@ -434,6 +436,25 @@ class PosService {
       body: {
         'user_voucher': voucherCode,
       },
+    );
+  }
+
+  Future<Map<String, dynamic>> getAppliedUserVouchers({
+    required String posProfile,
+    String? fromDate,
+    String? toDate,
+    int limit = 10,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      if (fromDate != null) 'from_date': fromDate,
+      if (toDate != null) 'to_date': toDate,
+      'limit': limit.toString(),
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_applied_user_vouchers?$queryString',
     );
   }
 
