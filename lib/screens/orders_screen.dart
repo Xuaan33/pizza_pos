@@ -302,17 +302,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 ],
               ),
               SizedBox(height: 4),
-              Text(
-                'Remarks: ${order['remarks']}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -332,6 +321,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                   ),
                 ],
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Remarks: ${order['remarks'] != null && order['remarks'].toString().isNotEmpty ? order['remarks'] : 'N/A'}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -521,7 +521,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
-                          'Remarks: ${order['remarks']}',
+                          'Remarks: ${order['remarks'] != null && order['remarks'].toString().isNotEmpty ? order['remarks'] : 'N/A'}',
                           style: TextStyle(
                               fontSize: 14, fontWeight: FontWeight.bold),
                         ),
@@ -655,7 +655,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   children: [
                     _buildSummaryRow('Subtotal', originalSubtotal),
                     if (totalDiscount > 0)
-                      _buildSummaryRow('Discount Amount', -totalDiscount),
+                      _buildSummaryRow(
+                          'Discount Amount (${order['user_voucher_code']})',
+                          -totalDiscount),
                     if (taxBreakdown != null)
                       _buildSummaryRow(
                         'GST (${taxBreakdown['rate']?.toStringAsFixed(0) ?? '6.0'}%)',
@@ -948,6 +950,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           (order['orderId']?.toString().toLowerCase() ?? '')
               .contains(_searchQuery.toLowerCase()) ||
           (order['customerName']?.toString().toLowerCase() ?? '')
+              .contains(_searchQuery.toLowerCase()) ||
+          (order['remarks']?.toString().toLowerCase() ??
+                  '')
               .contains(_searchQuery.toLowerCase());
 
       // Determine the actual status of the order
@@ -1012,6 +1017,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             'discount_amount': order['discount_amount'] ?? 0.0,
             'coupon_code': order['coupon_code'],
             'custom_user_voucher': order['custom_user_voucher'],
+            'user_voucher_code': order['user_voucher_code'],
             'total_taxes_and_charges': order['total_taxes_and_charges'] ?? 0.0,
             'base_rounding_adjustment':
                 order['base_rounding_adjustment'] ?? 0.0,

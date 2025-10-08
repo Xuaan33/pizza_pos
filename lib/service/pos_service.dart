@@ -826,7 +826,8 @@ class OrderMapper {
         'net_total': (order['net_total'] as num).toDouble(),
         'base_rounding_adjustment':
             (order['base_rounding_adjustment'] as num).toDouble(),
-        'remarks': order['remarks'] as String? ?? 'No remarks'
+        'remarks': order['remarks'] as String? ?? 'N/A',
+        'user_voucher_code': order['user_voucher_code']as String?,
       };
     } catch (e) {
       print('Error mapping submitted order: $e');

@@ -482,7 +482,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               }).toList(),
               subtotal: _calculateSubtotal(),
               tax: _calculateGST(),
-              discount: 0.00,
+              discount: _getDiscountAmount(),
               rounding: _getRoundingDifference(),
               total: _getRoundedTotal(),
               taxRate: _getGSTRate(),
@@ -816,6 +816,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       _buildOrderSummaryRow('Sub Total',
                                           'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
+                                      if (_hasDiscount())
+                                        _buildOrderSummaryRow(
+                                          'Discount ${_getDiscountLabel()}',
+                                          '-RM ${_getDiscountAmount().toStringAsFixed(2)}',
+                                        ),
                                       if (_getGSTRate() != '0')
                                         _buildOrderSummaryRow(
                                             'GST (${_getGSTRate()}%)',
@@ -2512,8 +2517,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         0.0; // Return 0 if not authenticated
   }
 
+  // Check if there's a discount applied
+  bool _hasDiscount() {
+    return widget.existingOrder != null &&
+        widget.existingOrder!['discount_amount'] != null &&
+        (widget.existingOrder!['discount_amount'] as num) > 0;
+  }
+
+// Get the discount amount
+  double _getDiscountAmount() {
+    if (widget.existingOrder != null &&
+        widget.existingOrder!['discount_amount'] != null) {
+      return (widget.existingOrder!['discount_amount'] as num).toDouble();
+    }
+    return 0.0;
+  }
+
+// Get the discount label (voucher code)
+  String _getDiscountLabel() {
+    if (widget.existingOrder != null) {
+      final voucherCode = widget.existingOrder!['user_voucher_code'] ??
+          widget.existingOrder!['custom_user_voucher'];
+      if (voucherCode != null && voucherCode.isNotEmpty) {
+        return '($voucherCode)';
+      }
+    }
+    return '';
+  }
+
+// Update the total calculation to account for discount
   double _calculateTotal() {
-    return _calculateSubtotal() + _calculateGST();
+    double subtotal = _calculateSubtotal();
+    double gst = _calculateGST();
+    double discount = _getDiscountAmount();
+
+    return subtotal - discount + gst;
+  }
+
+// Update the rounded total calculation to account for discount
+  double _getUnroundedTotal() {
+    double subtotal = _calculateSubtotal();
+    double discount = _getDiscountAmount();
+    double gstAmount = (subtotal - discount) * (_getGSTRateAsDouble() / 100);
+
+    return (subtotal - discount) + gstAmount;
+  }
+
+// Helper method to get GST rate as double
+  double _getGSTRateAsDouble() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+          ) {
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 0.0},
+            );
+            return (gstTax['rate'] ?? 0.0).toDouble();
+          },
+        ) ??
+        0.0;
   }
 
   double _calculateTotalRevenue() {
@@ -2527,11 +2605,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return (item['additional_cost'] as num).toDouble();
     }
     return 0.0;
-  }
-
-  double _getUnroundedTotal() {
-    return _calculateSubtotal() +
-        (_calculateSubtotal() * _calculateGST()); // GST 6%
   }
 
   double _getRoundedTotal() {

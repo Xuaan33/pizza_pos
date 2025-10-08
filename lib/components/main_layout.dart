@@ -241,7 +241,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'remarks': invoice['remarks']?.toString() ?? '',
                           'custom_item_remarks':
                               invoice['custom_item_remarks']?.toString() ??
-                                  'No remarks',
+                                  'N/A',
                           'taxBreakdown': taxBreakdown,
                           'paidAmount':
                               (invoice['paid_amount'] as num?)?.toDouble() ??
@@ -263,6 +263,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                                   0.0,
                           'discount_amount':
                               (invoice['discount_amount'] as num?)?.toDouble(),
+                          'user_voucher_code': (invoice['user_voucher_code']),
                         };
                       } catch (e) {
                         print(
@@ -426,6 +427,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
       'discount_amount':
           (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0,
+      'user_voucher_code': (invoice['user_voucher_code']),
       'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
           DateTime.now(),
       'paidTime': invoice['status']?.toString() == 'Paid'
@@ -436,7 +438,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           invoice['payments'][0]['mode_of_payment']?.toString() ?? 'Cash',
       'customerName': invoice['customer_name']?.toString() ?? 'Guest',
       'custom_item_remarks':
-          invoice['custom_item_remarks']?.toString() ?? 'No remarks',
+          invoice['custom_item_remarks']?.toString() ?? 'N/A',
       'taxBreakdown': _parseTaxBreakdown(invoice),
     };
   }

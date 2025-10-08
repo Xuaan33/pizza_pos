@@ -18,51 +18,18 @@ class ReceiptPrinter {
     }
   }
 
-  static Future<Printer?> getDefaultPrinter() async {
-    try {
-      final printers = await Printing.listPrinters();
-      if (printers.isEmpty) {
-        return null;
-      }
-      
-      // Look for a default printer
-      final defaultPrinter = printers.firstWhere(
-        (printer) => printer.isDefault,
-        orElse: () => printers.first,
-      );
-      
-      return defaultPrinter;
-    } catch (e) {
-      print('Error getting default printer: $e');
-      return null;
-    }
-  }
-
   static Future<void> printReceipt(Uint8List bytes, {bool isPdf = true}) async {
     try {
-      // Check if printers are available first
-      final canPrint = await ReceiptPrinter.canPrint();
-      if (!canPrint) {
-        throw Exception('No printer detected');
-      }
-
-      // Get the default printer
-      final printer = await getDefaultPrinter();
-      if (printer == null) {
-        throw Exception('No printer available');
-      }
-
       if (isPdf) {
-        await Printing.directPrintPdf(
-          printer: printer,
+        // Use the print dialog instead of direct printing
+        await Printing.layoutPdf(
           onLayout: (PdfPageFormat format) async => bytes,
-          usePrinterSettings: true,
         );
       } else {
         // Convert image to PDF for printing
         final pdf = pw.Document();
         final image = img.decodeImage(bytes);
-        
+
         if (image != null) {
           pdf.addPage(
             pw.Page(
@@ -77,12 +44,11 @@ class ReceiptPrinter {
               },
             ),
           );
-          
+
           final pdfBytes = await pdf.save();
-          await Printing.directPrintPdf(
-            printer: printer,
+          // Use the print dialog instead of direct printing
+          await Printing.layoutPdf(
             onLayout: (PdfPageFormat format) async => pdfBytes,
-            usePrinterSettings: true,
           );
         } else {
           throw Exception('Failed to decode image');
@@ -101,6 +67,19 @@ class ReceiptPrinter {
     } catch (e) {
       print('Print receipt error: $e');
       rethrow;
+    }
+  }
+
+  static Future<void> printKitchenOrderOnly(String orderName) async {
+    try {
+      final kitchenOrderBytes = await PosService().printKitchenOrder(
+        orderName: orderName,
+      );
+      await printReceipt(kitchenOrderBytes, isPdf: false);
+      debugPrint('Kitchen order printed successfully');
+    } catch (e) {
+      debugPrint('Print kitchen order error: $e');
+      // Don't rethrow - kitchen order printing failure shouldn't block the flow
     }
   }
 
@@ -128,23 +107,11 @@ class ReceiptPrinter {
   }
 
   static Future<void> autoPrintReceipt(
-    BuildContext context, 
+    BuildContext context,
     String orderName, {
     bool shouldPrintKitchenOrder = false,
   }) async {
     try {
-      // Check if printer is available first
-      final canPrint = await ReceiptPrinter.canPrint();
-      if (!canPrint) {
-        Fluttertoast.showToast(
-          msg: "No printer detected",
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.orange,
-          textColor: Colors.white,
-        );
-        return;
-      }
-
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -156,9 +123,7 @@ class ReceiptPrinter {
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
               Text(
-                shouldPrintKitchenOrder 
-                  ? 'Printing receipt and kitchen order...'
-                  : 'Printing receipt...',
+                'Preparing receipt for printing...',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
@@ -166,18 +131,13 @@ class ReceiptPrinter {
         ),
       );
 
-      if (shouldPrintKitchenOrder) {
-        await printReceiptAndKitchenOrder(orderName);
-      } else {
-        await printReceiptFromApi(orderName);
-      }
+      // Only print receipt here (kitchen order is handled separately)
+      await printReceiptFromApi(orderName);
 
       Navigator.of(context).pop();
 
       Fluttertoast.showToast(
-        msg: shouldPrintKitchenOrder 
-          ? "Receipt and kitchen order printed successfully"
-          : "Receipt printed successfully",
+        msg: "Receipt sent to print dialog",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.green,
         textColor: Colors.white,
@@ -185,9 +145,7 @@ class ReceiptPrinter {
     } catch (e) {
       Navigator.of(context).pop();
       Fluttertoast.showToast(
-        msg: shouldPrintKitchenOrder 
-          ? "Failed to print receipt and kitchen order: $e"
-          : "Failed to print receipt: $e",
+        msg: "Failed to prepare receipt: $e",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
@@ -197,13 +155,10 @@ class ReceiptPrinter {
 
   // Keep the original showPrintDialog for manual printing if needed
   static Future<void> showPrintDialog(
-    BuildContext context, 
+    BuildContext context,
     String orderName, {
     bool shouldPrintKitchenOrder = false,
   }) async {
-    // This can remain the same as your original implementation
-    // or you can redirect to autoPrintReceipt if you prefer
-    await autoPrintReceipt(context, orderName, 
-      shouldPrintKitchenOrder: shouldPrintKitchenOrder);
+    await autoPrintReceipt(context, orderName);
   }
 }

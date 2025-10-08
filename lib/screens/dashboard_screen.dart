@@ -1241,6 +1241,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           voucher['user_voucher'] as String? ?? 'Unknown';
                       final amount =
                           _convertToDouble(voucher['voucher_amount']);
+                      final orderID =
+                          voucher['name'] as String? ?? 'Unknown';
                       final voucherName =
                           voucher['name'] as String? ?? 'Unknown';
 
@@ -1276,7 +1278,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                         'Code: $userVoucher',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Colors.grey[600],
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Order: $orderID',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black,
+                                          fontStyle: FontStyle.italic,
                                         ),
                                       ),
                                     ],
