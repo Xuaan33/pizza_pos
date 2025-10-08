@@ -344,7 +344,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             disable: 0,
           );
 
-
           if (response['success'] == true) {
             final newStockQuantities = <String, int>{};
 
@@ -483,7 +482,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               }).toList(),
               subtotal: _calculateSubtotal(),
               tax: _calculateGST(),
-              discount: 0.00,
+              discount: _getDiscountAmount(),
               rounding: _getRoundingDifference(),
               total: _getRoundedTotal(),
               taxRate: _getGSTRate(),
@@ -593,7 +592,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                           ),
                                                           child: Text(
                                                             hasOpening
-                                                                ? 'Opening Entry: ${DateFormat('dd MMM yyyy').format(openingDate ?? DateTime.now())}'
+                                                                ? 'Opening Entry: ${DateFormat('hh:mm a dd MMM yyyy').format(openingDate ?? DateTime.now())}'
                                                                 : 'No Opening Entry',
                                                             style:
                                                                 const TextStyle(
@@ -817,9 +816,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       _buildOrderSummaryRow('Sub Total',
                                           'RM ${_calculateSubtotal().toStringAsFixed(2)}'),
-                                      _buildOrderSummaryRow(
-                                          'GST (${_getGSTRate()}%)',
-                                          'RM ${_calculateGST().toStringAsFixed(2)}'),
+                                      if (_hasDiscount())
+                                        _buildOrderSummaryRow(
+                                          'Discount ${_getDiscountLabel()}',
+                                          '-RM ${_getDiscountAmount().toStringAsFixed(2)}',
+                                        ),
+                                      if (_getGSTRate() != '0')
+                                        _buildOrderSummaryRow(
+                                            'GST (${_getGSTRate()}%)',
+                                            'RM ${_calculateGST().toStringAsFixed(2)}'),
                                       _buildOrderSummaryRow(
                                           'Rounding', _getRoundingLabel()),
                                       const SizedBox(height: 10),
@@ -1713,7 +1718,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             'price_list_rate': itemPrice,
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
+            'custom_variant_info': variantInfo,
           };
         }).toList();
 
@@ -1723,14 +1728,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (hasExistingOrder) {
           // Update existing order
           final response = await PosService().submitOrder(
-            posProfile: posProfile,
-            customer: 'Guest',
-            items: items,
-            table: tableFullName,
-            orderChannel: 'Dine In',
-            name: widget
-                .existingOrder!['orderId'], // Pass existing order ID to update
-          );
+              posProfile: posProfile,
+              customer: 'Guest',
+              items: items,
+              table: tableFullName,
+              orderChannel: 'Dine In',
+              name: widget.existingOrder!['orderId'],
+              couponCode: widget.existingOrder!['coupon_code'],
+              custom_user_voucher:
+                  widget.existingOrder!['custom_user_voucher']);
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -1761,6 +1767,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             builder: (context) => CheckoutScreen(
               order: {
                 'tableNumber': widget.tableNumber,
+                'tableFullName': tableFullName,
                 'items': List<Map<String, dynamic>>.from(currentOrderItems),
                 'entryTime': hasExistingOrder
                     ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
@@ -2510,8 +2517,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         0.0; // Return 0 if not authenticated
   }
 
+  // Check if there's a discount applied
+  bool _hasDiscount() {
+    return widget.existingOrder != null &&
+        widget.existingOrder!['discount_amount'] != null &&
+        (widget.existingOrder!['discount_amount'] as num) > 0;
+  }
+
+// Get the discount amount
+  double _getDiscountAmount() {
+    if (widget.existingOrder != null &&
+        widget.existingOrder!['discount_amount'] != null) {
+      return (widget.existingOrder!['discount_amount'] as num).toDouble();
+    }
+    return 0.0;
+  }
+
+// Get the discount label (voucher code)
+  String _getDiscountLabel() {
+    if (widget.existingOrder != null) {
+      final voucherCode = widget.existingOrder!['user_voucher_code'] ??
+          widget.existingOrder!['custom_user_voucher'];
+      if (voucherCode != null && voucherCode.isNotEmpty) {
+        return '($voucherCode)';
+      }
+    }
+    return '';
+  }
+
+// Update the total calculation to account for discount
   double _calculateTotal() {
-    return _calculateSubtotal() + _calculateGST();
+    double subtotal = _calculateSubtotal();
+    double gst = _calculateGST();
+    double discount = _getDiscountAmount();
+
+    return subtotal - discount + gst;
+  }
+
+// Update the rounded total calculation to account for discount
+  double _getUnroundedTotal() {
+    double subtotal = _calculateSubtotal();
+    double discount = _getDiscountAmount();
+    double gstAmount = (subtotal - discount) * (_getGSTRateAsDouble() / 100);
+
+    return (subtotal - discount) + gstAmount;
+  }
+
+// Helper method to get GST rate as double
+  double _getGSTRateAsDouble() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+          ) {
+            final gstTax = taxes.firstWhere(
+              (tax) => tax['description']?.contains('GST') ?? false,
+              orElse: () => {'rate': 0.0},
+            );
+            return (gstTax['rate'] ?? 0.0).toDouble();
+          },
+        ) ??
+        0.0;
   }
 
   double _calculateTotalRevenue() {
@@ -2525,10 +2605,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return (item['additional_cost'] as num).toDouble();
     }
     return 0.0;
-  }
-
-  double _getUnroundedTotal() {
-    return _calculateSubtotal() + (_calculateSubtotal() * _calculateGST()); // GST 6%
   }
 
   double _getRoundedTotal() {
@@ -2567,23 +2643,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _getGSTRate() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (
-            sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,
-            itemsGroups
-          ) {
+          authenticated: (sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups) {
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
               orElse: () => {'rate': 0.0},

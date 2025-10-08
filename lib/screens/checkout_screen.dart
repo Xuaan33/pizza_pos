@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
@@ -65,6 +66,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isRemarksEditing = false;
   bool _isSavingRemarks = false;
   String _currentRemarks = '';
+  bool _isRemovingDiscount = false;
+  TextInputFormatter get _uppercaseFormatter =>
+      FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]'));
 
   @override
   void dispose() {
@@ -184,6 +188,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (response['message']?['success'] == true) {
         final List<dynamic> invoices = response['message']?['message'] ?? [];
+        print('RESPONSES: $response');
         if (invoices.isNotEmpty) {
           final invoice = invoices.first;
           final List<dynamic> serverItems = invoice['items'] ?? [];
@@ -201,6 +206,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             widget.order['coupon_code'] = invoice['coupon_code'];
             widget.order['custom_user_voucher'] =
                 invoice['custom_user_voucher'];
+            // ADD THIS: Store user_voucher_code from backend
+            widget.order['user_voucher_code'] = invoice['user_voucher_code'];
             widget.order['taxes'] = invoice['taxes'];
             widget.order['total_taxes_and_charges'] =
                 (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0;
@@ -211,6 +218,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             // Update local discount amount
             _discountAmount = widget.order['discount_amount'];
             total_taxes_and_charges = widget.order['total_taxes_and_charges'];
+
+            // Update voucher code - use user_voucher_code if available, otherwise nothing
+            _voucherCode = widget.order['user_voucher_code'] ?? '';
 
             // Update remarks
             _currentRemarks = widget.order['remarks'] ?? '';
@@ -557,7 +567,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 Text(
                   widget.order['tableNumber'] == 0
                       ? 'Instant Order'
-                      : 'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
+                      : '${widget.order['tableFullName'] ?? "Take Away"}',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -619,7 +629,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           child: Text(
             widget.order['tableNumber'] == 0
                 ? 'Instant Order'
-                : 'MK-Floor 1-Table ${widget.order['tableNumber'] ?? "Take Away"}',
+                : '${widget.order['tableFullName'] ?? "Take Away"}',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -765,7 +775,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   )
                 else
                   Expanded(
-                    child: _buildPayNowButton(),
+                    child: _buildPayLaterButton(),
                   ),
                 const SizedBox(width: 10),
                 if (_isSplitting)
@@ -778,7 +788,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   )
                 else
                   Expanded(
-                    child: _buildPayLaterButton(),
+                    child: _buildPayNowButton(),
                   ),
               ],
             ),
@@ -1327,6 +1337,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _navigateToHomeScreen() {
+    final currentCouponCode = widget.order['coupon_code'];
+    final currentVoucherName = widget.order['user_voucher_code'];
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1337,6 +1349,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'items': widget.order['items'],
             'orderId': widget.order['invoiceNumber'],
             'invoiceNumber': widget.order['invoiceNumber'],
+            'coupon_code': currentCouponCode,
+            'custom_user_voucher': currentVoucherName,
+            'user_voucher_code': widget.order['user_voucher_code'],
+            'discount_amount': widget.order['discount_amount']
           },
           isTier1: true,
         ),
@@ -1355,6 +1371,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return sum + (item['price'] * item['quantity']);
     });
 
+    final String? voucherName = widget.order['user_voucher_code'];
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1372,16 +1390,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
           if (_discountAmount > 0) ...[
             _buildSummaryRow(
-              'Discount',
+              // Show voucher name if available, otherwise just "Discount"
+              voucherName != null && voucherName.isNotEmpty
+                  ? 'Discount ($voucherName)'
+                  : 'Discount',
               "-RM ${_discountAmount.toStringAsFixed(2)}",
             ),
             const SizedBox(height: 8),
           ],
-
-          _buildSummaryRow(
-            'GST (${_getGSTRate()}%)',
-            "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
-          ),
+          if (_getGSTRate() != '0')
+            _buildSummaryRow(
+              'GST (${_getGSTRate()}%)',
+              "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
+            ),
           const SizedBox(height: 8),
 
           _buildSummaryRow(
@@ -1544,7 +1565,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           };
         }).toList(),
         couponCode: widget.order['coupon_code'],
-        custom_user_voucher: widget.order['custom_user_voucher'],
+        custom_user_voucher: _voucherCode,
         remarks: _remarksController.text, // Add remarks parameter
       );
 
@@ -1803,14 +1824,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // For Pay Later, we just submit the order without processing payment
       if (payLater) {
         // Show print receipt dialog
-        final shouldPrint = await _showPrintReceiptDialog();
-
-        if (shouldPrint) {
-          await ReceiptPrinter.showPrintDialog(
-            context,
-            invoiceName,
-            shouldPrintKitchenOrder: shouldPrintKitchenOrder,
-          );
+        if (shouldPrintKitchenOrder) {
+          await _printKitchenOrderOnly(invoiceName);
         }
         if (mounted) {
           Fluttertoast.showToast(
@@ -1830,13 +1845,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
         if (response['success'] == true) {
           // Show print receipt dialog
-          final shouldPrint = await _showPrintReceiptDialog();
+          if (shouldPrintKitchenOrder) {
+            await _printKitchenOrderOnly(invoiceName);
+          }
 
-          if (shouldPrint) {
+          // Then show print receipt dialog
+          final shouldPrintReceipt = await _showPrintReceiptDialog();
+
+          if (shouldPrintReceipt) {
             await ReceiptPrinter.showPrintDialog(
               context,
               invoiceName,
-              shouldPrintKitchenOrder: shouldPrintKitchenOrder,
+              shouldPrintKitchenOrder: false,
             );
           }
           if (mounted) {
@@ -1873,6 +1893,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
       }
+    }
+  }
+
+  Future<void> _printKitchenOrderOnly(String orderName) async {
+    try {
+      await ReceiptPrinter.printKitchenOrderOnly(orderName);
+    } catch (e) {
+      debugPrint('Failed to print kitchen order: $e');
+      // Don't show error toast for kitchen order failure as it's non-critical
     }
   }
 
@@ -2637,7 +2666,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
 
       if (shouldRemove == true) {
+        _isRemovingDiscount = true;
         await _removeDiscount();
+        _isRemovingDiscount = false;
       }
       return;
     }
@@ -2748,6 +2779,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             labelText: 'Voucher Code',
                             border: OutlineInputBorder(),
                           ),
+                          inputFormatters: [_uppercaseFormatter],
+                          textCapitalization: TextCapitalization.characters,
+                          onChanged: (value) {
+                            // Convert to uppercase and update cursor position
+                            if (value != value.toUpperCase()) {
+                              final cursorPosition =
+                                  voucherController.selection.base.offset;
+                              voucherController.value =
+                                  voucherController.value.copyWith(
+                                text: value.toUpperCase(),
+                                selection: TextSelection.collapsed(
+                                    offset: cursorPosition),
+                              );
+                            }
+                          },
                         ),
 
                       // Percentage field (only visible when percentage is selected)
@@ -3416,6 +3462,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       setState(() {
         _discountAmount = 0;
         _voucherCode = '';
+        widget.order['coupon_code'] = null;
+        widget.order['custom_user_voucher'] = null;
+        widget.order['user_voucher_code'] = null; // Clear user_voucher_code
 
         // Remove discounts from all items
         for (var item in orderItems) {
@@ -3474,6 +3523,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         // Force a complete refresh of order details
         await _fetchOrderDetails();
 
+        // Double-check and force clear any discount values that might have persisted
+        setState(() {
+          if (_discountAmount > 0) _discountAmount = 0;
+          if (_voucherCode?.isNotEmpty == true) _voucherCode = '';
+          if (widget.order['coupon_code'] != null)
+            widget.order['coupon_code'] = null;
+          if (widget.order['custom_user_voucher'] != null)
+            widget.order['custom_user_voucher'] = null;
+          if (widget.order['user_voucher_code'] != null)
+            widget.order['user_voucher_code'] = null;
+        });
+
         Fluttertoast.showToast(
           msg: "Discount removed successfully",
           gravity: ToastGravity.BOTTOM,
@@ -3497,19 +3558,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _showLoadingOverlay(true);
 
     try {
-      final response = await PosService().validateVoucher(voucherCode);
+      // Convert user input to uppercase
+      final uppercaseVoucherCode = voucherCode.toUpperCase();
+
+      final response = await PosService().validateVoucher(uppercaseVoucherCode);
 
       if (response['success'] == true) {
         final voucherData = response['message'];
-        final voucherName = voucherData['name'];
         final couponCode = voucherData['coupon_code'];
 
         setState(() {
-          _voucherCode = voucherName;
+          _voucherCode = uppercaseVoucherCode; // Use the uppercase user input
         });
 
-        // Update the order with the voucher
-        await _updateOrderWithVoucher(voucherName, couponCode);
+        // Update the order with the voucher using the user's input (uppercase)
+        await _updateOrderWithVoucher(uppercaseVoucherCode, couponCode);
 
         Fluttertoast.showToast(
           msg: "Voucher applied successfully",
@@ -3546,6 +3609,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Update local state immediately
       setState(() {
         _voucherCode = voucherName;
+        // Store the user_voucher_code in the order for future use
+        widget.order['user_voucher_code'] = voucherName;
         // We'll let the server calculate the discount amount
         // The _fetchOrderDetails() call below will update the actual discount amount
       });
@@ -3576,6 +3641,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: 'Dine In',
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -3588,7 +3655,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           };
         }).toList(),
         couponCode: couponCode,
-        custom_user_voucher: voucherName,
+        // Use user_voucher_code if available, otherwise use the voucher name
+        custom_user_voucher: widget.order['user_voucher_code'] ?? voucherName,
       );
 
       if (response['success'] == true) {
@@ -3600,6 +3668,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Revert local changes on error
       setState(() {
         _voucherCode = '';
+        widget.order['user_voucher_code'] = null;
       });
     }
   }
@@ -3639,8 +3708,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   double _calculateTotal() {
     // Use server value if available, otherwise calculate
-    return (widget.order['rounded_total'] as num?)?.toDouble() ??
+    final total = (widget.order['rounded_total'] as num?)?.toDouble() ??
         (_calculateSubtotal() + _calculateGST() + _calculateRounding());
+
+    if (total <= 0) {
+      return 0.00;
+    } else {
+      return total;
+    }
   }
 
   double _calculateGST() {
@@ -3969,7 +4044,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           };
         }).toList(),
         couponCode: widget.order['coupon_code'],
-        custom_user_voucher: widget.order['custom_user_voucher'],
+        custom_user_voucher: widget.order['user_voucher_code'],
       );
 
       if (response['success'] == true) {
@@ -4149,7 +4224,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       'custom_variant_info': item['custom_variant_info'],
                   })
               .toList(),
-          table: "MK-Floor 1-Take Away",
+          table: widget.order['tableFullName'],
           orderChannel: "Dine In");
 
       if (response['success'] == true) {
@@ -4435,7 +4510,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'custom_variant_info': item['custom_variant_info'],
             };
           }).toList(),
-          table: "MK-Floor 1-Take Away");
+          table: widget.order['tableFullName']);
 
       // Update local state
       if (mounted) {

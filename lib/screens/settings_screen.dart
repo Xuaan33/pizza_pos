@@ -179,8 +179,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               }
 
               return {
-                'item_code': item['item'] ?? '',
-                'item_name': item['item'] ?? '',
+                'item_code': item['item_code'] ?? '',
+                'item_name': item['item_name'] ?? '',
                 'actual_qty': (item['qty'] ?? 0).toDouble(),
                 'reserved_qty': 0.0,
                 'available_qty': (item['qty'] ?? 0).toDouble(),

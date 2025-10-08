@@ -50,22 +50,23 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getAvailableItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_available_items?pos_profile=$posProfile',
+    );
+  }
 
   Future<Map<String, dynamic>> getAllItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
-  );
-}
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile',
+    );
+  }
 
   Future<Map<String, dynamic>> getItems(String posProfile) async {
-  return makeRequest(
-    endpoint: 'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
-  );
-}
+    return makeRequest(
+      endpoint:
+          'shiok_pos.api.get_items?pos_profile=$posProfile&is_pos_item=1&disabled=0',
+    );
+  }
 
   Future<Map<String, dynamic>> getItemGroups() async {
     return makeRequest(
@@ -113,7 +114,7 @@ class PosService {
     final params = {
       'pos_profile': posProfile,
       'is_pos_item': isPosItem.toString(),
-      if (disable != null)'disable': disable.toString(),
+      if (disable != null) 'disable': disable.toString(),
       if (date != null) 'date': date,
     };
 
@@ -143,7 +144,7 @@ class PosService {
         if (search != null) 'search': search,
         if (status != null) 'status': status,
         if (customer != null) 'customer': customer,
-        if (postingDate != null) 'creation': postingDate,
+        if (postingDate != null) 'posting_date': postingDate,
         if (customTable != null) 'custom_table': customTable,
         if (customOrderChannel != null)
           'custom_order_channel': customOrderChannel,
@@ -434,6 +435,25 @@ class PosService {
       body: {
         'user_voucher': voucherCode,
       },
+    );
+  }
+
+  Future<Map<String, dynamic>> getAppliedUserVouchers({
+    required String posProfile,
+    String? fromDate,
+    String? toDate,
+    int limit = 10,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      if (fromDate != null) 'from_date': fromDate,
+      if (toDate != null) 'to_date': toDate,
+      'limit': limit.toString(),
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_applied_user_vouchers?$queryString',
     );
   }
 
@@ -805,7 +825,8 @@ class OrderMapper {
         'net_total': (order['net_total'] as num).toDouble(),
         'base_rounding_adjustment':
             (order['base_rounding_adjustment'] as num).toDouble(),
-        'remarks': order['remarks'] as String? ?? 'No remarks'
+        'remarks': order['remarks'] as String? ?? 'N/A',
+        'user_voucher_code': order['user_voucher_code']as String?,
       };
     } catch (e) {
       print('Error mapping submitted order: $e');
