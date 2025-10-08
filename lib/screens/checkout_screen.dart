@@ -188,7 +188,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       if (response['message']?['success'] == true) {
         final List<dynamic> invoices = response['message']?['message'] ?? [];
-        print('RESPONSES: $response');
         if (invoices.isNotEmpty) {
           final invoice = invoices.first;
           final List<dynamic> serverItems = invoice['items'] ?? [];
@@ -310,8 +309,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             isPosItem: 1,
             disable: 0,
           );
-
-          debugPrint('Stock API Response: $response');
 
           if (response['success'] == true) {
             final message = response['message'];

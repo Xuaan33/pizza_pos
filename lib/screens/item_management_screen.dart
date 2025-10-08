@@ -123,13 +123,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
         } else {
           _variantGroups = [];
         }
-
-        // Debug output
-        print('Items: $_items');
-        print('Item Groups: ${_itemGroups.map((g) => g['name']).toList()}');
-        print(
-            'Variant Groups: ${_variantGroups.map((g) => g['name']).toList()}');
-
+        
         // Reset invalid selections
         if (_selectedItem != null &&
             !_items.any((item) => item['item_code'] == _selectedItem)) {

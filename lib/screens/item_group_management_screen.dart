@@ -39,8 +39,6 @@ class _ItemGroupManagementScreenState
     setState(() => _isLoading = true);
     try {
       final response = await PosService().getItemGroups();
-      print('API Response: $response'); // Debug print
-
       // Handle the actual API response structure
       final message = response['message'];
       List<dynamic> itemGroupsList = [];
