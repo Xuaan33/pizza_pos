@@ -145,7 +145,7 @@ class PosService {
         if (search != null) 'search': search,
         if (status != null) 'status': status,
         if (customer != null) 'customer': customer,
-        if (postingDate != null) 'creation': postingDate,
+        if (postingDate != null) 'posting_date': postingDate,
         if (customTable != null) 'custom_table': customTable,
         if (customOrderChannel != null)
           'custom_order_channel': customOrderChannel,

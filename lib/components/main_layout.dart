@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
@@ -27,9 +28,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Set<int> tablesWithSubmittedOrders = {};
   bool _isOrdersLoading = false;
   bool _isLoggingOut = false;
-  // int _orderCounter = 1;
   bool _customerScreenShown = false;
   Future<void>? _refreshFuture;
+  DateTime _selectedDate = DateTime.now();
+  int _pageLimit = 30;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -120,7 +122,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _refreshOrders() async {
-    if (!mounted) return; // Add this check at the start
+    if (!mounted) return;
 
     setState(() => _isOrdersLoading = true);
 
@@ -146,7 +148,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           itemsGroups,
         ) async {
           try {
-            final future = PosService().getOrders(posProfile: posProfile);
+            final postingDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+            final future = PosService().getOrders(
+              posProfile: posProfile,
+              postingDate: postingDate,
+              pageLength: _pageLimit, 
+              start: 0,
+            );
             _refreshFuture = future;
             final response = await future;
             if (_refreshFuture != future || !mounted) return;
@@ -541,12 +550,30 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 handleOrderPaid(order);
                 setState(() => _isOrdersLoading = true);
                 Future.delayed(Duration(seconds: 1), () {
-                  setState(() => _isOrdersLoading = false);
+                  if (mounted) {
+                    setState(() => _isOrdersLoading = false);
+                  }
                 });
               },
               onEditOrder: _handleEditOrder,
               onRefresh: () async {
                 await _refreshOrders();
+              },
+              selectedDate: _selectedDate,
+              pageLimit: _pageLimit,
+              onDateChanged: (newDate) {
+                setState(() => _selectedDate = newDate);
+                // Trigger refresh after a small delay to ensure state is updated
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
+              },
+              onLimitChanged: (newLimit) {
+                setState(() => _pageLimit = newLimit);
+                // Trigger refresh after a small delay to ensure state is updated
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
               },
             ),
             DashboardScreen(),
@@ -571,12 +598,30 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 handleOrderPaid(order);
                 setState(() => _isOrdersLoading = true);
                 Future.delayed(Duration(seconds: 1), () {
-                  setState(() => _isOrdersLoading = false);
+                  if (mounted) {
+                    setState(() => _isOrdersLoading = false);
+                  }
                 });
               },
               onEditOrder: _handleEditOrder,
               onRefresh: () async {
                 await _refreshOrders();
+              },
+              selectedDate: _selectedDate,
+              pageLimit: _pageLimit,
+              onDateChanged: (newDate) {
+                setState(() => _selectedDate = newDate);
+                // Trigger refresh after a small delay to ensure state is updated
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
+              },
+              onLimitChanged: (newLimit) {
+                setState(() => _pageLimit = newLimit);
+                // Trigger refresh after a small delay to ensure state is updated
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
               },
             ),
             DashboardScreen(),

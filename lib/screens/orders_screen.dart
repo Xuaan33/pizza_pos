@@ -20,6 +20,10 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final Function(Map<String, dynamic>) onEditOrder;
   final Future<void> Function()? onRefresh;
   final bool isLoading;
+  final DateTime selectedDate;
+  final int pageLimit;
+  final Function(DateTime) onDateChanged;
+  final Function(int) onLimitChanged;
 
   const OrdersScreen({
     Key? key,
@@ -28,6 +32,10 @@ class OrdersScreen extends ConsumerStatefulWidget {
     required this.onEditOrder,
     this.onRefresh,
     this.isLoading = false,
+    required this.selectedDate,
+    required this.pageLimit,
+    required this.onDateChanged,
+    required this.onLimitChanged,
   }) : super(key: key);
 
   @override
@@ -39,6 +47,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
+  // DateTime _selectedDate = DateTime.now();
+  // int _pageLimit = 30;
+  final List<int> _limitOptions = [30, 50, 100];
 
   @override
   bool get wantKeepAlive => true;
@@ -52,10 +63,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     });
   }
 
+  @override
+  void didUpdateWidget(OrdersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Schedule refresh for after build phase
+    if (oldWidget.selectedDate != widget.selectedDate ||
+        oldWidget.pageLimit != widget.pageLimit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _refreshOrders();
+      });
+    }
+  }
+
   Future<void> _refreshOrders() async {
-    await widget.onRefresh!();
     if (widget.onRefresh != null && mounted) {
-      // Clear the current state to refresh the whole screen
+      await widget.onRefresh!();
+    }
+    if (mounted) {
       setState(() {
         _selectedOrder = null;
         _filterStatus = 'All';
@@ -169,34 +194,128 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Recent Orders',
-                    style:
-                        TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Orders",
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          DateFormat('EEEE, dd MMMM yyyy')
+                              .format(widget.selectedDate),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE732A0).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        onPressed: _selectDate,
+                        icon: Icon(Icons.calendar_month, size: 24),
+                        color: Color(0xFFE732A0),
+                        tooltip: 'Select Date',
+                      ),
+                    ),
+                  ],
+                ),
                 SizedBox(height: 16),
 
                 // Search Bar
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: TextField(
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Search by order ID, customer name...',
-                      hintStyle: TextStyle(color: Colors.grey.shade600),
-                      prefixIcon:
-                          Icon(Icons.search, color: Colors.grey.shade600),
-                      border: InputBorder.none,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                Row(
+                  children: [
+                    // Search Bar (shortened)
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: TextField(
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search orders...',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            prefixIcon:
+                                Icon(Icons.search, color: Colors.grey.shade600),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    SizedBox(width: 16),
+
+                    // Limit Dropdown
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Limit',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.black,
+                                fontWeight: FontWeight.w600),
+                          ),
+                          SizedBox(height: 4),
+                          Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: widget.pageLimit,
+                                isExpanded: true,
+                                items: _limitOptions.map((int value) {
+                                  return DropdownMenuItem<int>(
+                                    value: value,
+                                    child: Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 12),
+                                      child: Text('$value'),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (int? newValue) {
+                                  if (newValue != null) {
+                                    // Call parent callback to update the limit
+                                    widget.onLimitChanged(newValue);
+                                    // The refresh will be triggered by the parent callback
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
 
                 SizedBox(height: 16),
@@ -951,8 +1070,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               .contains(_searchQuery.toLowerCase()) ||
           (order['customerName']?.toString().toLowerCase() ?? '')
               .contains(_searchQuery.toLowerCase()) ||
-          (order['remarks']?.toString().toLowerCase() ??
-                  '')
+          (order['remarks']?.toString().toLowerCase() ?? '')
               .contains(_searchQuery.toLowerCase());
 
       // Determine the actual status of the order
@@ -1374,6 +1492,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
+  }
+
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: widget.selectedDate, // Use widget.selectedDate
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+
+    if (picked != null && picked != widget.selectedDate) {
+      // Call parent callback instead of setting local state
+      widget.onDateChanged(picked);
+    }
   }
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
