@@ -234,10 +234,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                   ],
                 ),
-                SizedBox(height: 16),
+                SizedBox(height: 5),
 
                 // Search Bar
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     // Search Bar (shortened)
                     Expanded(
@@ -318,7 +319,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   ],
                 ),
 
-                SizedBox(height: 16),
+                SizedBox(height: 10),
 
                 Row(
                   children: [
@@ -346,7 +347,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ],
             ),
           ),
-
+          SizedBox(height: 5),
           // Order list
           Expanded(
             child: widget.isLoading

@@ -1096,7 +1096,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       final variantGroup = variant['variant_group'];
                       final isRequired = variant['required'] == 1;
                       final minSelection = variant['option_required_no'] ?? 1;
-                      print("minimum: $minSelection");
                       final selectedCount =
                           selectedOptions[variantGroup]?.length ?? 0;
 
@@ -1535,9 +1534,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
             };
           }).toList();
-
-          print('Submitting order for table: $tableFullName'); // Debug log
-          print('Order channel: Dine In'); // Debug log
 
           // 3. Submit with proper table format and order channel
           final response = await PosService().submitOrder(

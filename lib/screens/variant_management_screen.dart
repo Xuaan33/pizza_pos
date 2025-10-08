@@ -292,11 +292,6 @@ class _VariantManagementScreenState
       validSelectedValue = _selectedVariantGroup;
     }
 
-    // Debug: Print values to help identify the issue
-    print('Available values: $availableValues');
-    print('Selected value: $_selectedVariantGroup');
-    print('Valid selected value: $validSelectedValue');
-
     // If we have an invalid selection, schedule a reset
     if (_selectedVariantGroup != null &&
         !availableValues.contains(_selectedVariantGroup)) {
