@@ -1354,7 +1354,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           isTier1: true,
         ),
       ),
-    );
+    ).then((_) {
+      // When returning from adding items, refresh order details
+      _fetchOrderDetails().then((_) {
+        // Kitchen order needs re-printing since items may have been added
+        // But don't reset the tracking state - we need to know what was previously printed
+      });
+    });
   }
 
   Widget _buildOrderSummary() {
@@ -1550,6 +1556,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: 'Dine In',
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -1563,7 +1571,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }).toList(),
         couponCode: widget.order['coupon_code'],
         custom_user_voucher: _voucherCode,
-        remarks: _remarksController.text, // Add remarks parameter
+        remarks: _remarksController.text, 
+        discountAmount: widget.order['discount_amount']
       );
 
       if (response['success'] == true) {
@@ -1822,8 +1831,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (payLater) {
         // Show print receipt dialog
         if (shouldPrintKitchenOrder) {
-          await _printKitchenOrderOnly(invoiceName);
+          await _printKitchenOrderOnly(
+            invoiceName,
+          );
         }
+
         if (mounted) {
           Fluttertoast.showToast(
             msg: "Order saved for later payment",
@@ -1893,7 +1905,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Future<void> _printKitchenOrderOnly(String orderName) async {
+  Future<void> _printKitchenOrderOnly(
+    String orderName,
+  ) async {
     try {
       await ReceiptPrinter.printKitchenOrderOnly(orderName);
     } catch (e) {
@@ -3405,6 +3419,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: 'Dine In',
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -3416,6 +3432,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               'custom_variant_info': item['custom_variant_info'],
           };
         }).toList(),
+        remarks: widget.order['remarks'] ?? "N/A",
         discountAmount: amount, // Pass the discount amount directly
       );
 
@@ -3654,6 +3671,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: couponCode,
         // Use user_voucher_code if available, otherwise use the voucher name
         custom_user_voucher: widget.order['user_voucher_code'] ?? voucherName,
+        remarks: widget.order['remarks'] ?? "N/A"
       );
 
       if (response['success'] == true) {

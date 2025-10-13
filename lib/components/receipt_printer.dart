@@ -70,15 +70,26 @@ class ReceiptPrinter {
     }
   }
 
-  static Future<void> printKitchenOrderOnly(String orderName) async {
+  // In receipt_printer.dart - this remains the same
+  static Future<void> printKitchenOrderOnly(String orderName,) async {
     try {
-      final kitchenOrderBytes = await PosService().printKitchenOrder(
+      debugPrint('🖨️ Printing kitchen order for: $orderName');
+
+      final kitchenOrderPages = await PosService().printKitchenOrder(
         orderName: orderName,
       );
-      await printReceipt(kitchenOrderBytes, isPdf: false);
-      debugPrint('Kitchen order printed successfully');
+
+      // Print each page sequentially
+      for (int i = 0; i < kitchenOrderPages.length; i++) {
+        await printReceipt(kitchenOrderPages[i], isPdf: false);
+        debugPrint(
+            '✅ Printed kitchen order page ${i + 1}/${kitchenOrderPages.length}');
+      }
+
+      debugPrint(
+          '🎉 Kitchen order printed successfully - ${kitchenOrderPages.length} page(s)');
     } catch (e) {
-      debugPrint('Print kitchen order error: $e');
+      debugPrint('❌ Print kitchen order error: $e');
       // Don't rethrow - kitchen order printing failure shouldn't block the flow
     }
   }
