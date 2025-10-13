@@ -22,7 +22,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   String _selectedTimeRange = 'Daily'; // 'Daily', 'Weekly', 'Monthly', 'Custom'
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
-  String _selectedPopularItemsLimit = '5';
+  String _selectedPopularItemsLimit = '10';
   String _selectedVouchersLimit = '5';
   int _customVouchersLimit = 10;
   int _customLimit = 10;
@@ -825,7 +825,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   color: Colors.black,
                 ),
                 dropdownColor: Colors.white,
-                items: ['3', '5', '10', 'Custom'].map((String value) {
+                items: ['10', '30', '50', 'Custom'].map((String value) {
                   return DropdownMenuItem<String>(
                     value: value,
                     child: Text(value),

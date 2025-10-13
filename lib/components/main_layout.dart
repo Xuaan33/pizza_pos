@@ -232,7 +232,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               (invoice['rounded_total'] as num?)?.toDouble() ??
                                   0.0,
                           'entryTime':
-                              parseDate(invoice['creation']?.toString()) ??
+                              parseDate(invoice['modified']?.toString()) ??
                                   DateTime.now(),
                           'paidTime': invoice['status']?.toString() == 'Paid'
                               ? parseDate(invoice['modified']?.toString())
@@ -437,7 +437,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       'discount_amount':
           (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0,
       'user_voucher_code': (invoice['user_voucher_code']),
-      'entryTime': DateTime.tryParse(invoice['creation']?.toString() ?? '') ??
+      'entryTime': DateTime.tryParse(invoice['modified']?.toString() ?? '') ??
           DateTime.now(),
       'paidTime': invoice['status']?.toString() == 'Paid'
           ? DateTime.tryParse(invoice['modified']?.toString() ?? '')
