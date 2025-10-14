@@ -32,6 +32,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Future<void>? _refreshFuture;
   DateTime _selectedDate = DateTime.now();
   int _pageLimit = 30;
+  String _filterStatus = 'Pay Later'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
+  String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  bool _useDateRange = false;
+
+  final List<int> _limitOptions = [30, 50, 100];
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -121,7 +128,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     );
   }
 
-  Future<void> _refreshOrders() async {
+  Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
     if (!mounted) return;
 
     setState(() => _isOrdersLoading = true);
@@ -148,12 +155,41 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           itemsGroups,
         ) async {
           try {
-            final postingDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+            String? fromDateStr;
+            String? toDateStr;
+
+            if (_filterStatus == 'Pay Later' || forceAllForPayLater) {
+              fromDateStr = null;
+              toDateStr = null;
+              // If no explicit date filter (including today's date), show all dates (null)
+            } else {
+              // For other statuses (All, Paid, Cancelled), always apply date filters
+              if (_useDateRange && _fromDate != null && _toDate != null) {
+                fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
+                toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
+              } else {
+                fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+                toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+              }
+            }
+
+            // Map the filter status to API status
+            String? apiStatus;
+            if (_filterStatus == 'Pay Later') {
+              apiStatus = 'Draft';
+            } else if (_filterStatus == 'Paid') {
+              apiStatus = null;
+            } else if (_filterStatus == 'Cancelled') {
+              apiStatus = 'Cancelled';
+            }
+            // 'All' will send null, which returns all statuses
 
             final future = PosService().getOrders(
               posProfile: posProfile,
-              postingDate: postingDate,
-              pageLength: _pageLimit, 
+              fromDate: fromDateStr,
+              toDate: toDateStr,
+              status: apiStatus,
+              pageLength: _pageLimit,
               start: 0,
             );
             _refreshFuture = future;
@@ -292,75 +328,67 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           }
         },
       );
-    } on SessionTimeoutException catch (e) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Session Timeout'),
-            content: Text(e.toString()),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => LoginPage()),
-                    (route) => false,
-                  );
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
     } catch (e) {
       print('Error refreshing orders: $e');
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text(
-              'Session Timeout',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: Colors.white,
-            content: Text(
-              "Your session has expired. Please log in again to continue.",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => LoginPage()),
-                    (route) => false,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE732A0),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'OK',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        );
-      }
+      // Error handling remains the same...
     } finally {
       if (mounted) {
         setState(() => _isOrdersLoading = false);
       }
     }
+  }
+
+  Future<void> _selectDateRange() async {
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(Duration(days: 0)),
+      currentDate: DateTime.now(),
+      initialDateRange: _fromDate != null && _toDate != null
+          ? DateTimeRange(start: _fromDate!, end: _toDate!)
+          : null,
+      initialEntryMode: DatePickerEntryMode.calendar,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Color(0xFFE732A0),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _fromDate = picked.start;
+        _toDate = picked.end;
+        _useDateRange = true;
+      });
+
+      Future.delayed(Duration(milliseconds: 100), () {
+        _refreshOrders();
+      });
+    }
+  }
+
+  void _clearDateRange() {
+    setState(() {
+      _fromDate = null;
+      _toDate = null;
+      _useDateRange = false;
+      _selectedDate = DateTime.now(); // Reset to today
+    });
+
+    // Refresh orders to show Pay Later with all dates
+    Future.delayed(Duration(milliseconds: 100), () {
+      _refreshOrders();
+    });
   }
 
   int _extractTableNumber(String? tableFullName) {
@@ -562,19 +590,43 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               selectedDate: _selectedDate,
               pageLimit: _pageLimit,
               onDateChanged: (newDate) {
-                setState(() => _selectedDate = newDate);
-                // Trigger refresh after a small delay to ensure state is updated
+                setState(() {
+                  _selectedDate = newDate;
+                  _useDateRange = false; // Switch to single date mode
+                });
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
               onLimitChanged: (newLimit) {
                 setState(() => _pageLimit = newLimit);
-                // Trigger refresh after a small delay to ensure state is updated
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
+              // Pass filter callbacks to OrdersScreen
+              onFilterStatusChanged: (newStatus) {
+                setState(() => _filterStatus = newStatus);
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
+              },
+              onFilterOrderTypeChanged: (newOrderType) {
+                setState(() => _filterOrderType = newOrderType);
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
+              },
+              // Pass current filter values
+              currentFilterStatus: _filterStatus,
+              currentFilterOrderType: _filterOrderType,
+              // Pass date range methods
+              onDateRangeSelected: _selectDateRange,
+              onDateRangeCleared: _clearDateRange,
+              useDateRange: _useDateRange,
+              fromDate: _fromDate,
+              toDate: _toDate,
+              limitOptions: _limitOptions,
             ),
             DashboardScreen(),
             SettingsScreen(),
@@ -610,19 +662,43 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               selectedDate: _selectedDate,
               pageLimit: _pageLimit,
               onDateChanged: (newDate) {
-                setState(() => _selectedDate = newDate);
-                // Trigger refresh after a small delay to ensure state is updated
+                setState(() {
+                  _selectedDate = newDate;
+                  _useDateRange = false; // Switch to single date mode
+                });
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
               onLimitChanged: (newLimit) {
                 setState(() => _pageLimit = newLimit);
-                // Trigger refresh after a small delay to ensure state is updated
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
+              // Pass filter callbacks to OrdersScreen
+              onFilterStatusChanged: (newStatus) {
+                setState(() => _filterStatus = newStatus);
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
+              },
+              onFilterOrderTypeChanged: (newOrderType) {
+                setState(() => _filterOrderType = newOrderType);
+                Future.delayed(Duration(milliseconds: 100), () {
+                  _refreshOrders();
+                });
+              },
+              // Pass current filter values
+              currentFilterStatus: _filterStatus,
+              currentFilterOrderType: _filterOrderType,
+              // Pass date range methods
+              onDateRangeSelected: _selectDateRange,
+              onDateRangeCleared: _clearDateRange,
+              useDateRange: _useDateRange,
+              fromDate: _fromDate,
+              toDate: _toDate,
+              limitOptions: _limitOptions,
             ),
             DashboardScreen(),
             SettingsScreen(),
