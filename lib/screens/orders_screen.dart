@@ -24,6 +24,16 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final int pageLimit;
   final Function(DateTime) onDateChanged;
   final Function(int) onLimitChanged;
+  final Function(String) onFilterStatusChanged;
+  final Function(String) onFilterOrderTypeChanged;
+  final String currentFilterStatus;
+  final String currentFilterOrderType;
+  final Function() onDateRangeSelected;
+  final Function() onDateRangeCleared;
+  final useDateRange;
+  final fromDate;
+  final toDate;
+  final List<int> limitOptions;
 
   const OrdersScreen({
     Key? key,
@@ -36,6 +46,16 @@ class OrdersScreen extends ConsumerStatefulWidget {
     required this.pageLimit,
     required this.onDateChanged,
     required this.onLimitChanged,
+    required this.onFilterStatusChanged,
+    required this.onFilterOrderTypeChanged,
+    required this.currentFilterStatus,
+    required this.currentFilterOrderType,
+    required this.onDateRangeSelected,
+    required this.onDateRangeCleared,
+    required this.useDateRange,
+    this.fromDate,
+    this.toDate,
+    required this.limitOptions,
   }) : super(key: key);
 
   @override
@@ -43,13 +63,8 @@ class OrdersScreen extends ConsumerStatefulWidget {
 }
 
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
-  String _filterStatus = 'All'; // 'All', 'Draft', 'Paid'
-  String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
-  // DateTime _selectedDate = DateTime.now();
-  // int _pageLimit = 30;
-  final List<int> _limitOptions = [30, 50, 100];
 
   @override
   bool get wantKeepAlive => true;
@@ -83,9 +98,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (mounted) {
       setState(() {
         _selectedOrder = null;
-        _filterStatus = 'All';
-        _filterOrderType = 'All';
-        _searchQuery = '';
+        // _filterStatus = 'All';
+        // _filterOrderType = 'All';
+        // _searchQuery = '';
       });
     }
   }
@@ -208,28 +223,120 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           ),
                         ),
                         SizedBox(height: 4),
-                        Text(
-                          DateFormat('EEEE, dd MMMM yyyy')
-                              .format(widget.selectedDate),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
+                        if (widget.useDateRange &&
+                            widget.fromDate != null &&
+                            widget.toDate != null)
+                          Text(
+                            '${DateFormat('dd MMM yyyy').format(widget.fromDate!)} - ${DateFormat('dd MMM yyyy').format(widget.toDate!)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          )
+                        else if (!widget.useDateRange &&
+                            widget.selectedDate != DateTime.now())
+                          Text(
+                            '${DateFormat('dd MMM yyyy').format(widget.selectedDate)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          )
+                        else
+                          Text(
+                            'All Dates',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
+
+                        // Add a filter status indicator
+                        if (widget.currentFilterStatus == 'Pay Later')
+                          Text(
+                            widget.useDateRange ||
+                                    widget.selectedDate != DateTime.now()
+                                ? 'Pay Later orders with date filter'
+                                : 'All Pay Later orders',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                       ],
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Color(0xFFE732A0).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        onPressed: _selectDate,
-                        icon: Icon(Icons.calendar_month, size: 24),
-                        color: Color(0xFFE732A0),
-                        tooltip: 'Select Date',
-                      ),
+                    Row(
+                      children: [
+                        // Date Range Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: widget.useDateRange
+                                ? const Color(0xFFE732A0).withOpacity(0.2)
+                                : const Color(0xFFE732A0).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextButton(
+                            onPressed: _selectDateRange,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Date Range',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(width: 8),
+                        // Single Date Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: !widget.useDateRange
+                                ? Color(0xFFE732A0).withOpacity(0.2)
+                                : Color(0xFFE732A0).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            onPressed: _selectDate,
+                            icon: Icon(Icons.calendar_month, size: 24),
+                            color: Color(0xFFE732A0),
+                            tooltip: 'Select Single Date',
+                          ),
+                        ),
+                        // Show clear/reset button when date filters are active
+                        if (widget.useDateRange ||
+                            widget.selectedDate == DateTime.now()) ...[
+                          SizedBox(width: 8),
+                          // Clear/Reset Date Button - This now works for both cases
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              onPressed:
+                                  _clearDateRange, // This will reset to show all dates for Pay Later
+                              icon: Icon(Icons.clear, size: 24),
+                              color: Colors.grey,
+                              tooltip: widget.currentFilterStatus == 'Pay Later'
+                                  ? 'Reset to All Dates'
+                                  : 'Clear Date Filter',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -292,7 +399,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                               child: DropdownButton<int>(
                                 value: widget.pageLimit,
                                 isExpanded: true,
-                                items: _limitOptions.map((int value) {
+                                items: widget.limitOptions.map((int value) {
                                   return DropdownMenuItem<int>(
                                     value: value,
                                     child: Padding(
@@ -324,20 +431,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   children: [
                     Expanded(
                       child: _buildFilterDropdown(
-                        value: _filterStatus,
+                        value: widget.currentFilterStatus,
                         items: ['All', 'Pay Later', 'Paid', 'Cancelled'],
                         onChanged: (value) =>
-                            setState(() => _filterStatus = value!),
+                            widget.onFilterStatusChanged(value!),
                         label: 'Status',
                       ),
                     ),
                     SizedBox(width: 16),
                     Expanded(
                       child: _buildFilterDropdown(
-                        value: _filterOrderType,
+                        value: widget.currentFilterOrderType,
                         items: ['All', 'Dine in', 'Takeaway', 'Delivery'],
                         onChanged: (value) =>
-                            setState(() => _filterOrderType = value!),
+                            widget.onFilterOrderTypeChanged(value!),
                         label: 'Order Type',
                       ),
                     ),
@@ -1128,15 +1235,46 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         orderStatus = 'Paid';
       }
 
-      final statusMatch = _filterStatus == 'All' ||
-          orderStatus.toLowerCase() == _filterStatus.toLowerCase();
+      final statusMatch = widget.currentFilterStatus == 'All' ||
+          orderStatus.toLowerCase() == widget.currentFilterStatus.toLowerCase();
 
-      final typeMatch = _filterOrderType == 'All' ||
+      final typeMatch = widget.currentFilterOrderType == 'All' ||
           (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
-              _filterOrderType.toLowerCase();
+              widget.currentFilterOrderType.toLowerCase();
 
       return searchMatch && statusMatch && typeMatch;
     }).toList();
+  }
+
+  Future<void> _selectDateRange() async {
+    // Simply call the parent callback - MainLayout will handle the date selection
+    widget.onDateRangeSelected();
+  }
+
+  void _resetToToday() {
+    // Call parent to reset to today
+    widget.onDateChanged(DateTime.now());
+  }
+
+// Replace the _clearDateRange method with this:
+  void _clearDateRange() {
+    // Simply call the parent callback - MainLayout will handle clearing the date range
+    widget.onDateRangeCleared();
+  }
+
+// Also update the _selectDate method to ensure it works with the new structure:
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: widget.selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(Duration(days: 0)),
+    );
+
+    if (picked != null && picked != widget.selectedDate) {
+      // Call parent callback - this will switch to single date mode automatically
+      widget.onDateChanged(picked);
+    }
   }
 
   void _goToCheckout(Map<String, dynamic> order) {
@@ -1531,20 +1669,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
-  }
-
-  Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: widget.selectedDate, // Use widget.selectedDate
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(Duration(days: 365)),
-    );
-
-    if (picked != null && picked != widget.selectedDate) {
-      // Call parent callback instead of setting local state
-      widget.onDateChanged(picked);
-    }
   }
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {

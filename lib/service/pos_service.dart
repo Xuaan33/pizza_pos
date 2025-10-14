@@ -132,6 +132,8 @@ class PosService {
     String? status,
     String? customer,
     String? postingDate,
+    String? fromDate,
+    String? toDate,
     String? customTable,
     String? customOrderChannel,
     int pageLength = 20,
@@ -146,8 +148,13 @@ class PosService {
         if (search != null) 'search': search,
         if (status != null) 'status': status,
         if (customer != null) 'customer': customer,
-        if (postingDate != null) 'from_date': postingDate,
-        if (postingDate != null) 'to_date': postingDate,
+        // Use date range if provided, otherwise use single posting date
+        if (fromDate != null) 'from_date': fromDate,
+        if (toDate != null) 'to_date': toDate,
+        if (fromDate == null && toDate == null && postingDate != null)
+          'from_date': postingDate,
+        if (fromDate == null && toDate == null && postingDate != null)
+          'to_date': postingDate,
         if (customTable != null) 'custom_table': customTable,
         if (customOrderChannel != null)
           'custom_order_channel': customOrderChannel,
@@ -157,7 +164,6 @@ class PosService {
 
       print(
           'Sending request to get orders with body: ${jsonEncode(requestBody)}');
-      print('Using token: $token');
 
       final response = await http
           .post(
@@ -176,11 +182,21 @@ class PosService {
         throw Exception('Failed to load orders: ${response.statusCode}');
       }
     } on SessionTimeoutException {
-      rethrow; // Let this propagate up
+      rethrow;
     } catch (e) {
       print('Error in getOrders: $e');
       throw Exception('Network error: $e');
     }
+  }
+
+  Future<Map<String, dynamic>> getPayLaterOrders({
+    required String posProfile,
+  }) async {
+    return getOrders(
+      posProfile: posProfile,
+      status: 'Draft',
+      pageLength: 1000, // Large number to get all draft orders
+    );
   }
 
   Future<Map<String, dynamic>> submitOrder({

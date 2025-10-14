@@ -23,20 +23,127 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
   String _selectedPopularItemsLimit = '10';
-  String _selectedVouchersLimit = '5';
+  String _selectedVouchersLimit = '10';
   int _customVouchersLimit = 10;
   int _customLimit = 10;
+  late Future<double> _payLaterData;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadPayLaterData();
   }
 
   void _loadData() {
     setState(() {
       _dashboardData = _loadDashboardData();
     });
+  }
+
+  void _loadPayLaterData() {
+    setState(() {
+      _payLaterData = _loadPayLaterAmount();
+    });
+  }
+
+  Future<double> _loadPayLaterAmount() async {
+    final authState = ref.read(authProvider);
+    return authState.maybeWhen(
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) async {
+        try {
+          print('Fetching pay later orders for posProfile: $posProfile');
+
+          final response = await PosService().getOrders(
+            posProfile: posProfile,
+            status: 'Draft',
+            pageLength: 1000,
+          );
+
+          print('Raw API response keys: ${response.keys}');
+          print('Full response structure: ${response.toString()}');
+
+          // Check if message exists and what it contains
+          if (response['message'] == null) {
+            print('ERROR: message field is null');
+            return 0.0;
+          }
+
+          print('Message type: ${response['message'].runtimeType}');
+          print('Message content: ${response['message']}');
+
+          // Fix: The orders are nested at response['message']['message']
+          final messageData = response['message'] as Map<String, dynamic>?;
+          final orders =
+              _convertListToProperType(messageData?['message'] ?? []);
+
+          print('Found ${orders.length} draft orders after conversion');
+
+          if (orders.isEmpty) {
+            print('WARNING: No orders found after conversion');
+            return 0.0;
+          }
+
+          // Calculate total and debug each order
+          double totalPayLater = 0.0;
+          int validOrderCount = 0;
+
+          for (int i = 0; i < orders.length; i++) {
+            final order = orders[i];
+            final orderName = order['name'] as String? ?? 'Unknown';
+            final netTotal = _convertToDouble(order['net_total']);
+            final grandTotal = _convertToDouble(order['grand_total']);
+            final total = _convertToDouble(order['total']);
+            final status = order['status'] as String? ?? 'Unknown';
+            final docstatus = order['docstatus'] as int? ?? 1;
+
+            print(
+                'Order ${i + 1}/${orders.length}: $orderName, Status: $status, DocStatus: $docstatus');
+            print('  - net_total: $netTotal');
+            print('  - total: $total');
+            print('  - grand_total: $grandTotal');
+
+            // Only include orders with docstatus = 0 (Draft)
+            if (docstatus == 0) {
+              totalPayLater += netTotal;
+              validOrderCount++;
+              print(
+                  '  ✓ Added to total: $netTotal (Running total: $totalPayLater)');
+            } else {
+              print('  ✗ Skipped (docstatus != 0)');
+            }
+          }
+
+          print('===========================================');
+          print('Valid draft orders counted: $validOrderCount');
+          print('Calculated Total Pay Later Amount: $totalPayLater');
+          print('===========================================');
+
+          return totalPayLater;
+        } catch (e, stackTrace) {
+          print('Error loading pay later data: $e');
+          print('Stack trace: $stackTrace');
+          return 0.0;
+        }
+      },
+      orElse: () => Future.value(0.0),
+    );
   }
 
   Future<Map<String, dynamic>> _loadDashboardData() async {
@@ -90,7 +197,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           limit = int.parse(_selectedPopularItemsLimit);
         }
 
-        // NEW: Determine limit for applied vouchers
+        // Determine limit for applied vouchers
         int vouchersLimit;
         if (_selectedVouchersLimit == 'Custom') {
           vouchersLimit = _customVouchersLimit;
@@ -101,7 +208,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         final grouping = _determineTimeGrouping(fromDate, toDate);
         final xaxisParam = _getXAxisParameter(grouping);
 
-        // Fetch all data concurrently - CORRECTED: Now only 6 futures
+        // Fetch all data concurrently - UPDATED: Now 7 futures
         final results = await Future.wait([
           // 0: Total sales
           PosService().makeRequest(
@@ -115,7 +222,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           // 2: Today info
           PosService().getTodayInfo(),
-          // 3: Revenue data (NEW - using the new endpoint)
+          // 3: Revenue data
           PosService().makeRequest(
             endpoint: 'shiok_pos.api.get_revenue?'
                 'pos_profile=$posProfile&'
@@ -133,7 +240,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             fromDate: dateFormat.format(fromDate),
             toDate: dateFormat.format(toDate),
           ),
-          // 6: Applied vouchers (NEW)
+          // 6: Applied vouchers
           PosService().getAppliedUserVouchers(
             posProfile: posProfile,
             fromDate: dateFormat.format(fromDate),
@@ -142,27 +249,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ]);
 
-        print(
-            'http://shiokpos.byondwave.com/shiok_pos.api.get_revenue?pos_profile=$posProfile&daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&xaxis=$xaxisParam');
-
         final peakTimes = _convertListToProperType(results[1]['message']);
         final totalOrders = peakTimes.fold(0, (sum, timeData) {
           return sum + _convertToInt(timeData['invoice_count']);
         });
 
-        // Convert to proper types - CORRECTED: Now using proper indices
+        // NEW: Calculate total voucher redemption amount
+        final appliedVouchers =
+            _convertListToProperType(results[6]['message'] ?? []);
+        final totalVoucherRedemption =
+            appliedVouchers.fold(0.0, (sum, voucher) {
+          return sum + _convertToDouble(voucher['voucher_amount']);
+        });
+
+        // Convert to proper types - UPDATED: Include totalVoucherRedemption
         return <String, dynamic>{
           'totalSales': _convertToDouble(results[0]['message']),
           'totalOrders': totalOrders,
           'todayInfo': _convertMapToStringDynamic(results[2]['message']),
-          'revenueData': _convertListToProperType(
-              results[3]['message'] ?? []), // Index 3 is now revenue
-          'peakTimes': _convertListToProperType(
-              results[1]['message']), // Peak times from index 1
+          'revenueData': _convertListToProperType(results[3]['message'] ?? []),
+          'peakTimes': _convertListToProperType(results[1]['message']),
           'topItems': _convertListToProperType(results[4]['message']),
           'paymentMethods': _convertListToProperType(results[5]['message']),
-          'appliedVouchers':
-              _convertListToProperType(results[6]['message'] ?? []),
+          'appliedVouchers': appliedVouchers,
+          'totalVoucherRedemption': totalVoucherRedemption, // NEW
           'fromDate': fromDate,
           'toDate': toDate,
         };
@@ -352,6 +462,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final appliedVouchers =
                 data['appliedVouchers'] as List<Map<String, dynamic>>? ??
                     <Map<String, dynamic>>[];
+            final totalVoucherRedemption =
+                data['totalVoucherRedemption'] as double? ?? 0.0; // NEW
+
             final fromDate = data['fromDate'] as DateTime? ?? DateTime.now();
             final toDate = data['toDate'] as DateTime? ?? DateTime.now();
 
@@ -365,7 +478,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 10),
                     _buildTopSection(fromDate, toDate),
                     const SizedBox(height: 20),
-                    _buildSummaryCards(totalSales, totalOrders, todayInfo),
+                    _buildSummaryCards(totalSales, totalOrders, todayInfo,
+                        totalVoucherRedemption),
                     const SizedBox(height: 30),
                     _buildRevenueChart(revenueData, fromDate, toDate),
                     const SizedBox(height: 30),
@@ -377,6 +491,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Expanded(child: _buildAppliedVouchers(appliedVouchers)),
                       ],
                     ),
+                    const SizedBox(height: 30),
+                    _buildPayLaterSection(),
                     const SizedBox(height: 30),
                     Row(
                       children: [
@@ -467,8 +583,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildSummaryCards(
-      double totalSales, int totalOrders, Map<String, dynamic> todayInfo) {
+  Widget _buildSummaryCards(double totalSales, int totalOrders,
+      Map<String, dynamic> todayInfo, double totalVoucherRedemption) {
+    // UPDATED: Added parameter
     final totalRevenue = _convertToDouble(todayInfo['total_revenue']);
     final totalCost = _convertToDouble(todayInfo['total_cost']);
     final profit = totalRevenue - totalCost;
@@ -492,6 +609,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           title: 'Avg Order Value',
           value: 'RM ${averageOrderValue.toStringAsFixed(2)}',
           icon: Icons.calculate,
+        ),
+        const SizedBox(width: 15),
+        // NEW: Total Voucher Redemption card
+        _buildSummaryCard(
+          title: 'Voucher Redemption',
+          value: 'RM ${totalVoucherRedemption.toStringAsFixed(2)}',
+          icon: Icons.card_giftcard,
+          isProfit: false, // Typically red since it's discount/cost
         ),
       ],
     );
@@ -1184,7 +1309,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     color: Colors.black,
                   ),
                   dropdownColor: Colors.white,
-                  items: ['5', '10', 'Custom'].map((String value) {
+                  items: ['10', '30', '50', 'Custom'].map((String value) {
                     return DropdownMenuItem<String>(
                       value: value,
                       child: Text(value),
@@ -1241,8 +1366,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           voucher['user_voucher'] as String? ?? 'Unknown';
                       final amount =
                           _convertToDouble(voucher['voucher_amount']);
-                      final orderID =
-                          voucher['name'] as String? ?? 'Unknown';
+                      final orderID = voucher['name'] as String? ?? 'Unknown';
                       final voucherName =
                           voucher['name'] as String? ?? 'Unknown';
 
@@ -1344,6 +1468,156 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPayLaterSection() {
+    return FutureBuilder<double>(
+      future: _payLaterData,
+      builder: (context, snapshot) {
+        double payLaterAmount = 0.0;
+        bool hasError = false;
+        bool isLoading = false;
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          isLoading = true;
+        } else if (snapshot.hasError) {
+          payLaterAmount = 0.0;
+          hasError = true;
+          print('Pay Later Error: ${snapshot.error}');
+        } else {
+          payLaterAmount = snapshot.data ?? 0.0;
+          isLoading = false;
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 1,
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.payment, size: 20, color: Colors.orange[700]),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Pay Later Summary',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.refresh,
+                      color: isLoading ? Colors.grey : Colors.orange[700],
+                    ),
+                    onPressed: isLoading
+                        ? null
+                        : () {
+                            _loadPayLaterData();
+                          },
+                    tooltip: 'Refresh Pay Later Data',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Total Outstanding Amount',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (isLoading)
+                const CircularProgressIndicator()
+              else
+                Text(
+                  'RM ${payLaterAmount.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: hasError
+                        ? Colors.red
+                        : (payLaterAmount > 0
+                            ? Colors.orange[700]
+                            : Colors.green),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              if (isLoading)
+                Text(
+                  'Loading pay later data...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                )
+              else if (hasError)
+                Text(
+                  'Error loading pay later data',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.red,
+                  ),
+                )
+              else
+                Text(
+                  'Total amount from all pending Pay Later orders (Draft status)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              if (payLaterAmount > 0 && !isLoading && !hasError) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 16, color: Colors.orange[700]),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Collect payments from customers to complete these orders',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
