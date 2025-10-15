@@ -2040,7 +2040,7 @@ class Item {
   final String? description;
   final List<String> variantGroups;
   final int disabled;
-  final int isPosItem; // Use custom_is_pos_item from detailed API
+  final int isPosItem; 
 
   Item({
     required this.itemCode,
@@ -2105,7 +2105,7 @@ class Item {
       itemCode: json['item_code'] ?? '',
       itemName: json['item_name'] ?? '',
       itemGroup: json['item_group'] ?? '',
-      price: (json['price_list_rate'] as num?)?.toDouble() ?? 0.0,
+      price: (json['standard_rate'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image'] != null
           ? 'https://mejaa.joydivisionpadel.com${json['image']}'
           : null,

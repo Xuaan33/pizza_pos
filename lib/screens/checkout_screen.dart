@@ -1531,49 +1531,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (invoiceName == null) return;
 
       final response = await PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        table: widget.order['tableFullName'],
-        orderChannel: 'Dine In',
-        items: orderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'],
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        couponCode: widget.order['coupon_code'],
-        custom_user_voucher: _voucherCode,
-        remarks: _remarksController.text, 
-        discountAmount: widget.order['discount_amount']
-      );
+          name: invoiceName,
+          posProfile: ref.read(authProvider).maybeWhen(
+                    authenticated: (
+                      sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier,
+                      printKitchenOrder,
+                      openingDate,
+                      itemsGroups,
+                    ) {
+                      return posProfile;
+                    },
+                    orElse: () => null,
+                  ) ??
+              '',
+          customer: 'Guest',
+          table: widget.order['tableFullName'],
+          orderChannel: 'Dine In',
+          items: orderItems.map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['custom_variant_info'] != null)
+                'custom_variant_info': item['custom_variant_info'],
+            };
+          }).toList(),
+          couponCode: widget.order['coupon_code'],
+          custom_user_voucher: _voucherCode,
+          remarks: _remarksController.text,
+          discountAmount: widget.order['discount_amount']);
 
       if (response['success'] == true) {
         setState(() {
@@ -3309,33 +3308,38 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }).toList();
 
       final response = await PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        items: itemsToSubmit,
-      );
+          name: invoiceName,
+          posProfile: ref.read(authProvider).maybeWhen(
+                    authenticated: (
+                      sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier,
+                      printKitchenOrder,
+                      openingDate,
+                      itemsGroups,
+                    ) {
+                      return posProfile;
+                    },
+                    orElse: () => null,
+                  ) ??
+              '',
+          customer: 'Guest',
+          table: widget.order['tableFullName'],
+          orderChannel: 'Dine In',
+          items: itemsToSubmit,
+          couponCode: widget.order['coupon_code'],
+          custom_user_voucher: widget.order['user_voucher_code'],
+          discountAmount: widget.order['discount_amount'],
+          remarks: widget.order['remarks'] ?? "N/A");
 
       if (response['success'] == true) {
         // Update the order details with new amounts
@@ -3517,6 +3521,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: 'Dine In',
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -3630,49 +3636,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
 
       final response = await PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        table: widget.order['tableFullName'],
-        orderChannel: 'Dine In',
-        items: orderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'],
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        couponCode: couponCode,
-        // Use user_voucher_code if available, otherwise use the voucher name
-        custom_user_voucher: widget.order['user_voucher_code'] ?? voucherName,
-        remarks: widget.order['remarks'] ?? "N/A"
-      );
+          name: invoiceName,
+          posProfile: ref.read(authProvider).maybeWhen(
+                    authenticated: (
+                      sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier,
+                      printKitchenOrder,
+                      openingDate,
+                      itemsGroups,
+                    ) {
+                      return posProfile;
+                    },
+                    orElse: () => null,
+                  ) ??
+              '',
+          customer: 'Guest',
+          table: widget.order['tableFullName'],
+          orderChannel: 'Dine In',
+          items: orderItems.map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'],
+              'price_list_rate': item['price'],
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['custom_variant_info'] != null)
+                'custom_variant_info': item['custom_variant_info'],
+            };
+          }).toList(),
+          couponCode: couponCode,
+          // Use user_voucher_code if available, otherwise use the voucher name
+          custom_user_voucher: widget.order['user_voucher_code'] ?? voucherName,
+          remarks: widget.order['remarks'] ?? "N/A");
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -4047,6 +4052,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: "Dine In",
         items: _editableItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -4060,6 +4067,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }).toList(),
         couponCode: widget.order['coupon_code'],
         custom_user_voucher: widget.order['user_voucher_code'],
+        discountAmount: widget.order['discount_amount'],
       );
 
       if (response['success'] == true) {
@@ -4525,7 +4533,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'custom_variant_info': item['custom_variant_info'],
             };
           }).toList(),
-          table: widget.order['tableFullName']);
+          table: widget.order['tableFullName'],
+          orderChannel: 'Dine In');
 
       // Update local state
       if (mounted) {
