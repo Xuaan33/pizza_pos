@@ -561,6 +561,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 //   icon: Icon(Icons.arrow_back),
                 //   onPressed: () => _confirmExit(),
                 // ),
+                IconButton(
+                  icon: Icon(Icons.home, size: 28),
+                  onPressed: _showHomeConfirmationDialog,
+                ),
+                const SizedBox(width: 8),
                 Text(
                   widget.order['tableNumber'] == 0
                       ? 'Instant Order'
@@ -579,6 +584,51 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
           );
         });
+  }
+
+  Future<void> _showHomeConfirmationDialog() async {
+    final shouldNavigate = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Return to Menu?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            'Are you sure you want to return to the Main Menu?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text(
+                'Yes, Go to Menu',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldNavigate == true) {
+      // Navigate to home screen
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
   }
 
   Widget _buildStatPill(String title, String value) {
@@ -1091,38 +1141,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               // Image cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Stack(
-                  children: [
-                    Image.network(
-                      _getProperImageUrl('${items[i]['image']}'),
-                      width: 50,
-                      height: 50,
-                      errorBuilder: (context, error, stackTrace) => Image.asset(
-                          'assets/pizza.png',
-                          width: 50,
-                          height: 50),
-                    ),
-                    if (_isEditing)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        child: GestureDetector(
-                          onTap: () => _deleteItem(i),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                child: Image.network(
+                  _getProperImageUrl('${items[i]['image']}'),
+                  width: 50,
+                  height: 50,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Image.asset('assets/pizza.png', width: 50, height: 50),
                 ),
               ),
 
@@ -1223,36 +1247,45 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               // Split checkbox cell (only visible in split mode)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: _isSplitting
-                    ? Checkbox(
-                        value: _itemsToSplit.any((splitItem) =>
-                            splitItem['item_code'] == items[i]['item_code'] &&
-                            _compareOptions(
-                                splitItem['options'], items[i]['options'])),
-                        onChanged: (value) async {
-                          if (value == true) {
-                            if ((items[i]['quantity'] as num).toInt() > 1) {
-                              await _showQuantitySelectorDialog(items[i]);
-                            } else {
-                              setState(() {
-                                _itemsToSplit.add({
-                                  ...items[i],
-                                  'split_quantity': 1,
-                                });
-                              });
-                            }
-                          } else {
-                            setState(() {
-                              _itemsToSplit.removeWhere((splitItem) =>
-                                  splitItem['item_code'] ==
-                                      items[i]['item_code'] &&
-                                  _compareOptions(splitItem['options'],
-                                      items[i]['options']));
-                            });
-                          }
-                        },
+                child: _isEditing
+                    ? IconButton(
+                        icon: const Icon(Icons.delete, size: 20),
+                        color: Colors.red,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _deleteItem(i),
                       )
-                    : const SizedBox.shrink(),
+                    : _isSplitting
+                        ? Checkbox(
+                            value: _itemsToSplit.any((splitItem) =>
+                                splitItem['item_code'] ==
+                                    items[i]['item_code'] &&
+                                _compareOptions(
+                                    splitItem['options'], items[i]['options'])),
+                            onChanged: (value) async {
+                              if (value == true) {
+                                if ((items[i]['quantity'] as num).toInt() > 1) {
+                                  await _showQuantitySelectorDialog(items[i]);
+                                } else {
+                                  setState(() {
+                                    _itemsToSplit.add({
+                                      ...items[i],
+                                      'split_quantity': 1,
+                                    });
+                                  });
+                                }
+                              } else {
+                                setState(() {
+                                  _itemsToSplit.removeWhere((splitItem) =>
+                                      splitItem['item_code'] ==
+                                          items[i]['item_code'] &&
+                                      _compareOptions(splitItem['options'],
+                                          items[i]['options']));
+                                });
+                              }
+                            },
+                          )
+                        : const SizedBox.shrink(),
               ),
 
               // Price cell
