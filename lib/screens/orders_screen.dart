@@ -78,6 +78,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
     });
+    _refreshOrders();
     _loadPaymentMethods();
   }
 
@@ -1338,7 +1339,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       }
     }
 
-     final tableFullName = order['tableNumber'];
+    final tableFullName = order['tableNumber'];
 
     print("OIII: ${order['custom_table']}");
 

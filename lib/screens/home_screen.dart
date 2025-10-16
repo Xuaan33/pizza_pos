@@ -8,12 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  final int tableNumber;
+  final String tableNumber;
   final Map<String, dynamic>? existingOrder;
   final bool isTier1;
 
@@ -586,7 +587,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 Text(
                                                   widget.isTier1
                                                       ? 'Instant Order'
-                                                      : 'Table ${widget.tableNumber}',
+                                                      : '${widget.tableNumber}',
                                                   style: const TextStyle(
                                                     fontSize: 24,
                                                     fontWeight: FontWeight.bold,
@@ -995,21 +996,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           SizedBox(
                                             width: double.infinity,
                                             child: ElevatedButton(
-                                              onPressed: _goToCheckout,
+                                              onPressed: _isLoading
+                                                  ? null
+                                                  : _goToCheckout,
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     const Color(0xFFE732A0),
                                                 minimumSize:
                                                     const Size.fromHeight(50),
                                               ),
-                                              child: Text(
-                                                'Checkout RM ${_getRoundedTotal().toStringAsFixed(2)}',
-                                                style: const TextStyle(
-                                                  fontSize: 20,
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
+                                              child: _isLoading
+                                                  ? SizedBox(
+                                                      height: 18,
+                                                      width: 18,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<
+                                                                    Color>(
+                                                                Colors.white),
+                                                      ),
+                                                    )
+                                                  : Text(
+                                                      'Checkout RM ${_getRoundedTotal().toStringAsFixed(2)}',
+                                                      style: const TextStyle(
+                                                        fontSize: 20,
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
                                             ),
                                           ),
                                         ],
@@ -2000,11 +2017,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               orderChannel: 'Dine In',
               name: widget.existingOrder!['orderId'],
               couponCode: widget.existingOrder!['coupon_code'],
+              remarks: widget.existingOrder!['remarks'],
               custom_user_voucher:
                   widget.existingOrder!['custom_user_voucher']);
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
+
+            // 2. Print kitchen order immediately if enabled
+            if (printKitchenOrder == 1) {
+              await ReceiptPrinter.printKitchenOrderOnly(
+                  response['message']['name']);
+            }
           } else {
             throw Exception('Failed to update order');
           }
@@ -2020,6 +2044,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
+
+            // 2. Print kitchen order immediately if enabled
+            if (printKitchenOrder == 1) {
+              await ReceiptPrinter.printKitchenOrderOnly(
+                  response['message']['name']);
+            }
+
+// Add error handling wrapper:
+            if (printKitchenOrder == 1) {
+              try {
+                await ReceiptPrinter.printKitchenOrderOnly(
+                    response['message']['name']);
+              } catch (e) {
+                // This catch might not be needed now since printKitchenOrderOnly handles it internally,
+                // but keeping it for extra safety
+                debugPrint('Kitchen order printing completed with note: $e');
+              }
+            }
           } else {
             throw Exception('Failed to submit order');
           }

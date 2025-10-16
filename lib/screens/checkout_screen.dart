@@ -563,7 +563,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 // ),
                 IconButton(
                   icon: Icon(Icons.home, size: 28),
-                  onPressed: _showHomeConfirmationDialog,
+                  onPressed:
+                      _isProcessingPayment ? null : _showHomeConfirmationDialog,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -734,33 +735,35 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final isOfflinePayment = method['custom_fiuu_m1_value'] == '-1';
 
           return GestureDetector(
-            onTap: () async {
-              if (isCash) {
-                // Show cash dialog and only select if user confirms
-                final confirmed = await _showCashPaymentDialog();
-                if (confirmed) {
-                  setState(() {
-                    _selectedPaymentMethod = method['name'];
-                  });
-                } else {
-                  // If dialog is cancelled, deselect the payment method
-                  setState(() {
-                    _selectedPaymentMethod = '';
-                  });
-                }
-              } else if (isOfflinePayment) {
-                // For offline payment methods (m1_value = -1), select immediately
-                // No POS terminal communication needed
-                setState(() {
-                  _selectedPaymentMethod = method['name'];
-                });
-              } else {
-                // For other non-cash methods that require POS terminal, select immediately
-                setState(() {
-                  _selectedPaymentMethod = method['name'];
-                });
-              }
-            },
+            onTap: _isProcessingPayment
+                ? null
+                : () async {
+                    if (isCash) {
+                      // Show cash dialog and only select if user confirms
+                      final confirmed = await _showCashPaymentDialog();
+                      if (confirmed) {
+                        setState(() {
+                          _selectedPaymentMethod = method['name'];
+                        });
+                      } else {
+                        // If dialog is cancelled, deselect the payment method
+                        setState(() {
+                          _selectedPaymentMethod = '';
+                        });
+                      }
+                    } else if (isOfflinePayment) {
+                      // For offline payment methods (m1_value = -1), select immediately
+                      // No POS terminal communication needed
+                      setState(() {
+                        _selectedPaymentMethod = method['name'];
+                      });
+                    } else {
+                      // For other non-cash methods that require POS terminal, select immediately
+                      setState(() {
+                        _selectedPaymentMethod = method['name'];
+                      });
+                    }
+                  },
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
@@ -817,7 +820,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: _buildActionButton(
                       'Cancel Split',
                       Colors.grey,
-                      onPressed: _toggleSplitMode,
+                      onPressed: _isProcessingPayment ? null : _toggleSplitMode,
                     ),
                   )
                 else
@@ -830,7 +833,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: _buildActionButton(
                       'Confirm Split',
                       Colors.green,
-                      onPressed: _confirmSplit,
+                      onPressed: _isProcessingPayment ? null : _confirmSplit,
                     ),
                   )
                 else
@@ -849,7 +852,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   : canSplit
                       ? const Color(0xFF00203E)
                       : Colors.grey,
-              onPressed: _isEditing || !canSplit ? null : _toggleSplitMode,
+              onPressed: _isProcessingPayment
+                  ? null
+                  : _isEditing || !canSplit
+                      ? null
+                      : _toggleSplitMode,
             ),
           ),
         ],
@@ -931,7 +938,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           children: [
             if (widget.order['invoiceNumber'] != null)
               GestureDetector(
-                onTap: _isEditing ? null : _deleteOrder,
+                onTap:
+                    (_isEditing || _isProcessingPayment) ? null : _deleteOrder,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -972,7 +980,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: _discardChanges,
+                onTap: _isProcessingPayment ? null : _discardChanges,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -992,7 +1000,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ],
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => _isEditing ? null : _showVoucherDialog(),
+              onTap: () => (_isEditing || _isProcessingPayment)
+                  ? null
+                  : _showVoucherDialog(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1011,18 +1021,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: _isEditing ? _updateOrder : _toggleEditMode,
+              onTap: _isProcessingPayment
+                  ? null
+                  : (_isEditing ? _updateOrder : _toggleEditMode),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _isEditing ? Colors.green : Colors.yellow,
+                  color: _isProcessingPayment
+                      ? Colors.grey
+                      : _isEditing
+                          ? Colors.green
+                          : Colors.yellow,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   _isEditing ? 'Update Order' : 'Edit Order',
                   style: TextStyle(
-                    color: _isEditing ? Colors.white : Colors.black,
+                    color: _isProcessingPayment
+                        ? Colors.white
+                        : _isEditing
+                            ? Colors.white
+                            : Colors.black,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -1030,7 +1050,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => _isEditing ? null : _navigateToHomeScreen(),
+              onTap: () => (_isEditing || _isProcessingPayment)
+                  ? null
+                  : _navigateToHomeScreen(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1382,7 +1404,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'coupon_code': currentCouponCode,
             'custom_user_voucher': currentVoucherName,
             'user_voucher_code': widget.order['user_voucher_code'],
-            'discount_amount': widget.order['discount_amount']
+            'discount_amount': widget.order['discount_amount'],
+            'remarks': widget.order['remarks']
           },
           isTier1: true,
         ),
@@ -1506,7 +1529,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               style: TextStyle(fontSize: 16),
               maxLines: 1,
-              enabled: !_isSavingRemarks,
+              enabled: !_isSavingRemarks && !_isProcessingPayment,
               onChanged: (value) {
                 setState(() {
                   _isRemarksEditing = value != _currentRemarks;
@@ -1539,7 +1562,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                   child: IconButton(
                     icon: Icon(Icons.check, size: 18, color: Colors.white),
-                    onPressed: _isRemarksEditing && !_isSavingRemarks
+                    onPressed: (_isRemarksEditing &&
+                            !_isSavingRemarks &&
+                            !_isProcessingPayment)
                         ? () {
                             _saveRemarks();
                             FocusScope.of(context).unfocus();
@@ -1679,7 +1704,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return SizedBox(
       height: 50,
       child: ElevatedButton(
-        onPressed: _isEditing
+        onPressed: (_isEditing || _isProcessingPayment)
             ? null
             : () async {
                 // if (_selectedPaymentMethod.isEmpty) {
@@ -1713,7 +1738,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return SizedBox(
       height: 50,
       child: ElevatedButton(
-        onPressed: _isEditing
+        onPressed: (_isEditing || _isProcessingPayment)
             ? null
             : () async {
                 if (_selectedPaymentMethod.isEmpty) {
@@ -1729,7 +1754,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 _completePayment();
               },
         style: ElevatedButton.styleFrom(
-          backgroundColor: _isEditing ? Colors.grey : const Color(0xFFE732A0),
+          backgroundColor: (_isEditing || _isProcessingPayment)
+              ? Colors.grey
+              : const Color(0xFFE732A0),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(4),
