@@ -78,6 +78,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
     });
+    _refreshOrders();
     _loadPaymentMethods();
   }
 
@@ -1331,14 +1332,15 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         // Ensure image URL is properly formatted
         final image = convertedItem['image']?.toString() ?? '';
         if (image.isNotEmpty && !image.startsWith('http')) {
-          convertedItem['image'] = 'https://wakuwaku.joydivisionpadel.com$image';
+          convertedItem['image'] =
+              'https://wakuwaku.joydivisionpadel.com$image';
         }
 
         formattedItems.add(convertedItem);
       }
     }
 
-     final tableFullName = order['tableNumber'];
+    final tableFullName = order['tableNumber'];
 
     print("OIII: ${order['custom_table']}");
 

@@ -1404,7 +1404,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'coupon_code': currentCouponCode,
             'custom_user_voucher': currentVoucherName,
             'user_voucher_code': widget.order['user_voucher_code'],
-            'discount_amount': widget.order['discount_amount']
+            'discount_amount': widget.order['discount_amount'],
+            'remarks': widget.order['remarks']
           },
           isTier1: true,
         ),
@@ -1887,12 +1888,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       // For Pay Later, we just submit the order without processing payment
       if (payLater) {
-        // // Show print receipt dialog
-        // if (shouldPrintKitchenOrder) {
-        //   await _printKitchenOrderOnly(
-        //     invoiceName,
-        //   );
-        // }
+        // Show print receipt dialog
+        if (shouldPrintKitchenOrder) {
+          await _printKitchenOrderOnly(
+            invoiceName,
+          );
+        }
 
         if (mounted) {
           Fluttertoast.showToast(
@@ -1911,10 +1912,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
 
         if (response['success'] == true) {
-          // // Show print receipt dialog
-          // if (shouldPrintKitchenOrder) {
-          //   await _printKitchenOrderOnly(invoiceName);
-          // }
+          // Show print receipt dialog
+          if (shouldPrintKitchenOrder) {
+            await _printKitchenOrderOnly(invoiceName);
+          }
 
           // Then show print receipt dialog
           final shouldPrintReceipt = await _showPrintReceiptDialog();

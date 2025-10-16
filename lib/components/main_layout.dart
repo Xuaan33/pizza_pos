@@ -180,12 +180,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
+            final effectivePageLimit = _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+
             final future = PosService().getOrders(
               posProfile: posProfile,
               fromDate: fromDateStr,
               toDate: toDateStr,
               status: apiStatus,
-              pageLength: _pageLimit,
+              pageLength: effectivePageLimit,
               start: 0,
             );
             _refreshFuture = future;
@@ -247,7 +249,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                       final payments = invoice['payments'] as List? ?? [];
                       String? m1Value;
                       if (payments.isNotEmpty) {
-                        m1Value = payments[0]['custom_fiuu_m1_value']?.toString();
+                        m1Value =
+                            payments[0]['custom_fiuu_m1_value']?.toString();
                       }
 
                       return {
@@ -257,8 +260,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                         'status': invoice['status']?.toString() ?? 'Draft',
                         'orderType':
                             invoice['custom_order_channel']?.toString() ?? '',
-                        'tableNumber':
-                            (invoice['custom_table'] ?? ''),
+                        'tableNumber': (invoice['custom_table'] ?? ''),
                         'items': items,
                         'subtotal':
                             (invoice['rounded_total'] as num?)?.toDouble() ??
@@ -279,7 +281,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             ? payments[0]['mode_of_payment']?.toString() ??
                                 'Cash'
                             : 'Cash',
-                        'm1value': m1Value, 
+                        'm1value': m1Value,
                         'customerName':
                             invoice['customer_name']?.toString() ?? 'Guest',
                         'remarks': invoice['remarks']?.toString() ?? '',
@@ -583,12 +585,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final defaultTable = snapshot.data;
+                print('${defaultTable}');
+
                 return HomeScreen(
                   tableNumber: defaultTable != null
-                      ? int.tryParse(defaultTable['title']
-                              .replaceAll(RegExp(r'[^0-9]'), '')) ??
-                          0
-                      : 1,
+                      ? defaultTable['name'] ??
+                          'adsf 1' // Use the full table name directly
+                      : 'zxcv 1', // Fallback to string
                   existingOrder: null,
                   isTier1: true,
                 );
@@ -840,18 +843,50 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               ref.read(authProvider.notifier).logout();
               Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
             } else {
-              setState(() => _selectedTabIndex = index);
-              if (index == 0) {
+              // Check if this is the Orders screen (index 2 for tier2, index 1 for tier1)
+              final authState = ref.read(authProvider);
+              bool isOrdersScreen = false;
+
+              authState.whenOrNull(
+                authenticated: (
+                  sid,
+                  apiKey,
+                  apiSecret,
+                  username,
+                  email,
+                  fullName,
+                  posProfile,
+                  branch,
+                  paymentMethods,
+                  taxes,
+                  hasOpening,
+                  tier,
+                  printKitchenOrder,
+                  openingDate,
+                  itemsGroups,
+                ) {
+                  if (tier.toLowerCase() == 'tier1') {
+                    isOrdersScreen = index == 1; // Orders is index 1 for tier1
+                  } else {
+                    isOrdersScreen = index == 2; // Orders is index 2 for tier2
+                  }
+                },
+              );
+
+              final previousLimit = _pageLimit;
+
+              // If this is the Orders screen, set filter to "Pay Later" and limit to 1000
+              if (isOrdersScreen) {
+                setState(() {
+                  _filterStatus = 'Pay Later';
+                });
+                // Refresh orders with the new filters
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _refreshOrders();
                 });
               }
-            }
 
-            if (index == 2) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _refreshOrders();
-              });
+              setState(() => _selectedTabIndex = index);
             }
           },
       child: Padding(

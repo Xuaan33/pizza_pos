@@ -99,14 +99,21 @@ class ReceiptPrinter {
     } catch (e) {
       debugPrint('❌ Print kitchen order error: $e');
       final errorString = e.toString();
+
+      // Check if this is the "no additional items" error
       if (errorString.contains('No additional items to print') ||
-          errorString.contains('"success":false') &&
-              errorString.contains('No additional items') ||
-          errorString.contains('HTTP 400') &&
-              errorString.contains('No additional items')) {
-        rethrow; // Re-throw so the caller can handle this specific case
+          (errorString.contains('"success":false') &&
+              errorString.contains('No additional items')) ||
+          (errorString.contains('HTTP 400') &&
+              errorString.contains('No additional items'))) {
+        debugPrint(
+            'ℹ️ No additional items to print for kitchen order - this is normal');
+        // Don't rethrow for this specific case - just log and continue
+        return;
       }
+
       // For other errors, don't rethrow to avoid blocking the flow
+      debugPrint('⚠️ Other kitchen order printing error, but continuing flow');
     }
   }
 

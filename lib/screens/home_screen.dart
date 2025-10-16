@@ -14,7 +14,7 @@ import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  final int tableNumber;
+  final String tableNumber;
   final Map<String, dynamic>? existingOrder;
   final bool isTier1;
 
@@ -587,7 +587,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 Text(
                                                   widget.isTier1
                                                       ? 'Instant Order'
-                                                      : 'Table ${widget.tableNumber}',
+                                                      : '${widget.tableNumber}',
                                                   style: const TextStyle(
                                                     fontSize: 24,
                                                     fontWeight: FontWeight.bold,
@@ -2017,6 +2017,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               orderChannel: 'Dine In',
               name: widget.existingOrder!['orderId'],
               couponCode: widget.existingOrder!['coupon_code'],
+              remarks: widget.existingOrder!['remarks'],
               custom_user_voucher:
                   widget.existingOrder!['custom_user_voucher']);
 
@@ -2048,6 +2049,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (printKitchenOrder == 1) {
               await ReceiptPrinter.printKitchenOrderOnly(
                   response['message']['name']);
+            }
+
+// Add error handling wrapper:
+            if (printKitchenOrder == 1) {
+              try {
+                await ReceiptPrinter.printKitchenOrderOnly(
+                    response['message']['name']);
+              } catch (e) {
+                // This catch might not be needed now since printKitchenOrderOnly handles it internally,
+                // but keeping it for extra safety
+                debugPrint('Kitchen order printing completed with note: $e');
+              }
             }
           } else {
             throw Exception('Failed to submit order');
