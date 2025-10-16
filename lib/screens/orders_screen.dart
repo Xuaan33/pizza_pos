@@ -65,6 +65,8 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
+  List<Map<String, dynamic>> _paymentMethods = [];
+  bool _isLoadingPaymentMethods = true;
 
   @override
   bool get wantKeepAlive => true;
@@ -76,6 +78,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshOrders();
     });
+    _loadPaymentMethods();
   }
 
   @override
@@ -89,6 +92,41 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         _refreshOrders();
       });
     }
+  }
+
+  void _loadPaymentMethods() {
+    final authState = ref.read(authProvider);
+    authState.whenOrNull(
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+      ) {
+        setState(() {
+          _paymentMethods = paymentMethods.map((method) {
+            return {
+              'name': method['name'],
+              'custom_payment_mode_image': method['custom_payment_mode_image'],
+              'custom_fiuu_m1_value': method['custom_fiuu_m1_value'] ??
+                  '01', // Default to '01' if not provided
+            };
+          }).toList();
+          _isLoadingPaymentMethods = false;
+        });
+      },
+    );
   }
 
   Future<void> _refreshOrders() async {
@@ -685,7 +723,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           Text(
                             order['tableNumber'] == 0
                                 ? 'Instant Order'
-                                : 'Table ${order['tableNumber']}',
+                                : '${order['tableNumber']}',
                             style: TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.w600),
@@ -1300,6 +1338,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       }
     }
 
+     final tableFullName = order['tableNumber'];
+
+    print("OIII: ${order['custom_table']}");
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1308,7 +1350,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             ...order,
             'items': formattedItems,
             'invoiceNumber': order['orderId'],
-            // Ensure discount information is passed through
             'discount_amount': order['discount_amount'] ?? 0.0,
             'coupon_code': order['coupon_code'],
             'custom_user_voucher': order['custom_user_voucher'],
@@ -1317,6 +1358,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             'base_rounding_adjustment':
                 order['base_rounding_adjustment'] ?? 0.0,
             'rounded_total': order['rounded_total'] ?? 0.0,
+            'tableFullName': tableFullName,
           },
           tablesWithSubmittedOrders: {},
           onOrderSubmitted: (newOrder) {
@@ -1376,8 +1418,21 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (!confirmed) return;
 
     try {
+      // Get the payment method from the order
+      final paymentMethod = order['paymentMethod']?.toString() ?? 'Cash';
+
+      // Find the corresponding payment method from _paymentMethods to get m1value
+      final paymentMethodData = _paymentMethods.firstWhere(
+        (method) => method['name'] == paymentMethod,
+        orElse: () => {'name': 'Cash', 'custom_fiuu_m1_value': '-1'},
+      );
+
+      final m1Value =
+          paymentMethodData['custom_fiuu_m1_value']?.toString() ?? '-1';
+
+      // Determine if it's cash payment
       final isCashPayment =
-          (order['paymentMethod']?.toString().toLowerCase() ?? '') == 'cash';
+          m1Value == '-1' || paymentMethod.toLowerCase() == 'cash';
 
       if (isCashPayment) {
         // For cash payments, just cancel the order directly
@@ -1397,8 +1452,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         }
         return;
       }
+
       final posInvoiceNumber = order['pos_invoice_number']?.toString();
-      print('pos lanjiao: $posInvoiceNumber');
+      print('POS Invoice Number: $posInvoiceNumber');
+      print('Payment Method: $paymentMethod');
+      print('M1 Value: $m1Value');
 
       if (posInvoiceNumber == null || posInvoiceNumber.isEmpty) {
         throw Exception('POS invoice number not available for refund');
@@ -1410,18 +1468,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           .padRight(20, '0')
           .substring(0, 20);
 
-      // Generate the void hex message
-      final hexMessage =
-          order['paymentMethod']?.toString().toLowerCase().contains('card') ==
-                  true
-              ? PosHexGenerator.generateVoidHexMessage(
-                  transactionId: transactionId,
-                  invoiceNumber: posInvoiceNumber,
-                )
-              : PosHexGenerator.generateVoidWalletQrHexMessage(
-                  transactionId,
-                  extendedInvoiceNumber: posInvoiceNumber,
-                );
+      String hexMessage;
+
+      // Determine refund type based on m1value
+      if (m1Value == '01') {
+        // Credit Card - do credit card void
+        hexMessage = PosHexGenerator.generateVoidHexMessage(
+          transactionId: transactionId,
+          invoiceNumber: posInvoiceNumber,
+        );
+        print('Processing Credit Card refund (m1value: 01)');
+      } else {
+        // Other payment methods (QR, DuitNow, etc.) - do QR void
+        hexMessage = PosHexGenerator.generateVoidWalletQrHexMessage(
+          transactionId,
+          extendedInvoiceNumber: posInvoiceNumber,
+        );
+        print('Processing QR/Wallet refund (m1value: $m1Value)');
+      }
 
       // Connect to POS terminal
       final prefs = await SharedPreferences.getInstance();

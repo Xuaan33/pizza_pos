@@ -3570,6 +3570,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: null, // Set to null to remove
         custom_user_voucher: null, // Set to null to remove
         discountAmount: 0, // Set to 0 to remove
+        remarks: widget.order['remarks'] ?? "N/A",
       );
 
       if (response['success'] == true) {
@@ -4101,6 +4102,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: widget.order['coupon_code'],
         custom_user_voucher: widget.order['user_voucher_code'],
         discountAmount: widget.order['discount_amount'],
+        remarks: widget.order['remarks'] ?? "N/A",
       );
 
       if (response['success'] == true) {
@@ -4280,6 +4282,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       'custom_variant_info': item['custom_variant_info'],
                   })
               .toList(),
+          remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
           orderChannel: "Dine In");
 
@@ -4566,6 +4569,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'custom_variant_info': item['custom_variant_info'],
             };
           }).toList(),
+          remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
           orderChannel: 'Dine In');
 
