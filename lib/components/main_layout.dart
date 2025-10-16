@@ -161,9 +161,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             if (_filterStatus == 'Pay Later' || forceAllForPayLater) {
               fromDateStr = null;
               toDateStr = null;
-              // If no explicit date filter (including today's date), show all dates (null)
             } else {
-              // For other statuses (All, Paid, Cancelled), always apply date filters
               if (_useDateRange && _fromDate != null && _toDate != null) {
                 fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
                 toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
@@ -173,7 +171,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               }
             }
 
-            // Map the filter status to API status
             String? apiStatus;
             if (_filterStatus == 'Pay Later') {
               apiStatus = 'Draft';
@@ -182,7 +179,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             } else if (_filterStatus == 'Cancelled') {
               apiStatus = 'Cancelled';
             }
-            // 'All' will send null, which returns all statuses
 
             final future = PosService().getOrders(
               posProfile: posProfile,
@@ -200,125 +196,153 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               final List<dynamic> invoices =
                   (response['message']?['message'] as List?) ?? [];
 
-              setState(() {
-                activeOrders = invoices
-                    .map((invoice) {
-                      try {
-                        final items =
-                            (invoice['items'] as List? ?? []).map((item) {
-                          return {
-                            'name':
-                                item['item_name']?.toString() ?? 'Unknown Item',
-                            'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                            'quantity':
-                                (item['qty'] as num?)?.toDouble() ?? 1.0,
-                            'item_code': item['item_code']?.toString() ?? '',
-                            'options': item['options'] ?? {},
-                            'option_text': item['option_text'] ?? '',
-                            'custom_serve_later': item['custom_serve_later'],
-                            'custom_item_remarks':
-                                item['custom_item_remarks']?.toString() ?? '',
-                            'custom_variant_info':
-                                item['custom_variant_info']?.toString() ?? '',
-                            'discount_amount':
-                                (item['discount_amount'] as num?)?.toDouble() ??
-                                    0.0,
-                            'image': (item['image'])
-                          };
-                        }).toList();
-
-                        Map<String, dynamic>? taxBreakdown;
-                        final taxes = invoice['taxes'] as List?;
-                        if (taxes != null && taxes.isNotEmpty) {
-                          taxBreakdown = {
-                            'rate':
-                                (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                            'amount':
-                                (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                            'description':
-                                taxes[0]['account_head']?.toString() ?? 'Tax',
-                          };
-                        }
-
-                        DateTime? parseDate(String? dateString) {
-                          try {
-                            return dateString != null
-                                ? DateTime.parse(dateString)
-                                : null;
-                          } catch (_) {
-                            return null;
-                          }
-                        }
-
+              List<Map<String, dynamic>> processedOrders = invoices
+                  .map((invoice) {
+                    try {
+                      final items =
+                          (invoice['items'] as List? ?? []).map((item) {
                         return {
-                          'orderId': invoice['name']?.toString() ?? 'Unknown',
-                          'invoiceNumber':
-                              invoice['name']?.toString() ?? 'Unknown',
-                          'status': invoice['status']?.toString() ?? 'Draft',
-                          'orderType':
-                              invoice['custom_order_channel']?.toString() ?? '',
-                          'tableNumber': _extractTableNumber(
-                              invoice['custom_table'] ?? ''),
-                          'items': items,
-                          'subtotal':
-                              (invoice['rounded_total'] as num?)?.toDouble() ??
-                                  0.0,
-                          'tax': taxBreakdown?['amount'] ?? 0.0,
-                          'total':
-                              (invoice['rounded_total'] as num?)?.toDouble() ??
-                                  0.0,
-                          'entryTime':
-                              parseDate(invoice['modified']?.toString()) ??
-                                  DateTime.now(),
-                          'paidTime': invoice['status']?.toString() == 'Paid'
-                              ? parseDate(invoice['modified']?.toString())
-                              : null,
-                          'isPaid': invoice['status']?.toString() == 'Paid' ||
-                              invoice['status']?.toString() == 'Consolidated',
-                          'paymentMethod':
-                              (invoice['payments'] as List?)?.isNotEmpty == true
-                                  ? invoice['payments'][0]['mode_of_payment']
-                                          ?.toString() ??
-                                      'Cash'
-                                  : 'Cash',
-                          'customerName':
-                              invoice['customer_name']?.toString() ?? 'Guest',
-                          'remarks': invoice['remarks']?.toString() ?? '',
+                          'name':
+                              item['item_name']?.toString() ?? 'Unknown Item',
+                          'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+                          'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
+                          'item_code': item['item_code']?.toString() ?? '',
+                          'options': item['options'] ?? {},
+                          'option_text': item['option_text'] ?? '',
+                          'custom_serve_later': item['custom_serve_later'],
                           'custom_item_remarks':
-                              invoice['custom_item_remarks']?.toString() ??
-                                  'N/A',
-                          'taxBreakdown': taxBreakdown,
-                          'paidAmount':
-                              (invoice['paid_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'changeAmount':
-                              (invoice['change_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'base_rounding_adjustment':
-                              (invoice['base_rounding_adjustment'] as num?)
-                                      ?.toDouble() ??
-                                  0.0,
-                          "pos_invoice_number":
-                              invoice['custom_fiuu_invoice_number']
-                                      ?.toString() ??
-                                  '000000',
-                          'total_taxes_and_charges':
-                              (invoice['total_taxes_and_charges'] as num?)
-                                      ?.toDouble() ??
-                                  0.0,
+                              item['custom_item_remarks']?.toString() ?? '',
+                          'custom_variant_info':
+                              item['custom_variant_info']?.toString() ?? '',
                           'discount_amount':
-                              (invoice['discount_amount'] as num?)?.toDouble(),
-                          'user_voucher_code': (invoice['user_voucher_code']),
+                              (item['discount_amount'] as num?)?.toDouble() ??
+                                  0.0,
+                          'image': (item['image'])
                         };
-                      } catch (e) {
-                        print(
-                            'Error processing invoice ${invoice['name']}: $e');
-                        return null;
+                      }).toList();
+
+                      Map<String, dynamic>? taxBreakdown;
+                      final taxes = invoice['taxes'] as List?;
+                      if (taxes != null && taxes.isNotEmpty) {
+                        taxBreakdown = {
+                          'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
+                          'amount':
+                              (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
+                          'description':
+                              taxes[0]['account_head']?.toString() ?? 'Tax',
+                        };
                       }
-                    })
-                    .where((order) => order != null)
-                    .cast<Map<String, dynamic>>()
-                    .toList();
+
+                      DateTime? parseDate(String? dateString) {
+                        try {
+                          return dateString != null
+                              ? DateTime.parse(dateString)
+                              : null;
+                        } catch (_) {
+                          return null;
+                        }
+                      }
+
+                      // Extract payment method info
+                      final payments = invoice['payments'] as List? ?? [];
+                      String? m1Value;
+                      if (payments.isNotEmpty) {
+                        m1Value = payments[0]['custom_fiuu_m1_value']?.toString();
+                      }
+
+                      return {
+                        'orderId': invoice['name']?.toString() ?? 'Unknown',
+                        'invoiceNumber':
+                            invoice['name']?.toString() ?? 'Unknown',
+                        'status': invoice['status']?.toString() ?? 'Draft',
+                        'orderType':
+                            invoice['custom_order_channel']?.toString() ?? '',
+                        'tableNumber':
+                            (invoice['custom_table'] ?? ''),
+                        'items': items,
+                        'subtotal':
+                            (invoice['rounded_total'] as num?)?.toDouble() ??
+                                0.0,
+                        'tax': taxBreakdown?['amount'] ?? 0.0,
+                        'total':
+                            (invoice['rounded_total'] as num?)?.toDouble() ??
+                                0.0,
+                        'entryTime':
+                            parseDate(invoice['modified']?.toString()) ??
+                                DateTime.now(),
+                        'paidTime': invoice['status']?.toString() == 'Paid'
+                            ? parseDate(invoice['modified']?.toString())
+                            : null,
+                        'isPaid': invoice['status']?.toString() == 'Paid' ||
+                            invoice['status']?.toString() == 'Consolidated',
+                        'paymentMethod': payments.isNotEmpty == true
+                            ? payments[0]['mode_of_payment']?.toString() ??
+                                'Cash'
+                            : 'Cash',
+                        'm1value': m1Value, 
+                        'customerName':
+                            invoice['customer_name']?.toString() ?? 'Guest',
+                        'remarks': invoice['remarks']?.toString() ?? '',
+                        'custom_item_remarks':
+                            invoice['custom_item_remarks']?.toString() ?? 'N/A',
+                        'taxBreakdown': taxBreakdown,
+                        'paidAmount':
+                            (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
+                        'changeAmount':
+                            (invoice['change_amount'] as num?)?.toDouble() ??
+                                0.0,
+                        'base_rounding_adjustment':
+                            (invoice['base_rounding_adjustment'] as num?)
+                                    ?.toDouble() ??
+                                0.0,
+                        "pos_invoice_number":
+                            invoice['custom_fiuu_invoice_number']?.toString() ??
+                                '000000',
+                        'total_taxes_and_charges':
+                            (invoice['total_taxes_and_charges'] as num?)
+                                    ?.toDouble() ??
+                                0.0,
+                        'discount_amount':
+                            (invoice['discount_amount'] as num?)?.toDouble(),
+                        'user_voucher_code': (invoice['user_voucher_code']),
+                      };
+                    } catch (e) {
+                      print('Error processing invoice ${invoice['name']}: $e');
+                      return null;
+                    }
+                  })
+                  .where((order) => order != null)
+                  .cast<Map<String, dynamic>>()
+                  .toList();
+
+              // Sort orders: Pay Later orders by timestamp, others by order ID
+              processedOrders.sort((a, b) {
+                final isPayLaterA =
+                    a['status']?.toString().toLowerCase() == 'draft';
+                final isPayLaterB =
+                    b['status']?.toString().toLowerCase() == 'draft';
+
+                if (isPayLaterA && isPayLaterB) {
+                  // Both are Pay Later - sort by entryTime descending (newest first)
+                  final timeA = a['entryTime'] as DateTime;
+                  final timeB = b['entryTime'] as DateTime;
+                  return timeB.compareTo(timeA);
+                } else if (isPayLaterA) {
+                  // Only A is Pay Later - A comes first
+                  return -1;
+                } else if (isPayLaterB) {
+                  // Only B is Pay Later - B comes first
+                  return 1;
+                } else {
+                  // Both are not Pay Later - sort by order ID
+                  final idA = a['orderId']?.toString() ?? '';
+                  final idB = b['orderId']?.toString() ?? '';
+                  return idB.compareTo(idA); // Descending order
+                }
+              });
+
+              setState(() {
+                activeOrders = processedOrders;
               });
 
               print('Successfully mapped ${activeOrders.length} orders');
@@ -330,7 +354,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       );
     } catch (e) {
       print('Error refreshing orders: $e');
-      // Error handling remains the same...
     } finally {
       if (mounted) {
         setState(() => _isOrdersLoading = false);
