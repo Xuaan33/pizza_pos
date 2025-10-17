@@ -2699,7 +2699,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         widget.order['coupon_code'] != null ||
         widget.order['custom_user_voucher'] != null;
 
-    if (hasDiscount) {
+    if (_discountAmount > 0) {
       final shouldRemove = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -3542,7 +3542,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _voucherCode = '';
         widget.order['coupon_code'] = null;
         widget.order['custom_user_voucher'] = null;
-        widget.order['user_voucher_code'] = null; // Clear user_voucher_code
+        widget.order['user_voucher_code'] = null;
+        widget.order['discount_amount'] = null;
 
         // Remove discounts from all items
         for (var item in orderItems) {
