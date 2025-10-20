@@ -872,6 +872,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   printKitchenOrder,
                   openingDate,
                   itemsGroups,
+                  baseUrl,
+                  mechantId,
                 ) {
                   if (tier.toLowerCase() == 'tier1') {
                     isOrdersScreen = index == 1; // Orders is index 1 for tier1
