@@ -26,19 +26,26 @@ class ReceiptPrinter {
           onLayout: (PdfPageFormat format) async => bytes,
         );
       } else {
-        // Convert image to PDF for printing
+        // Convert image to PDF for printing - use exact image dimensions
         final pdf = pw.Document();
         final image = img.decodeImage(bytes);
 
         if (image != null) {
+          // Calculate page size based on image dimensions
+          final pageFormat = PdfPageFormat(
+            image.width.toDouble() * 0.75, // Convert pixels to points (approx)
+            image.height.toDouble() * 0.75,
+            marginAll: 0, // Remove all margins
+          );
+
           pdf.addPage(
             pw.Page(
-              pageFormat: PdfPageFormat.a4,
+              pageFormat: pageFormat,
               build: (pw.Context context) {
-                return pw.Center(
+                return pw.Container(
                   child: pw.Image(
                     pw.MemoryImage(bytes),
-                    fit: pw.BoxFit.contain,
+                    fit: pw.BoxFit.fitWidth,
                   ),
                 );
               },
@@ -70,16 +77,36 @@ class ReceiptPrinter {
     }
   }
 
-  static Future<void> printKitchenOrderOnly(String orderName) async {
+  static Future<void> printKitchenOrderOnly(
+    String orderName,
+  ) async {
     try {
-      final kitchenOrderBytes = await PosService().printKitchenOrder(
+      debugPrint('🖨️ Printing kitchen order for: $orderName');
+
+      final kitchenOrderPages = await PosService().printKitchenOrder(
         orderName: orderName,
       );
-      await printReceipt(kitchenOrderBytes, isPdf: false);
-      debugPrint('Kitchen order printed successfully');
+
+      // Print each page sequentially
+      for (int i = 0; i < kitchenOrderPages.length; i++) {
+        await printReceipt(kitchenOrderPages[i], isPdf: false);
+        debugPrint(
+            '✅ Printed kitchen order page ${i + 1}/${kitchenOrderPages.length}');
+      }
+
+      debugPrint(
+          '🎉 Kitchen order printed successfully - ${kitchenOrderPages.length} page(s)');
     } catch (e) {
-      debugPrint('Print kitchen order error: $e');
-      // Don't rethrow - kitchen order printing failure shouldn't block the flow
+      debugPrint('❌ Print kitchen order error: $e');
+      final errorString = e.toString();
+      if (errorString.contains('No additional items to print') ||
+          errorString.contains('"success":false') &&
+              errorString.contains('No additional items') ||
+          errorString.contains('HTTP 400') &&
+              errorString.contains('No additional items')) {
+        rethrow; // Re-throw so the caller can handle this specific case
+      }
+      // For other errors, don't rethrow to avoid blocking the flow
     }
   }
 

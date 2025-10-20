@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
@@ -133,6 +134,8 @@ class PosService {
     String? status,
     String? customer,
     String? postingDate,
+    String? fromDate,
+    String? toDate,
     String? customTable,
     String? customOrderChannel,
     int pageLength = 20,
@@ -148,7 +151,13 @@ class PosService {
         if (search != null) 'search': search,
         if (status != null) 'status': status,
         if (customer != null) 'customer': customer,
-        if (postingDate != null) 'posting_date': postingDate,
+        // Use date range if provided, otherwise use single posting date
+        if (fromDate != null) 'from_date': fromDate,
+        if (toDate != null) 'to_date': toDate,
+        if (fromDate == null && toDate == null && postingDate != null)
+          'from_date': postingDate,
+        if (fromDate == null && toDate == null && postingDate != null)
+          'to_date': postingDate,
         if (customTable != null) 'custom_table': customTable,
         if (customOrderChannel != null)
           'custom_order_channel': customOrderChannel,
@@ -178,11 +187,21 @@ class PosService {
         throw Exception('Failed to load orders: ${response.statusCode}');
       }
     } on SessionTimeoutException {
-      rethrow; // Let this propagate up
+      rethrow;
     } catch (e) {
       print('Error in getOrders: $e');
       throw Exception('Network error: $e');
     }
+  }
+
+  Future<Map<String, dynamic>> getPayLaterOrders({
+    required String posProfile,
+  }) async {
+    return getOrders(
+      posProfile: posProfile,
+      status: 'Draft',
+      pageLength: 1000, // Large number to get all draft orders
+    );
   }
 
   Future<Map<String, dynamic>> submitOrder({
@@ -361,9 +380,9 @@ class PosService {
     }
   }
 
-  Future<Uint8List> printKitchenOrder({
+  // In pos_service.dart
+  Future<List<Uint8List>> printKitchenOrder({
     required String orderName,
-    String? onlyAdditionalItems,
   }) async {
     try {
       final token = await AuthService.getAuthToken();
@@ -372,8 +391,8 @@ class PosService {
       final baseUrl = await _getBaseUrl();
       final params = {
         'name': orderName,
-        if (onlyAdditionalItems != null)
-          'only_additional_items': onlyAdditionalItems,
+        'only_additional_items': '1',
+        'multi_pages': '1',
       };
 
       final queryString = Uri(queryParameters: params).query;
@@ -383,43 +402,132 @@ class PosService {
         'Authorization': token,
       };
 
-      print('API Request: GET $uri');
+      print('🖨️ API Request: GET $uri');
 
       final response = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 15)); // Increased timeout
 
-      print('API Response: ${response.statusCode} - ${response.body}');
+      print('🖨️ API Response Status: ${response.statusCode}');
+      print('🖨️ API Response Body Length: ${response.body.length} characters');
+
+      // Log first 500 characters and last 500 characters to see if response is complete
+      if (response.body.length > 1000) {
+        print('🖨️ Response start: ${response.body.substring(0, 500)}...');
+        print(
+            '🖨️ Response end: ...${response.body.substring(response.body.length - 500)}');
+      } else {
+        print('🖨️ Full Response: ${response.body}');
+      }
 
       if (response.statusCode == 200) {
-        return response.bodyBytes; // Return raw image bytes
+        // Parse JSON with better error handling
+        dynamic responseData;
+        try {
+          responseData = jsonDecode(response.body);
+        } catch (e) {
+          print('❌ JSON Parse Error: $e');
+          print('❌ Response body that failed to parse: ${response.body}');
+          throw Exception('Failed to parse API response as JSON');
+        }
+
+        if (responseData is! Map) {
+          throw Exception('API response is not a JSON object');
+        }
+
+        if (responseData['success'] == true) {
+          // Check if message exists and is a list
+          if (!responseData.containsKey('message')) {
+            throw Exception('API response missing "message" field');
+          }
+
+          final message = responseData['message'];
+          if (message is! List) {
+            throw Exception('"message" field is not an array');
+          }
+
+          final int pageCount = responseData['length'] ?? message.length;
+          final List<Uint8List> imagePages = [];
+
+          print(
+              '📄 API reports $pageCount pages, found ${message.length} items in message array');
+
+          // Process each page
+          for (int i = 0; i < message.length; i++) {
+            final imageData = message[i];
+
+            if (imageData is String) {
+              try {
+                // Validate base64 string
+                if (imageData.isEmpty) {
+                  print('⚠️ Page ${i + 1} has empty base64 string');
+                  continue;
+                }
+
+                // Check if base64 string looks complete (ends with = or ==)
+                if (!imageData.endsWith('=') && !imageData.endsWith('==')) {
+                  print(
+                      '⚠️ Page ${i + 1} base64 string may be truncated: ${imageData.length} chars');
+                }
+
+                final Uint8List imageBytes = base64.decode(imageData);
+
+                if (imageBytes.isEmpty) {
+                  print('⚠️ Page ${i + 1} decoded to empty bytes');
+                  continue;
+                }
+
+                imagePages.add(imageBytes);
+                print(
+                    '✅ Successfully decoded page ${i + 1} (${imageBytes.length} bytes)');
+              } catch (e) {
+                print('❌ Error decoding page ${i + 1}: $e');
+                print(
+                    '❌ Problematic base64 (first 100 chars): ${imageData.substring(0, min(100, imageData.length))}');
+                // Continue with other pages instead of failing completely
+                continue;
+              }
+            } else {
+              print(
+                  '⚠️ Page ${i + 1} is not a string, type: ${imageData.runtimeType}');
+            }
+          }
+
+          if (imagePages.isEmpty) {
+            throw Exception('No valid image pages could be decoded');
+          }
+
+          print(
+              '🎉 Successfully processed ${imagePages.length} kitchen order pages');
+          return imagePages;
+        } else {
+          final errorMessage = responseData['message'] ?? 'Unknown error';
+          throw Exception('API returned error: $errorMessage');
+        }
       } else {
-        final error = jsonDecode(response.body);
-        throw Exception(error['message'] ??
-            'Request failed with status ${response.statusCode}');
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      print('API Error: $e');
+      print('🚨 Kitchen order API error: $e');
       rethrow;
     }
   }
 
-  Future<Map<String, Uint8List>> printReceiptAndKitchenOrder({
+  Future<Map<String, dynamic>> printReceiptAndKitchenOrder({
     required String orderName,
     required bool shouldPrintKitchenOrder,
     String? onlyAdditionalItems,
   }) async {
     try {
       final receiptBytes = await printReceipt(orderName);
-      Map<String, Uint8List> result = {'receipt': receiptBytes};
+      Map<String, dynamic> result = {'receipt': receiptBytes};
 
       if (shouldPrintKitchenOrder) {
         try {
-          final kitchenOrderBytes = await printKitchenOrder(
+          final kitchenOrderPages = await printKitchenOrder(
             orderName: orderName,
-            onlyAdditionalItems: onlyAdditionalItems,
           );
-          result['kitchen_order'] = kitchenOrderBytes;
+          result['kitchen_order'] = kitchenOrderPages;
         } catch (e) {
           print('Failed to print kitchen order: $e');
           // Continue with just the receipt if kitchen order printing fails
@@ -831,7 +939,7 @@ class OrderMapper {
         'base_rounding_adjustment':
             (order['base_rounding_adjustment'] as num).toDouble(),
         'remarks': order['remarks'] as String? ?? 'N/A',
-        'user_voucher_code': order['user_voucher_code']as String?,
+        'user_voucher_code': order['user_voucher_code'] as String?,
       };
     } catch (e) {
       print('Error mapping submitted order: $e');

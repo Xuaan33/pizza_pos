@@ -25,6 +25,16 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final int pageLimit;
   final Function(DateTime) onDateChanged;
   final Function(int) onLimitChanged;
+  final Function(String) onFilterStatusChanged;
+  final Function(String) onFilterOrderTypeChanged;
+  final String currentFilterStatus;
+  final String currentFilterOrderType;
+  final Function() onDateRangeSelected;
+  final Function() onDateRangeCleared;
+  final useDateRange;
+  final fromDate;
+  final toDate;
+  final List<int> limitOptions;
 
   const OrdersScreen({
     Key? key,
@@ -37,6 +47,16 @@ class OrdersScreen extends ConsumerStatefulWidget {
     required this.pageLimit,
     required this.onDateChanged,
     required this.onLimitChanged,
+    required this.onFilterStatusChanged,
+    required this.onFilterOrderTypeChanged,
+    required this.currentFilterStatus,
+    required this.currentFilterOrderType,
+    required this.onDateRangeSelected,
+    required this.onDateRangeCleared,
+    required this.useDateRange,
+    this.fromDate,
+    this.toDate,
+    required this.limitOptions,
   }) : super(key: key);
 
   @override
@@ -44,15 +64,9 @@ class OrdersScreen extends ConsumerStatefulWidget {
 }
 
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
-  String _filterStatus = 'All'; // 'All', 'Draft', 'Paid'
-  String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
-    String baseImageUrl = '';
-
-  // DateTime _selectedDate = DateTime.now();
-  // int _pageLimit = 30;
-  final List<int> _limitOptions = [30, 50, 100];
+  String baseImageUrl = '';
 
   @override
   bool get wantKeepAlive => true;
@@ -92,16 +106,15 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (mounted) {
       setState(() {
         _selectedOrder = null;
-        _filterStatus = 'All';
-        _filterOrderType = 'All';
-        _searchQuery = '';
+        // _filterStatus = 'All';
+        // _filterOrderType = 'All';
+        // _searchQuery = '';
       });
     }
   }
 
   List<Widget> _buildVariantText(Map<String, dynamic> item) {
     dynamic variantInfo = item['custom_variant_info'];
-    print("Raw Variant Info: $variantInfo (${variantInfo.runtimeType})");
 
     if (variantInfo == null) return [];
 
@@ -220,35 +233,128 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           ),
                         ),
                         SizedBox(height: 4),
-                        Text(
-                          DateFormat('EEEE, dd MMMM yyyy')
-                              .format(widget.selectedDate),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
+                        if (widget.useDateRange &&
+                            widget.fromDate != null &&
+                            widget.toDate != null)
+                          Text(
+                            '${DateFormat('dd MMM yyyy').format(widget.fromDate!)} - ${DateFormat('dd MMM yyyy').format(widget.toDate!)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          )
+                        else if (!widget.useDateRange &&
+                            widget.selectedDate != DateTime.now())
+                          Text(
+                            '${DateFormat('dd MMM yyyy').format(widget.selectedDate)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          )
+                        else
+                          Text(
+                            'All Dates',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
+
+                        // Add a filter status indicator
+                        if (widget.currentFilterStatus == 'Pay Later')
+                          Text(
+                            widget.useDateRange ||
+                                    widget.selectedDate != DateTime.now()
+                                ? 'Pay Later orders with date filter'
+                                : 'All Pay Later orders',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                       ],
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Color(0xFFE732A0).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        onPressed: _selectDate,
-                        icon: Icon(Icons.calendar_month, size: 24),
-                        color: Color(0xFFE732A0),
-                        tooltip: 'Select Date',
-                      ),
+                    Row(
+                      children: [
+                        // Date Range Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: widget.useDateRange
+                                ? const Color(0xFFE732A0).withOpacity(0.2)
+                                : const Color(0xFFE732A0).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextButton(
+                            onPressed: _selectDateRange,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Date Range',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(width: 8),
+                        // Single Date Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: !widget.useDateRange
+                                ? Color(0xFFE732A0).withOpacity(0.2)
+                                : Color(0xFFE732A0).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            onPressed: _selectDate,
+                            icon: Icon(Icons.calendar_month, size: 24),
+                            color: Color(0xFFE732A0),
+                            tooltip: 'Select Single Date',
+                          ),
+                        ),
+                        // Show clear/reset button when date filters are active
+                        if (widget.useDateRange ||
+                            widget.selectedDate == DateTime.now()) ...[
+                          SizedBox(width: 8),
+                          // Clear/Reset Date Button - This now works for both cases
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              onPressed:
+                                  _clearDateRange, // This will reset to show all dates for Pay Later
+                              icon: Icon(Icons.clear, size: 24),
+                              color: Colors.grey,
+                              tooltip: widget.currentFilterStatus == 'Pay Later'
+                                  ? 'Reset to All Dates'
+                                  : 'Clear Date Filter',
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
-                SizedBox(height: 16),
+                SizedBox(height: 5),
 
                 // Search Bar
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     // Search Bar (shortened)
                     Expanded(
@@ -303,7 +409,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                               child: DropdownButton<int>(
                                 value: widget.pageLimit,
                                 isExpanded: true,
-                                items: _limitOptions.map((int value) {
+                                items: widget.limitOptions.map((int value) {
                                   return DropdownMenuItem<int>(
                                     value: value,
                                     child: Padding(
@@ -329,26 +435,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   ],
                 ),
 
-                SizedBox(height: 16),
+                SizedBox(height: 10),
 
                 Row(
                   children: [
                     Expanded(
                       child: _buildFilterDropdown(
-                        value: _filterStatus,
-                        items: ['All', 'Draft', 'Paid', 'Cancelled'],
+                        value: widget.currentFilterStatus,
+                        items: ['All', 'Pay Later', 'Paid', 'Cancelled'],
                         onChanged: (value) =>
-                            setState(() => _filterStatus = value!),
+                            widget.onFilterStatusChanged(value!),
                         label: 'Status',
                       ),
                     ),
                     SizedBox(width: 16),
                     Expanded(
                       child: _buildFilterDropdown(
-                        value: _filterOrderType,
+                        value: widget.currentFilterOrderType,
                         items: ['All', 'Dine in', 'Takeaway', 'Delivery'],
                         onChanged: (value) =>
-                            setState(() => _filterOrderType = value!),
+                            widget.onFilterOrderTypeChanged(value!),
                         label: 'Order Type',
                       ),
                     ),
@@ -357,7 +463,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ],
             ),
           ),
-
+          SizedBox(height: 5),
           // Order list
           Expanded(
             child: widget.isLoading
@@ -419,7 +525,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      isCancelled ? 'CANCELLED' : (isDraft ? 'DRAFT' : 'PAID'),
+                      isCancelled
+                          ? 'CANCELLED'
+                          : (isDraft ? 'PAY LATER' : 'PAID'),
                       style: TextStyle(
                         color: isCancelled
                             ? Colors.red[800]
@@ -487,14 +595,30 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     // Calculate original subtotal (before any discounts)
     final originalSubtotal = _calculateOriginalSubtotal(order);
 
+    // Calculate final values with proper negative handling
     final subtotal = (order['net_total'] as num?)?.toDouble() ??
         _calculateOrderSubtotal(order);
     final tax = (order['total_taxes_and_charges'] as num?)?.toDouble() ??
         _calculateOrderTax(order);
     final rounding = (order['base_rounding_adjustment'] as num?)?.toDouble() ??
         _calculateRounding(subtotal + tax);
-    final total =
+
+    // Calculate total with negative value protection
+    double total =
         (order['total'] as num?)?.toDouble() ?? (subtotal + tax + rounding);
+
+    // Ensure total is not negative - if negative, set to 0.00
+    if (total < 0) {
+      total = 0.00;
+    }
+
+    // Calculate the actual subtotal to display (original - discount, but not less than 0)
+    double displaySubtotal = originalSubtotal;
+    if (totalDiscount > originalSubtotal) {
+      // If discount exceeds subtotal, show the original subtotal but the effective subtotal becomes 0
+      displaySubtotal = originalSubtotal;
+    }
+
     final isPaid = order['isPaid'] == true;
     final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
@@ -547,7 +671,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           child: Text(
                             isCancelled
                                 ? 'CANCELLED'
-                                : (isDraft ? 'DRAFT' : 'PAID'),
+                                : (isDraft ? 'PAY LATER' : 'PAID'),
                             style: TextStyle(
                               color: isCancelled
                                   ? Colors.red[800]
@@ -783,7 +907,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 padding: EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _buildSummaryRow('Subtotal', originalSubtotal),
+                    _buildSummaryRow('Subtotal', displaySubtotal),
                     if (totalDiscount > 0)
                       _buildSummaryRow(
                           'Discount Amount (${order['user_voucher_code']})',
@@ -853,7 +977,21 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ),
             ),
 
-            // Inside _buildOrderDetailsPanel method, after the existing buttons:
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () => _printLeftoverOrder(order),
+              style: ElevatedButton.styleFrom(
+                minimumSize: Size(double.infinity, 48),
+                side: BorderSide(color: Colors.blue),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'Print Leftover Order',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+
             if (!isDraft &&
                 !isCancelled &&
                 _isToday(_parseDateTime(order['entryTime']))) ...[
@@ -883,17 +1021,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final orderLevelDiscount =
         (order['discount_amount'] as num?)?.toDouble() ?? 0.0;
 
-    // If there's an order-level discount, calculate original subtotal
+    // Calculate base subtotal from items
+    double baseSubtotal = items.fold(0.0, (sum, item) {
+      final quantity = (item['quantity'] ?? 1).toDouble();
+      final price = (item['price'] ?? 0).toDouble();
+      return sum + (price * quantity);
+    });
+
+    // If there's an order-level discount, add it back to get original
     if (orderLevelDiscount > 0) {
-      final currentSubtotal = items.fold(0.0, (sum, item) {
-        final quantity = (item['quantity'] ?? 1).toDouble();
-        final price = (item['price'] ?? 0).toDouble();
-        return sum + (price * quantity);
-      });
-      return currentSubtotal + orderLevelDiscount;
+      return baseSubtotal;
     }
 
-    // For item-level discounts in draft orders
+    // For item-level discounts, calculate original prices
     return items.fold(0.0, (sum, item) {
       final quantity = (item['quantity'] ?? 1).toDouble();
       final currentPrice = (item['price'] ?? 0).toDouble();
@@ -1039,7 +1179,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     String formattedValue;
 
     if (value is num) {
-      formattedValue = 'RM ${value.toStringAsFixed(2)}';
+      // Handle negative values - show as positive with minus sign
+      if (value < 0) {
+        formattedValue = '- RM ${(-value).toStringAsFixed(2)}';
+      } else {
+        formattedValue = 'RM ${value.toStringAsFixed(2)}';
+      }
     } else if (value is String) {
       formattedValue = value;
     } else {
@@ -1095,20 +1240,51 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       if (isCancelled) {
         orderStatus = 'Cancelled';
       } else if (isDraft) {
-        orderStatus = 'Draft';
+        orderStatus = 'Pay Later';
       } else {
         orderStatus = 'Paid';
       }
 
-      final statusMatch = _filterStatus == 'All' ||
-          orderStatus.toLowerCase() == _filterStatus.toLowerCase();
+      final statusMatch = widget.currentFilterStatus == 'All' ||
+          orderStatus.toLowerCase() == widget.currentFilterStatus.toLowerCase();
 
-      final typeMatch = _filterOrderType == 'All' ||
+      final typeMatch = widget.currentFilterOrderType == 'All' ||
           (order['orderType']?.toString().toLowerCase() ?? 'dine in') ==
-              _filterOrderType.toLowerCase();
+              widget.currentFilterOrderType.toLowerCase();
 
       return searchMatch && statusMatch && typeMatch;
     }).toList();
+  }
+
+  Future<void> _selectDateRange() async {
+    // Simply call the parent callback - MainLayout will handle the date selection
+    widget.onDateRangeSelected();
+  }
+
+  void _resetToToday() {
+    // Call parent to reset to today
+    widget.onDateChanged(DateTime.now());
+  }
+
+// Replace the _clearDateRange method with this:
+  void _clearDateRange() {
+    // Simply call the parent callback - MainLayout will handle clearing the date range
+    widget.onDateRangeCleared();
+  }
+
+// Also update the _selectDate method to ensure it works with the new structure:
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: widget.selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(Duration(days: 0)),
+    );
+
+    if (picked != null && picked != widget.selectedDate) {
+      // Call parent callback - this will switch to single date mode automatically
+      widget.onDateChanged(picked);
+    }
   }
 
   void _goToCheckout(Map<String, dynamic> order) {
@@ -1505,20 +1681,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         date.day == now.day;
   }
 
-  Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: widget.selectedDate, // Use widget.selectedDate
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(Duration(days: 365)),
-    );
-
-    if (picked != null && picked != widget.selectedDate) {
-      // Call parent callback instead of setting local state
-      widget.onDateChanged(picked);
-    }
-  }
-
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     final items = (order['items'] as List?) ?? [];
     return items.fold(0.0, (sum, item) {
@@ -1558,14 +1720,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   double _calculateOrderTotal(Map<String, dynamic> order) {
     // Use server values if available
     if (order['total'] != null) {
-      return (order['total'] as num).toDouble();
+      double total = (order['total'] as num).toDouble();
+      // Ensure total is not negative
+      return total < 0 ? 0.00 : total;
     }
 
     // Calculate from components
     final subtotal = _calculateOrderSubtotal(order);
     final tax = _calculateOrderTax(order);
     final rounding = _calculateRounding(subtotal + tax);
-    return subtotal + tax + rounding;
+    double total = subtotal + tax + rounding;
+
+    // Ensure total is not negative
+    return total < 0 ? 0.00 : total;
   }
 
   DateTime _parseDateTime(dynamic dateTime) {
@@ -1583,5 +1750,131 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   String _formatDate(DateTime date) {
     return DateFormat('HH:mm, dd MMM yyyy').format(date);
+  }
+
+  Future<void> _printLeftoverOrder(Map<String, dynamic> order) async {
+    final orderName = order['orderId']?.toString();
+    if (orderName == null) {
+      Fluttertoast.showToast(
+        msg: "Order ID not found",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    // Show loading indicator
+    bool isLoading = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          content: Center(
+            child: Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Checking for leftover orders...',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      // Call the kitchen order print function
+      await ReceiptPrinter.printKitchenOrderOnly(orderName);
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+        isLoading = false;
+      }
+
+      Fluttertoast.showToast(
+        msg: "Leftover kitchen order printed successfully",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      // Close loading dialog if still mounted
+      if (mounted && isLoading) {
+        Navigator.of(context).pop();
+        isLoading = false;
+      }
+
+      // Handle specific error cases
+      String errorMessage;
+      Color backgroundColor;
+      String errorString = e.toString();
+
+      // Check for "No additional items to print" error - SPECIFIC HANDLING
+      if (errorString.contains('No additional items to print') ||
+          errorString.contains('"success":false') &&
+              errorString.contains('No additional items')) {
+        errorMessage = "There is no leftover kitchen order to print";
+        backgroundColor = Colors.orange;
+      }
+      // Check for other "no leftover" related errors
+      else if (errorString.contains('No kitchen order') ||
+          errorString.contains('leftover') &&
+              errorString.contains('not found') ||
+          errorString.contains('400') &&
+              errorString.contains('No additional items')) {
+        errorMessage = "There is no leftover kitchen order to print";
+        backgroundColor = Colors.orange;
+      }
+      // Check for network errors
+      else if (errorString.toLowerCase().contains('network') ||
+          errorString.toLowerCase().contains('connection') ||
+          errorString.toLowerCase().contains('timeout') ||
+          errorString.toLowerCase().contains('socket')) {
+        errorMessage = "Network error: Please check your connection";
+        backgroundColor = Colors.red;
+      }
+      // Check for printer errors
+      else if (errorString.toLowerCase().contains('printer') ||
+          errorString.toLowerCase().contains('print')) {
+        errorMessage = "Printer error: Please check printer connection";
+        backgroundColor = Colors.red;
+      }
+      // Check for HTTP 400 errors specifically for no leftover orders
+      else if (errorString.contains('HTTP 400') &&
+          errorString.contains('No additional items')) {
+        errorMessage = "There is no leftover kitchen order to print";
+        backgroundColor = Colors.orange;
+      }
+      // Generic error
+      else {
+        errorMessage = "Failed to print leftover order";
+        backgroundColor = Colors.red;
+      }
+
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: errorMessage,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: backgroundColor,
+          textColor: Colors.white,
+        );
+      }
+    }
   }
 }

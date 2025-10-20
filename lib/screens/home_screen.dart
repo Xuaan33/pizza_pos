@@ -43,6 +43,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Map<String, int> _itemStockQuantities =
       {}; // key: item_code, value: available stock
   bool _isLoadingStock = false;
+  final ScrollController _scrollController = ScrollController();
+  bool _canScrollLeft = false;
+  bool _canScrollRight = false;
 
   @override
   void initState() {
@@ -51,6 +54,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _loadItemGroups();
     _loadAvailableItems();
     _initializeOrderItems();
+
+    // Listen to scroll events
+    _scrollController.addListener(_updateScrollButtons);
+
+    // Initialize scroll buttons after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateScrollButtons();
+    });
   }
 
   Future<void> _loadBaseUrl() async {
@@ -126,7 +137,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     for (var controller in _itemRemarkControllers) {
       controller.dispose();
     }
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _updateScrollButtons() {
+    if (!mounted) return;
+
+    final scrollPosition = _scrollController.position;
+    setState(() {
+      _canScrollLeft = scrollPosition.pixels > 0;
+      _canScrollRight = scrollPosition.pixels < scrollPosition.maxScrollExtent;
+    });
+  }
+
+  void _scrollLeft() {
+    final scrollPosition = _scrollController.position;
+    final newPosition = scrollPosition.pixels - 200; // Scroll 200 pixels left
+    _scrollController.animateTo(
+      newPosition.clamp(0, scrollPosition.maxScrollExtent),
+      duration: Duration(milliseconds: 100),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _scrollRight() {
+    final scrollPosition = _scrollController.position;
+    final newPosition = scrollPosition.pixels + 200; // Scroll 200 pixels right
+    _scrollController.animateTo(
+      newPosition.clamp(0, scrollPosition.maxScrollExtent),
+      duration: Duration(milliseconds: 100),
+      curve: Curves.easeInOut,
+    );
   }
 
   Future<void> _loadItemGroups() async {
@@ -174,6 +216,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ...groups,
               ];
               _isLoadingItemGroups = false;
+            });
+
+            // Update scroll buttons after data is loaded and UI is built
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _updateScrollButtons();
             });
           }
         },
@@ -658,60 +705,163 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 16.0),
                                     child: _isLoadingItemGroups
-                                        ? CircularProgressIndicator()
-                                        : ScrollConfiguration(
-                                            behavior: NoStretchScrollBehavior(),
-                                            child: SingleChildScrollView(
-                                              scrollDirection: Axis.horizontal,
-                                              child: Row(
-                                                children: List.generate(
-                                                    itemGroups.length, (index) {
-                                                  return Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                            right: 8.0),
-                                                    child: ElevatedButton(
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          _selectedItemGroupIndex =
-                                                              index;
-                                                          _selectedItemGroup =
-                                                              itemGroups[index]
-                                                                  ['value'];
-                                                          searchController
-                                                              .clear();
-                                                          searchQuery = '';
-                                                        });
-                                                      },
-                                                      style: ElevatedButton
-                                                          .styleFrom(
-                                                        backgroundColor:
-                                                            _selectedItemGroupIndex ==
-                                                                    index
-                                                                ? Colors.yellow
-                                                                : Colors.white,
-                                                        foregroundColor:
-                                                            Colors.black,
-                                                        shape:
-                                                            RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(20),
-                                                        ),
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          horizontal: 16,
-                                                          vertical: 12,
+                                        ? Center(
+                                            child: CircularProgressIndicator())
+                                        : Container(
+                                            height:
+                                                50, // Fixed height for the selector
+                                            child: Row(
+                                              children: [
+                                                // Left arrow button (show only when scrollable and not at start)
+                                                if (itemGroups.length > 6)
+                                                  IconButton(
+                                                    icon: Icon(
+                                                        Icons.arrow_back_ios,
+                                                        size: 18),
+                                                    onPressed: _canScrollLeft
+                                                        ? _scrollLeft
+                                                        : null,
+                                                    style: IconButton.styleFrom(
+                                                      backgroundColor:
+                                                          Colors.grey[100],
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                      ),
+                                                    ),
+                                                  ),
+
+                                                // Scrollable item groups
+                                                Expanded(
+                                                  child: NotificationListener<
+                                                      ScrollNotification>(
+                                                    onNotification:
+                                                        (scrollNotification) {
+                                                      if (scrollNotification
+                                                              is ScrollUpdateNotification ||
+                                                          scrollNotification
+                                                              is ScrollEndNotification) {
+                                                        _updateScrollButtons();
+                                                      }
+                                                      return false;
+                                                    },
+                                                    child: ScrollConfiguration(
+                                                      behavior:
+                                                          NoStretchScrollBehavior(),
+                                                      child:
+                                                          SingleChildScrollView(
+                                                        scrollDirection:
+                                                            Axis.horizontal,
+                                                        controller:
+                                                            _scrollController,
+                                                        child: Row(
+                                                          children:
+                                                              List.generate(
+                                                                  itemGroups
+                                                                      .length,
+                                                                  (index) {
+                                                            return Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      right:
+                                                                          8.0),
+                                                              child:
+                                                                  ElevatedButton(
+                                                                onPressed: () {
+                                                                  setState(() {
+                                                                    _selectedItemGroupIndex =
+                                                                        index;
+                                                                    _selectedItemGroup =
+                                                                        itemGroups[index]
+                                                                            [
+                                                                            'value'];
+                                                                    searchController
+                                                                        .clear();
+                                                                    searchQuery =
+                                                                        '';
+                                                                  });
+                                                                },
+                                                                style: ElevatedButton
+                                                                    .styleFrom(
+                                                                  backgroundColor: _selectedItemGroupIndex ==
+                                                                          index
+                                                                      ? Colors
+                                                                          .yellow
+                                                                      : Colors
+                                                                          .white,
+                                                                  foregroundColor:
+                                                                      Colors
+                                                                          .black,
+                                                                  shape:
+                                                                      RoundedRectangleBorder(
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                            20),
+                                                                  ),
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .symmetric(
+                                                                    horizontal:
+                                                                        16,
+                                                                    vertical:
+                                                                        12,
+                                                                  ),
+                                                                  elevation:
+                                                                      _selectedItemGroupIndex ==
+                                                                              index
+                                                                          ? 2
+                                                                          : 0,
+                                                                  shadowColor:
+                                                                      Colors
+                                                                          .black12,
+                                                                ),
+                                                                child: Text(
+                                                                  itemGroups[
+                                                                          index]
+                                                                      ['name'],
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontWeight: _selectedItemGroupIndex ==
+                                                                            index
+                                                                        ? FontWeight
+                                                                            .bold
+                                                                        : FontWeight
+                                                                            .normal,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            );
+                                                          }),
                                                         ),
                                                       ),
-                                                      child: Text(
-                                                          itemGroups[index]
-                                                              ['name']),
                                                     ),
-                                                  );
-                                                }),
-                                              ),
+                                                  ),
+                                                ),
+
+                                                // Right arrow button (show only when scrollable and not at end)
+                                                if (itemGroups.length > 6)
+                                                  IconButton(
+                                                    icon: Icon(
+                                                        Icons.arrow_forward_ios,
+                                                        size: 18),
+                                                    onPressed: _canScrollRight
+                                                        ? _scrollRight
+                                                        : null,
+                                                    style: IconButton.styleFrom(
+                                                      backgroundColor:
+                                                          Colors.grey[100],
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                           ),
                                   ),
@@ -743,26 +893,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     child: _isLoadingItems
                                         ? Center(
                                             child: CircularProgressIndicator())
-                                        : ScrollConfiguration(
-                                            behavior: NoStretchScrollBehavior(),
-                                            child: GridView.builder(
-                                              padding:
-                                                  const EdgeInsets.all(16.0),
-                                              gridDelegate:
-                                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: 5,
-                                                crossAxisSpacing: 16,
-                                                mainAxisSpacing: 16,
-                                                childAspectRatio: 0.8,
-                                              ),
-                                              itemCount: displayedItems.length,
-                                              itemBuilder: (context, index) {
-                                                return _buildMenuItem(
-                                                    displayedItems[index],
-                                                    index);
-                                              },
-                                            ),
-                                          ),
+                                        : _selectedItemGroup == 'All'
+                                            ? _buildGroupedMenuView()
+                                            : _buildStandardMenuView(),
                                   ),
                                 ],
                               ),
@@ -926,7 +1059,143 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return groupMatch && searchMatch;
     }).toList();
 
+    // Sort items by name alphabetically
+    filteredItems.sort((a, b) => (a['item_name'] ?? '')
+        .toLowerCase()
+        .compareTo((b['item_name'] ?? '').toLowerCase()));
+
     return filteredItems;
+  }
+
+// Add a new method to group items by item group
+  Map<String, List<Map<String, dynamic>>> _getGroupedItems() {
+    Map<String, List<Map<String, dynamic>>> groupedItems = {};
+
+    for (var item in availableItems) {
+      String groupName = item['item_group'] ?? 'Uncategorized';
+      if (!groupedItems.containsKey(groupName)) {
+        groupedItems[groupName] = [];
+      }
+      groupedItems[groupName]!.add(item);
+    }
+
+    // Sort items within each group alphabetically
+    groupedItems.forEach((groupName, items) {
+      items.sort((a, b) => (a['item_name'] ?? '')
+          .toLowerCase()
+          .compareTo((b['item_name'] ?? '').toLowerCase()));
+    });
+
+    // Sort groups alphabetically
+    final sortedGroups = groupedItems.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    Map<String, List<Map<String, dynamic>>> sortedGroupedItems = {};
+    for (var groupName in sortedGroups) {
+      sortedGroupedItems[groupName] = groupedItems[groupName]!;
+    }
+
+    return sortedGroupedItems;
+  }
+
+  Widget _buildStandardMenuView() {
+    List<Map<String, dynamic>> displayedItems = _getFilteredItems();
+
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16.0),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 5,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.8,
+        ),
+        itemCount: displayedItems.length,
+        itemBuilder: (context, index) {
+          return _buildMenuItem(displayedItems[index], index);
+        },
+      ),
+    );
+  }
+
+  Widget _buildGroupedMenuView() {
+    Map<String, List<Map<String, dynamic>>> groupedItems = _getGroupedItems();
+    List<String> groupNames = groupedItems.keys.toList();
+
+    // Apply search filter to grouped items
+    if (searchQuery.isNotEmpty) {
+      Map<String, List<Map<String, dynamic>>> filteredGroupedItems = {};
+
+      groupedItems.forEach((groupName, items) {
+        List<Map<String, dynamic>> filteredItems = items.where((item) {
+          return item['item_name']
+              .toLowerCase()
+              .contains(searchQuery.toLowerCase());
+        }).toList();
+
+        if (filteredItems.isNotEmpty) {
+          filteredGroupedItems[groupName] = filteredItems;
+        }
+      });
+
+      groupedItems = filteredGroupedItems;
+      groupNames = groupedItems.keys.toList();
+    }
+
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16.0),
+        itemCount: groupNames.length,
+        itemBuilder: (context, groupIndex) {
+          String groupName = groupNames[groupIndex];
+          List<Map<String, dynamic>> groupItems = groupedItems[groupName]!;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Group Header
+              Padding(
+                padding: EdgeInsets.only(
+                    bottom: 16.0, top: groupIndex > 0 ? 24.0 : 0.0),
+                child: Text(
+                  groupName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              // Items Grid for this group
+              GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                padding: const EdgeInsets.only(bottom: 16.0),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 5,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 0.8,
+                ),
+                itemCount: groupItems.length,
+                itemBuilder: (context, itemIndex) {
+                  return _buildMenuItem(groupItems[itemIndex], itemIndex);
+                },
+              ),
+              // Divider between groups (except after last group)
+              if (groupIndex < groupNames.length - 1)
+                Divider(
+                  color: Colors.grey.shade300,
+                  thickness: 1,
+                  height: 32,
+                ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _showItemOptionsDialog(Map<String, dynamic> item) async {
@@ -1113,7 +1382,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       final variantGroup = variant['variant_group'];
                       final isRequired = variant['required'] == 1;
                       final minSelection = variant['option_required_no'] ?? 1;
-                      print("minimum: $minSelection");
                       final selectedCount =
                           selectedOptions[variantGroup]?.length ?? 0;
 
@@ -1556,9 +1824,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (variantInfo.isNotEmpty) 'custom_variant_info': variantInfo,
             };
           }).toList();
-
-          print('Submitting order for table: $tableFullName'); // Debug log
-          print('Order channel: Dine In'); // Debug log
 
           // 3. Submit with proper table format and order channel
           final response = await PosService().submitOrder(

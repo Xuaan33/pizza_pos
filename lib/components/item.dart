@@ -102,8 +102,9 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         final List<dynamic> itemsData = responses[0]['message']['items'];
 
         // First create basic items
-        final basicItems =
-            itemsData.map((item) => Item.fromJson(item, baseUrl: baseImageUrl)).toList();
+        final basicItems = itemsData
+            .map((item) => Item.fromJson(item, baseUrl: baseImageUrl))
+            .toList();
 
         // Then fetch detailed information for each item
         final detailedItems = await _fetchDetailedItems(basicItems);
@@ -154,7 +155,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         final response = await PosService().getItem(basicItem.itemCode);
 
         if (response['success'] == true) {
-          final detailedItem = Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
+          final detailedItem =
+              Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
           _detailedItemsCache[basicItem.itemCode] = detailedItem;
           detailedItems.add(detailedItem);
         } else {
@@ -181,7 +183,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       final response = await PosService().getItem(item.itemCode);
 
       if (response['success'] == true) {
-        final updatedItem = Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
+        final updatedItem =
+            Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
         _detailedItemsCache[item.itemCode] = updatedItem;
 
         // Update the item in the list
@@ -2050,7 +2053,7 @@ class Item {
   final String? description;
   final List<String> variantGroups;
   final int disabled;
-  final int isPosItem; // Use custom_is_pos_item from detailed API
+  final int isPosItem;
 
   Item({
     required this.itemCode,
@@ -2114,7 +2117,7 @@ class Item {
       itemCode: json['item_code'] ?? '',
       itemName: json['item_name'] ?? '',
       itemGroup: json['item_group'] ?? '',
-      price: (json['price_list_rate'] as num?)?.toDouble() ?? 0.0,
+      price: (json['standard_rate'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image'] != null ? '$baseUrl${json['image']}' : null,
       description: json['description'] as String?,
       variantGroups: (json['custom_variant_group_table'] as List<dynamic>?)
