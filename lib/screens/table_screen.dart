@@ -210,7 +210,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
           context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              tableNumber: int.parse(table['title'].split(' ').last),
+              tableNumber: "int.parse(table['title'].split(' ').last)", // TO FIX
               existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
             ),
           ),
@@ -603,7 +603,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
           context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              tableNumber: tableNumber,
+              tableNumber: "tableNumber", //TO FIX;
               existingOrder: result['order'],
             ),
           ),

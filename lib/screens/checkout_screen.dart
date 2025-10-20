@@ -577,6 +577,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 //   icon: Icon(Icons.arrow_back),
                 //   onPressed: () => _confirmExit(),
                 // ),
+                IconButton(
+                  icon: Icon(Icons.home, size: 28),
+                  onPressed:
+                      _isProcessingPayment ? null : _showHomeConfirmationDialog,
+                ),
+                const SizedBox(width: 8),
                 Text(
                   widget.order['tableNumber'] == 0
                       ? 'Instant Order'
@@ -595,6 +601,51 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
           );
         });
+  }
+
+  Future<void> _showHomeConfirmationDialog() async {
+    final shouldNavigate = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Return to Menu?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            'Are you sure you want to return to the Main Menu?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text(
+                'Yes, Go to Menu',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldNavigate == true) {
+      // Navigate to home screen
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
   }
 
   Widget _buildStatPill(String title, String value) {
@@ -700,33 +751,35 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final isOfflinePayment = method['custom_fiuu_m1_value'] == '-1';
 
           return GestureDetector(
-            onTap: () async {
-              if (isCash) {
-                // Show cash dialog and only select if user confirms
-                final confirmed = await _showCashPaymentDialog();
-                if (confirmed) {
-                  setState(() {
-                    _selectedPaymentMethod = method['name'];
-                  });
-                } else {
-                  // If dialog is cancelled, deselect the payment method
-                  setState(() {
-                    _selectedPaymentMethod = '';
-                  });
-                }
-              } else if (isOfflinePayment) {
-                // For offline payment methods (m1_value = -1), select immediately
-                // No POS terminal communication needed
-                setState(() {
-                  _selectedPaymentMethod = method['name'];
-                });
-              } else {
-                // For other non-cash methods that require POS terminal, select immediately
-                setState(() {
-                  _selectedPaymentMethod = method['name'];
-                });
-              }
-            },
+            onTap: _isProcessingPayment
+                ? null
+                : () async {
+                    if (isCash) {
+                      // Show cash dialog and only select if user confirms
+                      final confirmed = await _showCashPaymentDialog();
+                      if (confirmed) {
+                        setState(() {
+                          _selectedPaymentMethod = method['name'];
+                        });
+                      } else {
+                        // If dialog is cancelled, deselect the payment method
+                        setState(() {
+                          _selectedPaymentMethod = '';
+                        });
+                      }
+                    } else if (isOfflinePayment) {
+                      // For offline payment methods (m1_value = -1), select immediately
+                      // No POS terminal communication needed
+                      setState(() {
+                        _selectedPaymentMethod = method['name'];
+                      });
+                    } else {
+                      // For other non-cash methods that require POS terminal, select immediately
+                      setState(() {
+                        _selectedPaymentMethod = method['name'];
+                      });
+                    }
+                  },
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
@@ -783,7 +836,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: _buildActionButton(
                       'Cancel Split',
                       Colors.grey,
-                      onPressed: _toggleSplitMode,
+                      onPressed: _isProcessingPayment ? null : _toggleSplitMode,
                     ),
                   )
                 else
@@ -796,7 +849,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: _buildActionButton(
                       'Confirm Split',
                       Colors.green,
-                      onPressed: _confirmSplit,
+                      onPressed: _isProcessingPayment ? null : _confirmSplit,
                     ),
                   )
                 else
@@ -815,7 +868,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   : canSplit
                       ? const Color(0xFF00203E)
                       : Colors.grey,
-              onPressed: _isEditing || !canSplit ? null : _toggleSplitMode,
+              onPressed: _isProcessingPayment
+                  ? null
+                  : _isEditing || !canSplit
+                      ? null
+                      : _toggleSplitMode,
             ),
           ),
         ],
@@ -897,7 +954,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           children: [
             if (widget.order['invoiceNumber'] != null)
               GestureDetector(
-                onTap: _isEditing ? null : _deleteOrder,
+                onTap:
+                    (_isEditing || _isProcessingPayment) ? null : _deleteOrder,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -938,7 +996,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: _discardChanges,
+                onTap: _isProcessingPayment ? null : _discardChanges,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -958,7 +1016,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ],
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => _isEditing ? null : _showVoucherDialog(),
+              onTap: () => (_isEditing || _isProcessingPayment)
+                  ? null
+                  : _showVoucherDialog(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -977,18 +1037,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: _isEditing ? _updateOrder : _toggleEditMode,
+              onTap: _isProcessingPayment
+                  ? null
+                  : (_isEditing ? _updateOrder : _toggleEditMode),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _isEditing ? Colors.green : Colors.yellow,
+                  color: _isProcessingPayment
+                      ? Colors.grey
+                      : _isEditing
+                          ? Colors.green
+                          : Colors.yellow,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   _isEditing ? 'Update Order' : 'Edit Order',
                   style: TextStyle(
-                    color: _isEditing ? Colors.white : Colors.black,
+                    color: _isProcessingPayment
+                        ? Colors.white
+                        : _isEditing
+                            ? Colors.white
+                            : Colors.black,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -996,7 +1066,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => _isEditing ? null : _navigateToHomeScreen(),
+              onTap: () => (_isEditing || _isProcessingPayment)
+                  ? null
+                  : _navigateToHomeScreen(),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1107,38 +1179,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               // Image cell
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Stack(
-                  children: [
-                    Image.network(
-                      _getProperImageUrl('${items[i]['image']}'),
-                      width: 50,
-                      height: 50,
-                      errorBuilder: (context, error, stackTrace) => Image.asset(
-                          'assets/pizza.png',
-                          width: 50,
-                          height: 50),
-                    ),
-                    if (_isEditing)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        child: GestureDetector(
-                          onTap: () => _deleteItem(i),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                child: Image.network(
+                  _getProperImageUrl('${items[i]['image']}'),
+                  width: 50,
+                  height: 50,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Image.asset('assets/pizza.png', width: 50, height: 50),
                 ),
               ),
 
@@ -1239,36 +1285,45 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               // Split checkbox cell (only visible in split mode)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: _isSplitting
-                    ? Checkbox(
-                        value: _itemsToSplit.any((splitItem) =>
-                            splitItem['item_code'] == items[i]['item_code'] &&
-                            _compareOptions(
-                                splitItem['options'], items[i]['options'])),
-                        onChanged: (value) async {
-                          if (value == true) {
-                            if ((items[i]['quantity'] as num).toInt() > 1) {
-                              await _showQuantitySelectorDialog(items[i]);
-                            } else {
-                              setState(() {
-                                _itemsToSplit.add({
-                                  ...items[i],
-                                  'split_quantity': 1,
-                                });
-                              });
-                            }
-                          } else {
-                            setState(() {
-                              _itemsToSplit.removeWhere((splitItem) =>
-                                  splitItem['item_code'] ==
-                                      items[i]['item_code'] &&
-                                  _compareOptions(splitItem['options'],
-                                      items[i]['options']));
-                            });
-                          }
-                        },
+                child: _isEditing
+                    ? IconButton(
+                        icon: const Icon(Icons.delete, size: 20),
+                        color: Colors.red,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _deleteItem(i),
                       )
-                    : const SizedBox.shrink(),
+                    : _isSplitting
+                        ? Checkbox(
+                            value: _itemsToSplit.any((splitItem) =>
+                                splitItem['item_code'] ==
+                                    items[i]['item_code'] &&
+                                _compareOptions(
+                                    splitItem['options'], items[i]['options'])),
+                            onChanged: (value) async {
+                              if (value == true) {
+                                if ((items[i]['quantity'] as num).toInt() > 1) {
+                                  await _showQuantitySelectorDialog(items[i]);
+                                } else {
+                                  setState(() {
+                                    _itemsToSplit.add({
+                                      ...items[i],
+                                      'split_quantity': 1,
+                                    });
+                                  });
+                                }
+                              } else {
+                                setState(() {
+                                  _itemsToSplit.removeWhere((splitItem) =>
+                                      splitItem['item_code'] ==
+                                          items[i]['item_code'] &&
+                                      _compareOptions(splitItem['options'],
+                                          items[i]['options']));
+                                });
+                              }
+                            },
+                          )
+                        : const SizedBox.shrink(),
               ),
 
               // Price cell
@@ -1365,7 +1420,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'coupon_code': currentCouponCode,
             'custom_user_voucher': currentVoucherName,
             'user_voucher_code': widget.order['user_voucher_code'],
-            'discount_amount': widget.order['discount_amount']
+            'discount_amount': widget.order['discount_amount'],
+            'remarks': widget.order['remarks']
           },
           isTier1: true,
         ),
@@ -1489,7 +1545,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               style: TextStyle(fontSize: 16),
               maxLines: 1,
-              enabled: !_isSavingRemarks,
+              enabled: !_isSavingRemarks && !_isProcessingPayment,
               onChanged: (value) {
                 setState(() {
                   _isRemarksEditing = value != _currentRemarks;
@@ -1522,7 +1578,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                   child: IconButton(
                     icon: Icon(Icons.check, size: 18, color: Colors.white),
-                    onPressed: _isRemarksEditing && !_isSavingRemarks
+                    onPressed: (_isRemarksEditing &&
+                            !_isSavingRemarks &&
+                            !_isProcessingPayment)
                         ? () {
                             _saveRemarks();
                             FocusScope.of(context).unfocus();
@@ -1664,7 +1722,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return SizedBox(
       height: 50,
       child: ElevatedButton(
-        onPressed: _isEditing
+        onPressed: (_isEditing || _isProcessingPayment)
             ? null
             : () async {
                 // if (_selectedPaymentMethod.isEmpty) {
@@ -1698,7 +1756,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return SizedBox(
       height: 50,
       child: ElevatedButton(
-        onPressed: _isEditing
+        onPressed: (_isEditing || _isProcessingPayment)
             ? null
             : () async {
                 if (_selectedPaymentMethod.isEmpty) {
@@ -1714,7 +1772,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 _completePayment();
               },
         style: ElevatedButton.styleFrom(
-          backgroundColor: _isEditing ? Colors.grey : const Color(0xFFE732A0),
+          backgroundColor: (_isEditing || _isProcessingPayment)
+              ? Colors.grey
+              : const Color(0xFFE732A0),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(4),
@@ -2661,7 +2721,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         widget.order['coupon_code'] != null ||
         widget.order['custom_user_voucher'] != null;
 
-    if (hasDiscount) {
+    if (_discountAmount > 0) {
       final shouldRemove = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -3508,7 +3568,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _voucherCode = '';
         widget.order['coupon_code'] = null;
         widget.order['custom_user_voucher'] = null;
-        widget.order['user_voucher_code'] = null; // Clear user_voucher_code
+        widget.order['user_voucher_code'] = null;
+        widget.order['discount_amount'] = null;
 
         // Remove discounts from all items
         for (var item in orderItems) {
@@ -3565,6 +3626,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: null, // Set to null to remove
         custom_user_voucher: null, // Set to null to remove
         discountAmount: 0, // Set to 0 to remove
+        remarks: widget.order['remarks'] ?? "N/A",
       );
 
       if (response['success'] == true) {
@@ -4102,6 +4164,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         couponCode: widget.order['coupon_code'],
         custom_user_voucher: widget.order['user_voucher_code'],
         discountAmount: widget.order['discount_amount'],
+        remarks: widget.order['remarks'] ?? "N/A",
       );
 
       if (response['success'] == true) {
@@ -4283,6 +4346,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       'custom_variant_info': item['custom_variant_info'],
                   })
               .toList(),
+          remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
           orderChannel: "Dine In");
 
@@ -4571,6 +4635,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'custom_variant_info': item['custom_variant_info'],
             };
           }).toList(),
+          remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
           orderChannel: 'Dine In');
 

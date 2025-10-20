@@ -936,6 +936,7 @@ class OrderMapper {
             (order['total_taxes_and_charges'] as num).toDouble(),
         'discount_amount': (order['discount_amount'] as num).toDouble(),
         'net_total': (order['net_total'] as num).toDouble(),
+        'custom_table': (order['custom_table']).toString(),
         'base_rounding_adjustment':
             (order['base_rounding_adjustment'] as num).toDouble(),
         'remarks': order['remarks'] as String? ?? 'N/A',
