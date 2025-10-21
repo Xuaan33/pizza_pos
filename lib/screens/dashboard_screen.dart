@@ -85,9 +85,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             pageLength: 1000,
           );
 
-          print('Raw API response keys: ${response.keys}');
-          print('Full response structure: ${response.toString()}');
-
           // Check if message exists and what it contains
           if (response['message'] == null) {
             print('ERROR: message field is null');
@@ -122,27 +119,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final status = order['status'] as String? ?? 'Unknown';
             final docstatus = order['docstatus'] as int? ?? 1;
 
-            print(
-                'Order ${i + 1}/${orders.length}: $orderName, Status: $status, DocStatus: $docstatus');
-            print('  - net_total: $netTotal');
-            print('  - total: $total');
-            print('  - grand_total: $grandTotal');
+            // print(
+            //     'Order ${i + 1}/${orders.length}: $orderName, Status: $status, DocStatus: $docstatus');
+            // print('  - net_total: $netTotal');
+            // print('  - total: $total');
+            // print('  - grand_total: $grandTotal');
 
             // Only include orders with docstatus = 0 (Draft)
             if (docstatus == 0) {
               totalPayLater += netTotal;
               validOrderCount++;
-              print(
-                  '  ✓ Added to total: $netTotal (Running total: $totalPayLater)');
+              // print(
+              //     '  ✓ Added to total: $netTotal (Running total: $totalPayLater)');
             } else {
-              print('  ✗ Skipped (docstatus != 0)');
+              // print('  ✗ Skipped (docstatus != 0)');
             }
           }
 
-          print('===========================================');
-          print('Valid draft orders counted: $validOrderCount');
-          print('Calculated Total Pay Later Amount: $totalPayLater');
-          print('===========================================');
+          // print('===========================================');
+          // print('Valid draft orders counted: $validOrderCount');
+          // print('Calculated Total Pay Later Amount: $totalPayLater');
+          // print('===========================================');
 
           return totalPayLater;
         } catch (e, stackTrace) {

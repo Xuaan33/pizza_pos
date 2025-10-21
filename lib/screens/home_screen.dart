@@ -1813,12 +1813,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         try {
           // 1. Get the full table name from floors and tables API
           final floorsResponse = await PosService().getFloorsAndTables(branch);
-          String tableFullName = 'Table ${widget.tableNumber}'; // fallback
+          String tableFullName = '${widget.tableNumber}'; // fallback
 
           if (floorsResponse['success'] == true) {
             for (var floor in floorsResponse['message']) {
               for (var table in floor['tables']) {
-                if (table['title'] == 'Table ${widget.tableNumber}') {
+                if (table['title'] == '${widget.tableNumber}') {
                   tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
                   break;
                 }
@@ -1995,13 +1995,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final tables = floor['tables'];
 
           if (tables is Map<String, dynamic>) {
-            if (floor['floor'] == 'DEFAULT' && tables['is_default'] == 1) {
+            if (tables['is_default'] == 1) {
               tableFullName = tables['name'];
               break;
             }
           } else if (tables is List) {
             for (var table in tables) {
-              if (table['title'] == 'Table ${widget.tableNumber}') {
+              if (table['title'] == '${widget.tableNumber}') {
                 tableFullName = table['name'];
                 break;
               }
@@ -2009,7 +2009,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         }
 
-        tableFullName ??= 'Table ${widget.tableNumber}';
+        tableFullName ??= '${widget.tableNumber}';
 
         // Prepare items with proper structure
         final items = currentOrderItems.map((item) {

@@ -184,7 +184,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
-            final effectivePageLimit = _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+            final effectivePageLimit =
+                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
 
             final future = PosService().getOrders(
               posProfile: posProfile,
@@ -1169,32 +1170,47 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final response = await PosService().getFloorsAndTables(branch);
       if (response['success'] == true) {
         final floorsData = response['message'];
+        print("TEST HIT: $floorsData");
 
         if (floorsData is List) {
+          // First, try to find a table with is_default = 1
           for (var floor in floorsData) {
-            final floorName = floor['floor'];
             final tables = floor['tables'];
 
-            // Case 1: Single-table in a Map (e.g., "DEFAULT" floor)
+            // Case 1: Single-table in a Map
             if (tables is Map<String, dynamic>) {
-              if (floorName == 'DEFAULT' && tables['is_default'] == 1) {
+              if (tables['is_default'] == 1) {
                 return tables;
               }
             }
-
             // Case 2: Multi-table List
             else if (tables is List) {
               for (var table in tables) {
+                // Check if table has is_default property and it's set to 1
                 if (table['is_default'] == 1) {
                   return table;
                 }
               }
             }
           }
+
+          // If no default table found, take the first available table
+          for (var floor in floorsData) {
+            final tables = floor['tables'];
+
+            // Case 1: Single-table in a Map
+            if (tables is Map<String, dynamic>) {
+              return tables; // Return the single table
+            }
+            // Case 2: Multi-table List
+            else if (tables is List && tables.isNotEmpty) {
+              return tables[0]; // Return first table from the list
+            }
+          }
         }
       }
 
-      return null; // No default table found
+      return null; // No tables found at all
     } catch (e, stackTrace) {
       print('Error getting default table: $e\n$stackTrace');
       return null;
