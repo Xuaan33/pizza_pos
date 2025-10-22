@@ -135,9 +135,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void dispose() {
     // Dispose all remark controllers
-    for (var controller in _itemRemarkControllers) {
-      controller.dispose();
-    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -501,7 +498,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Get the correct items list based on selection
     List<Map<String, dynamic>> displayedItems = _getFilteredItems();
     final authState = ref.watch(authProvider);
-
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
@@ -709,156 +705,223 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         ? Center(
                                             child: CircularProgressIndicator())
                                         : Container(
-                                            height:
-                                                50, // Fixed height for the selector
-                                            child: Row(
+                                            height: itemGroups.length <= 6
+                                                ? 50
+                                                : 90,
+                                            child: Stack(
                                               children: [
-                                                // Left arrow button (show only when scrollable and not at start)
-                                                if (itemGroups.length > 6)
-                                                  IconButton(
-                                                    icon: Icon(
-                                                        Icons.arrow_back_ios,
-                                                        size: 18),
-                                                    onPressed: _canScrollLeft
-                                                        ? _scrollLeft
-                                                        : null,
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor:
-                                                          Colors.grey[100],
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
-                                                      ),
-                                                    ),
-                                                  ),
-
-                                                // Scrollable item groups
-                                                Expanded(
-                                                  child: NotificationListener<
-                                                      ScrollNotification>(
-                                                    onNotification:
-                                                        (scrollNotification) {
-                                                      if (scrollNotification
-                                                              is ScrollUpdateNotification ||
-                                                          scrollNotification
-                                                              is ScrollEndNotification) {
-                                                        _updateScrollButtons();
-                                                      }
-                                                      return false;
-                                                    },
-                                                    child: ScrollConfiguration(
-                                                      behavior:
-                                                          NoStretchScrollBehavior(),
-                                                      child:
-                                                          SingleChildScrollView(
-                                                        scrollDirection:
-                                                            Axis.horizontal,
-                                                        controller:
-                                                            _scrollController,
-                                                        child: Row(
-                                                          children:
-                                                              List.generate(
+                                                Column(
+                                                  children: [
+                                                    Expanded(
+                                                      child: NotificationListener<
+                                                          ScrollNotification>(
+                                                        onNotification:
+                                                            (scrollNotification) {
+                                                          if (scrollNotification
+                                                                  is ScrollUpdateNotification ||
+                                                              scrollNotification
+                                                                  is ScrollEndNotification) {
+                                                            _updateScrollButtons();
+                                                          }
+                                                          return false;
+                                                        },
+                                                        child:
+                                                            ScrollConfiguration(
+                                                          behavior:
+                                                              NoStretchScrollBehavior(),
+                                                          child:
+                                                              SingleChildScrollView(
+                                                            scrollDirection:
+                                                                Axis.horizontal,
+                                                            controller:
+                                                                _scrollController,
+                                                            child: Container(
+                                                              width:
+                                                                  _calculateItemGroupsWidth(),
+                                                              child: Wrap(
+                                                                direction: Axis
+                                                                    .horizontal,
+                                                                spacing: 8.0,
+                                                                runSpacing: 8.0,
+                                                                children: List
+                                                                    .generate(
                                                                   itemGroups
                                                                       .length,
                                                                   (index) {
-                                                            return Padding(
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .only(
-                                                                      right:
-                                                                          8.0),
-                                                              child:
-                                                                  ElevatedButton(
-                                                                onPressed: () {
-                                                                  setState(() {
-                                                                    _selectedItemGroupIndex =
-                                                                        index;
-                                                                    _selectedItemGroup =
-                                                                        itemGroups[index]
-                                                                            [
-                                                                            'value'];
-                                                                    searchController
-                                                                        .clear();
-                                                                    searchQuery =
-                                                                        '';
-                                                                  });
-                                                                },
-                                                                style: ElevatedButton
-                                                                    .styleFrom(
-                                                                  backgroundColor: _selectedItemGroupIndex ==
-                                                                          index
-                                                                      ? Colors
-                                                                          .yellow
-                                                                      : Colors
-                                                                          .white,
-                                                                  foregroundColor:
-                                                                      Colors
-                                                                          .black,
-                                                                  shape:
-                                                                      RoundedRectangleBorder(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            20),
-                                                                  ),
-                                                                  padding:
-                                                                      const EdgeInsets
-                                                                          .symmetric(
-                                                                    horizontal:
-                                                                        16,
-                                                                    vertical:
-                                                                        12,
-                                                                  ),
-                                                                  elevation:
-                                                                      _selectedItemGroupIndex ==
-                                                                              index
-                                                                          ? 2
-                                                                          : 0,
-                                                                  shadowColor:
-                                                                      Colors
-                                                                          .black12,
-                                                                ),
-                                                                child: Text(
-                                                                  itemGroups[
-                                                                          index]
-                                                                      ['name'],
-                                                                  style:
-                                                                      TextStyle(
-                                                                    fontWeight: _selectedItemGroupIndex ==
-                                                                            index
-                                                                        ? FontWeight
-                                                                            .bold
-                                                                        : FontWeight
-                                                                            .normal,
-                                                                  ),
+                                                                    return SizedBox(
+                                                                      width:
+                                                                          120,
+                                                                      height:
+                                                                          40,
+                                                                      child:
+                                                                          ElevatedButton(
+                                                                        onPressed:
+                                                                            () {
+                                                                          setState(
+                                                                              () {
+                                                                            _selectedItemGroupIndex =
+                                                                                index;
+                                                                            _selectedItemGroup =
+                                                                                itemGroups[index]['value'];
+                                                                            searchController.clear();
+                                                                            searchQuery =
+                                                                                '';
+                                                                          });
+                                                                        },
+                                                                        style: ElevatedButton
+                                                                            .styleFrom(
+                                                                          backgroundColor: _selectedItemGroupIndex == index
+                                                                              ? Colors.yellow
+                                                                              : const Color(0xFFF2F3F4),
+                                                                          foregroundColor:
+                                                                              Colors.black,
+                                                                          shape:
+                                                                              RoundedRectangleBorder(
+                                                                            borderRadius:
+                                                                                BorderRadius.circular(20),
+                                                                          ),
+                                                                          padding:
+                                                                              const EdgeInsets.symmetric(
+                                                                            horizontal:
+                                                                                8,
+                                                                            vertical:
+                                                                                4,
+                                                                          ),
+                                                                          elevation: _selectedItemGroupIndex == index
+                                                                              ? 2
+                                                                              : 0,
+                                                                          shadowColor:
+                                                                              Colors.black12,
+                                                                        ),
+                                                                        child:
+                                                                            Text(
+                                                                          itemGroups[index]
+                                                                              [
+                                                                              'name'],
+                                                                          style:
+                                                                              TextStyle(
+                                                                            fontWeight: _selectedItemGroupIndex == index
+                                                                                ? FontWeight.bold
+                                                                                : FontWeight.normal,
+                                                                            fontSize:
+                                                                                14,
+                                                                          ),
+                                                                          textAlign:
+                                                                              TextAlign.center,
+                                                                          maxLines:
+                                                                              1,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  },
                                                                 ),
                                                               ),
-                                                            );
-                                                          }),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+
+                                                // Left scroll arrow - only show if more than 12 items
+                                                if (itemGroups.length > 12 &&
+                                                    _canScrollLeft)
+                                                  Positioned(
+                                                    left: 0,
+                                                    top: 0,
+                                                    bottom: 0,
+                                                    child: Container(
+                                                      width: 40,
+                                                      decoration: BoxDecoration(
+                                                        gradient:
+                                                            LinearGradient(
+                                                          begin: Alignment
+                                                              .centerLeft,
+                                                          end: Alignment
+                                                              .centerRight,
+                                                          colors: [
+                                                            Colors.white,
+                                                            Colors.white
+                                                                .withOpacity(
+                                                                    0.0),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      child: Center(
+                                                        child: Material(
+                                                          color: Colors.white,
+                                                          elevation: 2,
+                                                          shape: CircleBorder(),
+                                                          child: InkWell(
+                                                            onTap: _scrollLeft,
+                                                            customBorder:
+                                                                CircleBorder(),
+                                                            child: Container(
+                                                              width: 32,
+                                                              height: 32,
+                                                              child: Icon(
+                                                                Icons
+                                                                    .chevron_left,
+                                                                color: Colors
+                                                                    .black87,
+                                                                size: 24,
+                                                              ),
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
 
-                                                // Right arrow button (show only when scrollable and not at end)
-                                                if (itemGroups.length > 6)
-                                                  IconButton(
-                                                    icon: Icon(
-                                                        Icons.arrow_forward_ios,
-                                                        size: 18),
-                                                    onPressed: _canScrollRight
-                                                        ? _scrollRight
-                                                        : null,
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor:
-                                                          Colors.grey[100],
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
+                                                // Right scroll arrow - only show if more than 12 items
+                                                if (itemGroups.length > 12 &&
+                                                    _canScrollRight)
+                                                  Positioned(
+                                                    right: 0,
+                                                    top: 0,
+                                                    bottom: 0,
+                                                    child: Container(
+                                                      width: 40,
+                                                      decoration: BoxDecoration(
+                                                        gradient:
+                                                            LinearGradient(
+                                                          begin: Alignment
+                                                              .centerRight,
+                                                          end: Alignment
+                                                              .centerLeft,
+                                                          colors: [
+                                                            Colors.white,
+                                                            Colors.white
+                                                                .withOpacity(
+                                                                    0.0),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      child: Center(
+                                                        child: Material(
+                                                          color: Colors.white,
+                                                          elevation: 2,
+                                                          shape: CircleBorder(),
+                                                          child: InkWell(
+                                                            onTap: _scrollRight,
+                                                            customBorder:
+                                                                CircleBorder(),
+                                                            child: Container(
+                                                              width: 32,
+                                                              height: 32,
+                                                              child: Icon(
+                                                                Icons
+                                                                    .chevron_right,
+                                                                color: Colors
+                                                                    .black87,
+                                                                size: 24,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
@@ -867,9 +930,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           ),
                                   ),
 
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        left: 24.0,
+                                        right: 24.0,
+                                        top: 10.0,
+                                        bottom: 10.0),
+                                    child: Divider(
+                                      color: Colors.black54,
+                                      thickness: 1,
+                                      height: 1,
+                                    ),
+                                  ),
+
                                   // Search Bar
                                   Padding(
-                                    padding: const EdgeInsets.all(16.0),
+                                    padding: const EdgeInsets.only(
+                                        left: 16.0,
+                                        right: 16.0,
+                                        top: 10.0,
+                                        bottom: 5.0),
                                     child: TextField(
                                       controller: searchController,
                                       onChanged: (value) {
@@ -1061,6 +1141,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 );
               });
         });
+  }
+
+  double _calculateItemGroupsWidth() {
+    int itemsPerRow = 6; // 6 items per row
+    int rowCount = (itemGroups.length / itemsPerRow).ceil();
+    double buttonWidth = 110; // Width of each button
+    double spacing = 0; // spacing between buttons
+
+    // Calculate total width needed
+    double totalWidth =
+        (buttonWidth * itemsPerRow) + (spacing * (itemsPerRow - 1));
+
+    // Ensure minimum width to prevent layout issues
+    return totalWidth < MediaQuery.of(context).size.width - 32
+        ? MediaQuery.of(context).size.width - 32
+        : totalWidth;
   }
 
   List<Map<String, dynamic>> _getFilteredItems() {
@@ -2275,14 +2371,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final currentQuantity = item['quantity'];
     final showStockLimit = currentQuantity >= availableStock;
 
-    // Ensure we have a controller for this item
-    if (index >= _itemRemarkControllers.length) {
-      _itemRemarkControllers
-          .add(TextEditingController(text: item['custom_item_remarks'] ?? ''));
-    } else {
-      _itemRemarkControllers[index].text = item['custom_item_remarks'] ?? '';
-    }
-
     List<Widget> variantWidgets = [];
     if (item['custom_variant_info'] != null &&
         item['custom_variant_info'] is List) {
@@ -2304,32 +2392,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
 
+    // Check if this item has remarks
+    bool hasRemarks = item['custom_item_remarks'] != null &&
+        item['custom_item_remarks'].toString().isNotEmpty;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
       child: Column(
         children: [
           Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 child: item['image'] != null
                     ? Image.network(
                         '$baseImageUrl${item['image']}',
-                        width: 60,
-                        height: 60,
+                        width: 50,
+                        height: 50,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
                             Image.asset(
                           'assets/pizza.png',
-                          width: 60,
-                          height: 60,
+                          width: 50,
+                          height: 50,
                           fit: BoxFit.cover,
                         ),
                       )
                     : Image.asset(
                         'assets/pizza.png',
-                        width: 60,
-                        height: 60,
+                        width: 50,
+                        height: 50,
                         fit: BoxFit.cover,
                       ),
               ),
@@ -2350,9 +2442,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: variantWidgets,
                       ),
-                    SizedBox(
-                      height: 4,
-                    ),
+                    // Show remarks if they exist
+                    if (hasRemarks)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          'Remarks: ${item['custom_item_remarks']}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: 2),
                     Text(
                       'RM ${itemSubtotal.toStringAsFixed(2)}',
                       style: TextStyle(
@@ -2418,6 +2521,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // Quantity control and delete on the right
                     Row(
                       children: [
+                        // Add Remarks Button
+                        IconButton(
+                          icon: Icon(
+                            Icons.note_add_outlined,
+                            size: 20,
+                            color: hasRemarks ? Color(0xFFE732A0) : Colors.grey,
+                          ),
+                          onPressed: () => _showRemarksDialog(index),
+                          tooltip: 'Add remarks',
+                        ),
                         Container(
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.grey.shade300),
@@ -2464,60 +2577,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
           ),
+          Divider(color: Colors.grey.shade200),
+        ],
+      ),
+    );
+  }
 
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0, left: 0, bottom: 8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.grey.shade50,
+// Add this new method to show remarks dialog
+  void _showRemarksDialog(int index) {
+    TextEditingController remarksController = TextEditingController(
+        text: currentOrderItems[index]['custom_item_remarks'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        title: Text(
+          'Add Remarks',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              currentOrderItems[index]['name'],
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600],
               ),
-              child: TextField(
-                controller: _itemRemarkControllers[index],
-                decoration: InputDecoration(
-                  hintText: 'Add remarks...',
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Color(0xFFE732A0)),
-                  ),
-                  suffixIcon: Container(
-                    margin: EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFE732A0),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: IconButton(
-                      icon: Icon(Icons.check, size: 16, color: Colors.white),
-                      onPressed: () {
-                        _saveRemarks(index);
-                        FocusScope.of(context).unfocus();
-                      },
-                      constraints: BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: remarksController,
+              decoration: InputDecoration(
+                hintText: 'Enter remarks (e.g., Less spicy, No onion...)',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                style: TextStyle(fontSize: 13),
-                onSubmitted: (_) => _saveRemarks(index),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Color(0xFFE732A0)),
+                ),
+              ),
+              maxLines: 3,
+              textInputAction: TextInputAction.done,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'CANCEL',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
               ),
             ),
           ),
-          Divider(color: Colors.grey.shade200),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                currentOrderItems[index]['custom_item_remarks'] =
+                    remarksController.text.trim();
+              });
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFE732A0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: Text(
+              'SAVE',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );
