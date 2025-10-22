@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/closing_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/item.dart';
@@ -46,6 +48,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool isRequired = false;
   int optionRequiredNo = 1;
   List<Map<String, dynamic>> confirmedOptions = [];
+
+  // For debug reporting
+  final List<Map<String, dynamic>> _connectionLogs = [];
+  bool _isGeneratingReport = false;
 
   // Employee Management
   List<Map<String, dynamic>> _employees = [];
@@ -295,7 +301,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _ipController.text = prefs.getString('pos_ip') ?? '192.168';
-      _portController.text = '8800';
+    _portController.text = prefs.getInt('pos_port')?.toString() ?? '8800';
     });
   }
 
@@ -305,9 +311,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final posIp = _ipController.text.trim();
     final posPort = _portController.text.trim();
 
+    // Validation
     if (posIp.isEmpty || posPort.isEmpty) {
       Fluttertoast.showToast(
-        msg: "Please enter IP Address",
+        msg: "Please enter both IP Address and Port",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      setState(() => _isSaving = false);
+      return;
+    }
+
+    // Validate port number
+    final portNumber = int.tryParse(posPort);
+    if (portNumber == null || portNumber < 1 || portNumber > 65535) {
+      Fluttertoast.showToast(
+        msg: "Please enter a valid port number (1-65535)",
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
@@ -320,11 +341,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pos_ip', posIp);
-      await prefs.setInt('pos_port', int.tryParse(posPort) ?? 8800);
+      await prefs.setInt('pos_port', portNumber);
 
       Fluttertoast.showToast(
-        msg: "Configuration saved successfully",
-        toastLength: Toast.LENGTH_SHORT,
+        msg: "Configuration saved successfully\nIP: $posIp\nPort: $posPort",
+        toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.green,
         textColor: Colors.white,
@@ -598,6 +619,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildConnectionForm(),
         const SizedBox(height: 20),
         _buildTestButton(),
+        const SizedBox(height: 20),
+
+        // Add debug report button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isGeneratingReport ? null : _generateDebugReport,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: _isGeneratingReport
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Generate Debug Report',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+          ),
+        ),
+
+        // Show recent connection attempts
+        if (_connectionLogs.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const Text(
+            'Recent Connection Attempts:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          ..._connectionLogs.reversed
+              .take(3)
+              .map((log) => Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(
+                        log['success'] == true
+                            ? Icons.check_circle
+                            : Icons.error,
+                        color:
+                            log['success'] == true ? Colors.green : Colors.red,
+                      ),
+                      title: Text(
+                        log['message'] ?? 'Unknown',
+                        style: TextStyle(
+                          color: log['success'] == true
+                              ? Colors.green
+                              : Colors.red,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${log['timestamp']?.split('.').first ?? ''}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ))
+              .toList(),
+        ],
       ],
     );
   }
@@ -1942,6 +2027,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           keyboardType: TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: 16),
+        TextField(
+          controller: _portController,
+          decoration: const InputDecoration(
+            labelText: 'Port Number',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.numbers),
+          ),
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(5),
+          ],
+        ),
+        const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -2223,6 +2322,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _testPosConnection() async {
+    final connectionAttempt = {
+      'timestamp': DateTime.now().toString(),
+      'success': false,
+      'message': '',
+      'error': null,
+      'response': null,
+    };
+
     setState(() {
       _isTesting = true;
       _isPosConnected = false;
@@ -2231,46 +2338,113 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final posIp = _ipController.text.trim();
     final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
 
-    // 1. Verify basic network reachability
-    if (!await _isHostReachable(posIp)) {
-      _handleConnectionError("Host $posIp is unreachable");
-      setState(() => _isTesting = false);
-      return;
-    }
-
-    // 2. Attempt connection with proper message
-    const pingHexMessage =
-        "02 00 18 36 30 30 30 30 30 30 30 30 30 31 30 46 46 30 30 30 1C 03 30";
-
     try {
+      // 1. Verify basic network reachability
+      connectionAttempt['message'] = 'Testing host reachability';
+      final isReachable = await _isHostReachable(posIp);
+
+      if (!isReachable) {
+        connectionAttempt['error'] = "Host $posIp is unreachable";
+        connectionAttempt['message'] = 'Host unreachable';
+        _connectionLogs.add(connectionAttempt);
+        _handleConnectionError("Host $posIp is unreachable");
+        setState(() => _isTesting = false);
+        return;
+      }
+
+      connectionAttempt['message'] =
+          'Host reachable, attempting socket connection';
+
+      const pingHexMessage =
+          "02 00 18 36 30 30 30 30 30 30 30 30 30 31 30 46 46 30 30 30 1C 03 30";
+
       // Extended timeout for initial connection
       final socket = await Socket.connect(posIp, posPort,
           timeout: const Duration(seconds: 5));
 
       // Configure socket for response handling
       socket.setOption(SocketOption.tcpNoDelay, true);
+
+      // Create completer to handle async response
+      final completer = Completer<void>();
+      Timer? timeoutTimer;
+
       socket.listen(
-        (data) => _handleResponse(data),
-        onError: (e) => _handleConnectionError(e.toString()),
-        onDone: () => socket.destroy(),
+        (data) {
+          timeoutTimer?.cancel();
+          try {
+            final hexResponse =
+                data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+            connectionAttempt['response'] = hexResponse;
+
+            // Handle ACK (06) response
+            if (data.length == 1 && data[0] == 0x06) {
+              connectionAttempt['success'] = true;
+              connectionAttempt['message'] =
+                  'POS Terminal connected! (ACK received)';
+              _handleSuccessfulConnection(
+                  "POS Terminal connected! (ACK received)");
+            } else if (data.isNotEmpty) {
+              connectionAttempt['success'] = true;
+              connectionAttempt['message'] =
+                  'POS Terminal connected successfully!';
+              _handleSuccessfulConnection(
+                  "POS Terminal connected successfully!");
+            }
+          } catch (e) {
+            connectionAttempt['error'] = "Response parsing error: $e";
+            _handleConnectionError("Protocol error: ${e.toString()}");
+          }
+          completer.complete();
+          socket.destroy();
+        },
+        onError: (e) {
+          timeoutTimer?.cancel();
+          connectionAttempt['error'] = e.toString();
+          _handleConnectionError(e.toString());
+          completer.complete();
+          socket.destroy();
+        },
+        onDone: () {
+          timeoutTimer?.cancel();
+          if (!completer.isCompleted) {
+            connectionAttempt['error'] = "Connection closed prematurely";
+            _handleConnectionError("Connection closed prematurely");
+            completer.complete();
+          }
+          socket.destroy();
+        },
       );
 
       // Send ping message
       socket.add(_hexStringToBytes(pingHexMessage));
 
       // Set timeout for complete transaction
-      Timer(const Duration(seconds: 10), () {
-        if (!_isPosConnected) {
-          socket.destroy();
+      timeoutTimer = Timer(const Duration(seconds: 10), () {
+        if (!completer.isCompleted) {
+          connectionAttempt['error'] = "Response timeout";
           _handleConnectionError("Response timeout");
+          completer.complete();
+          socket.destroy();
         }
       });
-      socket.destroy();
+
+      await completer.future;
     } on SocketException catch (e) {
+      connectionAttempt['error'] = "Network error: ${e.message}";
       _handleConnectionError("Network error: ${e.message}");
     } on Exception catch (e) {
+      connectionAttempt['error'] = e.toString();
       _handleConnectionError(e.toString());
     } finally {
+      // Add to logs
+      _connectionLogs.add(connectionAttempt);
+
+      // Keep only last 10 attempts
+      if (_connectionLogs.length > 10) {
+        _connectionLogs.removeAt(0);
+      }
+
       if (!_isPosConnected) {
         setState(() => _isTesting = false);
       }
@@ -2388,5 +2562,342 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       backgroundColor: Colors.green,
       textColor: Colors.white,
     );
+  }
+
+  Future<void> _generateDebugReport() async {
+    setState(() => _isGeneratingReport = true);
+
+    try {
+      final String timestamp =
+          DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final String fileName = 'POS_Debug_Report_$timestamp.txt';
+
+      final String report = await _buildDebugReport();
+
+      // Save to Documents folder
+      await _saveToDocumentsFolder(fileName, report);
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save report: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isGeneratingReport = false);
+    }
+  }
+
+  Future<void> _saveToDocumentsFolder(String fileName, String content) async {
+    try {
+      // For Android, we need to use the external storage public directory
+      final Directory? externalDir = await getExternalStorageDirectory();
+
+      if (externalDir == null) {
+        throw Exception('Could not access device storage');
+      }
+
+      // Navigate to the actual public Documents folder
+      // This path should be: /storage/emulated/0/Documents/
+      final String publicDocumentsPath = externalDir.path.replaceAll(
+          '/Android/data/com.nicholas.shiok_pos_android_app/files', '');
+
+      final Directory publicDocumentsDir =
+          Directory('$publicDocumentsPath/Documents');
+      if (!await publicDocumentsDir.exists()) {
+        await publicDocumentsDir.create(recursive: true);
+      }
+
+      // Create our POS Reports folder
+      final Directory posReportsDir =
+          Directory('${publicDocumentsDir.path}/POS Debug Reports');
+      if (!await posReportsDir.exists()) {
+        await posReportsDir.create(recursive: true);
+      }
+
+      // Save the file
+      final File file = File('${posReportsDir.path}/$fileName');
+      await file.writeAsString(content);
+
+      // Show success with clear instructions
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 10),
+                Text('Report Saved to Documents'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                      'The debug report has been saved to your public Documents folder.'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Location:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Internal Storage → Documents → POS Debug Reports',
+                          style: TextStyle(
+                            color: Colors.green[800],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'File: $fileName',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'How to access:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildStep('1. Open your "Files" app'),
+                  _buildStep('2. Go to "Internal storage"'),
+                  _buildStep('3. Open "Documents" folder'),
+                  _buildStep('4. Open "POS Debug Reports" folder'),
+                  _buildStep('5. Find your file'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+
+      debugPrint('=== DEBUG REPORT SAVED TO PUBLIC DOCUMENTS ===');
+      debugPrint('Public Path: ${file.path}');
+      debugPrint('============================================');
+    } catch (e) {
+      debugPrint('Error saving to public Documents: $e');
+      // Fallback to showing in dialog
+      await _showReportInDialog(content);
+    }
+  }
+
+  Widget _buildStep(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showReportInDialog(String content) async {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Debug Report'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SelectableText(
+                content,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: content));
+              Fluttertoast.showToast(msg: 'Full report copied to clipboard');
+            },
+            child: const Text('Copy All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String> _buildDebugReport() async {
+    // Made async
+    final buffer = StringBuffer();
+
+    buffer.writeln('=== POS TERMINAL CONNECTION DEBUG REPORT ===');
+    buffer.writeln('Generated: ${DateTime.now()}');
+    buffer.writeln('App Version: 1.1.13');
+    buffer.writeln('Platform: ${Platform.operatingSystem}');
+    buffer.writeln('');
+
+    // Configuration Details
+    buffer.writeln('--- CONFIGURATION ---');
+    buffer.writeln('IP Address: ${_ipController.text}');
+    buffer.writeln('Port: ${_portController.text}');
+    buffer.writeln(
+        'Connection Status: ${_isPosConnected ? "Connected" : "Disconnected"}');
+    buffer.writeln('');
+
+    // Network Information
+    buffer.writeln('--- NETWORK INFO ---');
+    buffer.writeln(
+        'Host Reachable: ${await _isHostReachable(_ipController.text.trim())}');
+    buffer.writeln('');
+
+    // Connection Logs
+    buffer.writeln('--- CONNECTION ATTEMPTS (${_connectionLogs.length}) ---');
+    if (_connectionLogs.isEmpty) {
+      buffer.writeln('No connection attempts recorded');
+    } else {
+      for (int i = 0; i < _connectionLogs.length; i++) {
+        final log = _connectionLogs[i];
+        buffer.writeln('Attempt ${i + 1}: ${log['timestamp']}');
+        buffer.writeln('  Status: ${log['success'] ? 'SUCCESS' : 'FAILED'}');
+        buffer.writeln('  Message: ${log['message']}');
+        if (log['error'] != null) {
+          buffer.writeln('  Error: ${log['error']}');
+        }
+        if (log['response'] != null) {
+          buffer.writeln('  Response: ${log['response']}');
+        }
+        buffer.writeln('');
+      }
+    }
+
+    // Environment Details
+    buffer.writeln('--- ENVIRONMENT ---');
+    buffer.writeln('Flutter Version: ${Platform.version}');
+    buffer.writeln('');
+
+    // Troubleshooting Steps
+    buffer.writeln('--- TROUBLESHOOTING STEPS ---');
+    buffer.writeln('1. Verify POS terminal is powered on');
+    buffer.writeln('2. Ensure device and POS terminal are on same network');
+    buffer.writeln('3. Check firewall settings');
+    buffer.writeln('4. Verify IP address and port configuration');
+    buffer.writeln('5. Test with ping command from device');
+
+    return buffer.toString();
+  }
+
+  Future<void> _saveMobileReport(String fileName, String content) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsString(content);
+
+      // Show the exact path in a dialog so you can copy it
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Debug Report Saved'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Report saved to:'),
+                  const SizedBox(height: 10),
+                  SelectableText(
+                    file.path,
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text('To view the file:'),
+                  const SizedBox(height: 5),
+                  const Text('1. Open Android Studio'),
+                  const Text(
+                      '2. Go to View → Tool Windows → Device File Explorer'),
+                  const Text('3. Navigate to the path above'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // Copy path to clipboard
+                  Clipboard.setData(ClipboardData(text: file.path));
+                  Fluttertoast.showToast(msg: 'Path copied to clipboard');
+                  Navigator.pop(context);
+                },
+                child: const Text('Copy Path'),
+              ),
+            ],
+          ),
+        );
+      }
+
+      debugPrint('=== DEBUG REPORT PATH ===');
+      debugPrint(file.path);
+      debugPrint('=========================');
+    } catch (e) {
+      // Fallback - show content in alert dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Debug Report'),
+            content: SingleChildScrollView(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SelectableText(
+                  content,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: content));
+                  Fluttertoast.showToast(msg: 'Report copied to clipboard');
+                },
+                child: const Text('Copy to Clipboard'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 }
