@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
@@ -493,26 +494,51 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             ),
           ),
           SizedBox(height: 5),
-          // Order list
-          Expanded(
-            child: widget.isLoading
-                ? Center(child: CircularProgressIndicator())
-                : orders.isEmpty
-                    ? Center(child: Text('No orders found'))
-                    : ScrollConfiguration(
-                        behavior: NoStretchScrollBehavior(),
-                        child: ListView.builder(
-                          itemCount: orders.length,
-                          itemBuilder: (context, index) {
+          // Order list with infinite scrolling
+        Expanded(
+          child: widget.isLoading
+              ? Center(child: CircularProgressIndicator())
+              : orders.isEmpty
+                  ? Center(child: Text('No orders found'))
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: (scrollNotification) {
+                        // This will be handled by the scroll controller in main_layout
+                        return false;
+                      },
+                      child: ListView.builder(
+                        controller: MainLayout.of(context)?.ordersScrollController,
+                        itemCount: orders.length + 1, // +1 for loading indicator
+                        itemBuilder: (context, index) {
+                          if (index < orders.length) {
                             return _buildOrderListItem(orders[index]);
-                          },
-                        ),
+                          } else {
+                            // Show loading indicator at the bottom
+                            return _buildLoadingIndicator();
+                          }
+                        },
                       ),
-          ),
-        ],
-      ),
-    );
+                    ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildLoadingIndicator() {
+  final mainLayout = MainLayout.of(context);
+  if (mainLayout == null || 
+      !mainLayout.hasMoreOrders || 
+      mainLayout.isLoadingMore == false) {
+    return SizedBox.shrink();
   }
+  
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 16),
+    child: Center(
+      child: CircularProgressIndicator(),
+    ),
+  );
+}
 
   Widget _buildOrderListItem(Map<String, dynamic> order) {
     final isSelected = _selectedOrder != null &&
