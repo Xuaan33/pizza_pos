@@ -688,129 +688,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         ? Center(
                                             child: CircularProgressIndicator())
                                         : Container(
-                                            height: itemGroups.length <= 6
-                                                ? 50
-                                                : 90,
+                                            height: _calculateContainerHeight(),
                                             child: Stack(
                                               children: [
-                                                Column(
-                                                  children: [
-                                                    Expanded(
-                                                      child: NotificationListener<
-                                                          ScrollNotification>(
-                                                        onNotification:
-                                                            (scrollNotification) {
-                                                          if (scrollNotification
-                                                                  is ScrollUpdateNotification ||
-                                                              scrollNotification
-                                                                  is ScrollEndNotification) {
-                                                            _updateScrollButtons();
-                                                          }
-                                                          return false;
-                                                        },
-                                                        child:
-                                                            ScrollConfiguration(
-                                                          behavior:
-                                                              NoStretchScrollBehavior(),
-                                                          child:
-                                                              SingleChildScrollView(
-                                                            scrollDirection:
-                                                                Axis.horizontal,
-                                                            controller:
-                                                                _scrollController,
-                                                            child: Container(
-                                                              width:
-                                                                  _calculateItemGroupsWidth(),
-                                                              child: Wrap(
-                                                                direction: Axis
-                                                                    .horizontal,
-                                                                spacing: 8.0,
-                                                                runSpacing: 8.0,
-                                                                children: List
-                                                                    .generate(
-                                                                  itemGroups
-                                                                      .length,
-                                                                  (index) {
-                                                                    return SizedBox(
-                                                                      width:
-                                                                          120,
-                                                                      height:
-                                                                          40,
-                                                                      child:
-                                                                          ElevatedButton(
-                                                                        onPressed:
-                                                                            () {
-                                                                          setState(
-                                                                              () {
-                                                                            _selectedItemGroupIndex =
-                                                                                index;
-                                                                            _selectedItemGroup =
-                                                                                itemGroups[index]['value'];
-                                                                            searchController.clear();
-                                                                            searchQuery =
-                                                                                '';
-                                                                          });
-                                                                        },
-                                                                        style: ElevatedButton
-                                                                            .styleFrom(
-                                                                          backgroundColor: _selectedItemGroupIndex == index
-                                                                              ? Colors.yellow
-                                                                              : const Color(0xFFF2F3F4),
-                                                                          foregroundColor:
-                                                                              Colors.black,
-                                                                          shape:
-                                                                              RoundedRectangleBorder(
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(20),
-                                                                          ),
-                                                                          padding:
-                                                                              const EdgeInsets.symmetric(
-                                                                            horizontal:
-                                                                                8,
-                                                                            vertical:
-                                                                                4,
-                                                                          ),
-                                                                          elevation: _selectedItemGroupIndex == index
-                                                                              ? 2
-                                                                              : 0,
-                                                                          shadowColor:
-                                                                              Colors.black12,
-                                                                        ),
-                                                                        child:
-                                                                            Text(
-                                                                          itemGroups[index]
-                                                                              [
-                                                                              'name'],
-                                                                          style:
-                                                                              TextStyle(
-                                                                            fontWeight: _selectedItemGroupIndex == index
-                                                                                ? FontWeight.bold
-                                                                                : FontWeight.normal,
-                                                                            fontSize:
-                                                                                14,
-                                                                          ),
-                                                                          textAlign:
-                                                                              TextAlign.center,
-                                                                          maxLines:
-                                                                              1,
-                                                                          overflow:
-                                                                              TextOverflow.ellipsis,
-                                                                        ),
-                                                                      ),
-                                                                    );
-                                                                  },
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
+                                                // Main content with both rows in one scrollable area
+                                                NotificationListener<
+                                                    ScrollNotification>(
+                                                  onNotification:
+                                                      (scrollNotification) {
+                                                    if (scrollNotification
+                                                            is ScrollUpdateNotification ||
+                                                        scrollNotification
+                                                            is ScrollEndNotification) {
+                                                      _updateScrollButtons();
+                                                    }
+                                                    return false;
+                                                  },
+                                                  child: ScrollConfiguration(
+                                                    behavior:
+                                                        NoStretchScrollBehavior(),
+                                                    child:
+                                                        SingleChildScrollView(
+                                                      scrollDirection:
+                                                          Axis.horizontal,
+                                                      controller:
+                                                          _scrollController,
+                                                      child: Column(
+                                                        children: [
+                                                          // First row
+                                                          if (itemGroups
+                                                                  .length >
+                                                              0)
+                                                            _buildFirstRow(),
+                                                          // Second row (only if needed)
+                                                          if (itemGroups
+                                                                  .length >
+                                                              _getFirstRowCount())
+                                                            SizedBox(height: 8),
+                                                          if (itemGroups
+                                                                  .length >
+                                                              _getFirstRowCount())
+                                                            _buildSecondRow(),
+                                                        ],
                                                       ),
                                                     ),
-                                                  ],
+                                                  ),
                                                 ),
 
-                                                // Left scroll arrow - only show if more than 12 items
-                                                if (itemGroups.length > 12 &&
+                                                // Left scroll arrow
+                                                if (itemGroups.length >
+                                                        _getFirstRowCount() &&
                                                     _canScrollLeft)
                                                   Positioned(
                                                     left: 0,
@@ -859,8 +786,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                     ),
                                                   ),
 
-                                                // Right scroll arrow - only show if more than 12 items
-                                                if (itemGroups.length > 12 &&
+                                                // Right scroll arrow
+                                                if (itemGroups.length >
+                                                        _getFirstRowCount() &&
                                                     _canScrollRight)
                                                   Positioned(
                                                     right: 0,
@@ -911,19 +839,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                               ],
                                             ),
                                           ),
-                                  ),
-
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                        left: 24.0,
-                                        right: 24.0,
-                                        top: 10.0,
-                                        bottom: 10.0),
-                                    child: Divider(
-                                      color: Colors.black54,
-                                      thickness: 1,
-                                      height: 1,
-                                    ),
                                   ),
 
                                   // Search Bar
@@ -1126,20 +1041,146 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         });
   }
 
-  double _calculateItemGroupsWidth() {
-    int itemsPerRow = 6; // 6 items per row
-    int rowCount = (itemGroups.length / itemsPerRow).ceil();
-    double buttonWidth = 110; // Width of each button
-    double spacing = 0; // spacing between buttons
+  int _getFirstRowCount() {
+    int total = itemGroups.length;
+    if (total <= 7) return total;
+    return (total / 2).ceil(); // For 16 groups = 8
+  }
 
-    // Calculate total width needed
-    double totalWidth =
-        (buttonWidth * itemsPerRow) + (spacing * (itemsPerRow - 1));
+  int _getSecondRowCount() {
+    int total = itemGroups.length;
+    if (total <= 7) return 0;
+    return total - _getFirstRowCount(); // For 16 groups = 8
+  }
 
-    // Ensure minimum width to prevent layout issues
-    return totalWidth < MediaQuery.of(context).size.width - 32
-        ? MediaQuery.of(context).size.width - 32
-        : totalWidth;
+  double _calculateContainerHeight() {
+    int totalGroups = itemGroups.length;
+    if (totalGroups <= 7) {
+      return 50; // Single row
+    } else {
+      return 90; // Two rows (40 + 40 + 8 spacing)
+    }
+  }
+
+  Widget _buildFirstRow() {
+    int firstRowCount = _getFirstRowCount();
+    double rowWidth = (120 * firstRowCount) + (8 * (firstRowCount - 1));
+
+    return SizedBox(
+      height: 40,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (scrollNotification) {
+          if (scrollNotification is ScrollUpdateNotification ||
+              scrollNotification is ScrollEndNotification) {
+            _updateScrollButtons();
+          }
+          return false;
+        },
+        child: ScrollConfiguration(
+          behavior: NoStretchScrollBehavior(),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            controller: _scrollController,
+            child: Container(
+              width: rowWidth,
+              child: Row(
+                children: [
+                  for (int i = 0; i < firstRowCount; i++)
+                    Container(
+                      margin:
+                          EdgeInsets.only(right: i < firstRowCount - 1 ? 8 : 0),
+                      child: _buildItemGroupButton(i),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecondRow() {
+    int firstRowCount = _getFirstRowCount();
+    int secondRowCount = _getSecondRowCount();
+    double rowWidth = (120 * secondRowCount) + (8 * (secondRowCount - 1));
+
+    return SizedBox(
+      height: 40,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (scrollNotification) {
+          if (scrollNotification is ScrollUpdateNotification ||
+              scrollNotification is ScrollEndNotification) {
+            _updateScrollButtons();
+          }
+          return false;
+        },
+        child: ScrollConfiguration(
+          behavior: NoStretchScrollBehavior(),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            controller: _scrollController,
+            child: Container(
+              width: rowWidth,
+              child: Row(
+                children: [
+                  for (int i = firstRowCount; i < itemGroups.length; i++)
+                    Container(
+                      margin: EdgeInsets.only(
+                          right: i < itemGroups.length - 1 ? 8 : 0),
+                      child: _buildItemGroupButton(i),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItemGroupButton(int index) {
+    return SizedBox(
+      width: 120,
+      height: 40,
+      child: ElevatedButton(
+        onPressed: () {
+          setState(() {
+            _selectedItemGroupIndex = index;
+            _selectedItemGroup = itemGroups[index]['value'];
+            searchController.clear();
+            searchQuery = '';
+          });
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _selectedItemGroupIndex == index
+              ? Colors.yellow
+              : const Color(0xFFF2F3F4),
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 4,
+          ),
+          elevation: _selectedItemGroupIndex == index ? 2 : 0,
+          shadowColor: Colors.black12,
+        ),
+        child: Text(
+          itemGroups[index]['name'],
+          style: TextStyle(
+            fontWeight: _selectedItemGroupIndex == index
+                ? FontWeight.bold
+                : FontWeight.normal,
+            fontSize: 14,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> _getFilteredItems() {
