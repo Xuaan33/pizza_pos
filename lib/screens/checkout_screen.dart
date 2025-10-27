@@ -1335,7 +1335,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original price if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${(items[i]['price']).toStringAsFixed(2)}',
+                        'RM${((items[i]['price']) + items[i]['discount_amount']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
