@@ -95,8 +95,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               printKitchenOrder,
               openingDate,
               itemsGroups,
-              baseUrl,
-              merchantId) {
+              ) {
             return tier.toLowerCase() == 'tier1' ? 1 : 2;
           },
         ) ??
@@ -128,8 +127,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
         ) async {
           try {
             String? fromDateStr;
