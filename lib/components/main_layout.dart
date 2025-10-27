@@ -37,6 +37,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   DateTime? _fromDate;
   DateTime? _toDate;
   bool _useDateRange = false;
+  int _currentPage = 0;
+  bool _hasMoreOrders = true;
+  bool _isLoadingMore = false;
+  final ScrollController _ordersScrollController = ScrollController();
+  ScrollController get ordersScrollController => _ordersScrollController;
+  bool get hasMoreOrders => _hasMoreOrders;
+  bool get isLoadingMore => _isLoadingMore;
 
   final List<int> _limitOptions = [30, 50, 100];
 
@@ -46,6 +53,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   @override
   void initState() {
     super.initState();
+    _ordersScrollController.addListener(_onOrdersScroll);
     // Check auth state when widget initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authProvider.notifier).loadSession();
@@ -55,7 +63,288 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   @override
   void dispose() {
     _refreshFuture = null; // break reference
+    _ordersScrollController.dispose();
     super.dispose();
+  }
+
+  void _onOrdersScroll() {
+    if (_ordersScrollController.position.pixels >=
+            _ordersScrollController.position.maxScrollExtent - 100 &&
+        !_isLoadingMore &&
+        _hasMoreOrders &&
+        _selectedTabIndex == (_getOrdersTabIndex())) {
+      _loadMoreOrders();
+    }
+  }
+
+  int _getOrdersTabIndex() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId) {
+            return tier.toLowerCase() == 'tier1' ? 1 : 2;
+          },
+        ) ??
+        2;
+  }
+
+  Future<void> _loadMoreOrders() async {
+    if (!mounted || _isLoadingMore || !_hasMoreOrders) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final authState = ref.read(authProvider);
+
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+        ) async {
+          try {
+            String? fromDateStr;
+            String? toDateStr;
+
+            if (_filterStatus == 'Pay Later') {
+              fromDateStr = null;
+              toDateStr = null;
+            } else {
+              if (_useDateRange && _fromDate != null && _toDate != null) {
+                fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
+                toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
+              } else {
+                fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+                toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+              }
+            }
+
+            String? apiStatus;
+            if (_filterStatus == 'Pay Later') {
+              apiStatus = 'Draft';
+            } else if (_filterStatus == 'Paid') {
+              apiStatus = null;
+            } else if (_filterStatus == 'Cancelled') {
+              apiStatus = 'Cancelled';
+            }
+
+            final effectivePageLimit =
+                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+            final nextStart = (_currentPage + 1) * effectivePageLimit;
+
+            final response = await PosService().getOrders(
+              posProfile: posProfile,
+              fromDate: fromDateStr,
+              toDate: toDateStr,
+              status: apiStatus,
+              pageLength: effectivePageLimit,
+              start: nextStart,
+            );
+
+            if (!mounted) return;
+
+            if (response['message']?['success'] == true) {
+              final List<dynamic> invoices =
+                  (response['message']?['message'] as List?) ?? [];
+
+              if (invoices.isEmpty) {
+                setState(() {
+                  _hasMoreOrders = false;
+                });
+              } else {
+                List<Map<String, dynamic>> newOrders = invoices
+                    .map((invoice) {
+                      try {
+                        final items =
+                            (invoice['items'] as List? ?? []).map((item) {
+                          return {
+                            'name':
+                                item['item_name']?.toString() ?? 'Unknown Item',
+                            'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+                            'quantity':
+                                (item['qty'] as num?)?.toDouble() ?? 1.0,
+                            'item_code': item['item_code']?.toString() ?? '',
+                            'options': item['options'] ?? {},
+                            'option_text': item['option_text'] ?? '',
+                            'custom_serve_later': item['custom_serve_later'],
+                            'custom_item_remarks':
+                                item['custom_item_remarks']?.toString() ?? '',
+                            'custom_variant_info':
+                                item['custom_variant_info']?.toString() ?? '',
+                            'discount_amount':
+                                (item['discount_amount'] as num?)?.toDouble() ??
+                                    0.0,
+                            'image': (item['image'])
+                          };
+                        }).toList();
+
+                        Map<String, dynamic>? taxBreakdown;
+                        final taxes = invoice['taxes'] as List?;
+                        if (taxes != null && taxes.isNotEmpty) {
+                          taxBreakdown = {
+                            'rate':
+                                (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
+                            'amount':
+                                (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
+                            'description':
+                                taxes[0]['account_head']?.toString() ?? 'Tax',
+                          };
+                        }
+
+                        DateTime? parseDate(String? dateString) {
+                          try {
+                            return dateString != null
+                                ? DateTime.parse(dateString)
+                                : null;
+                          } catch (_) {
+                            return null;
+                          }
+                        }
+
+                        final payments = invoice['payments'] as List? ?? [];
+                        String? m1Value;
+                        if (payments.isNotEmpty) {
+                          m1Value =
+                              payments[0]['custom_fiuu_m1_value']?.toString();
+                        }
+
+                        return {
+                          'orderId': invoice['name']?.toString() ?? 'Unknown',
+                          'invoiceNumber':
+                              invoice['name']?.toString() ?? 'Unknown',
+                          'status': invoice['status']?.toString() ?? 'Draft',
+                          'orderType':
+                              invoice['custom_order_channel']?.toString() ?? '',
+                          'tableNumber': (invoice['custom_table'] ?? ''),
+                          'items': items,
+                          'subtotal':
+                              (invoice['rounded_total'] as num?)?.toDouble() ??
+                                  0.0,
+                          'tax': taxBreakdown?['amount'] ?? 0.0,
+                          'total':
+                              (invoice['rounded_total'] as num?)?.toDouble() ??
+                                  0.0,
+                          'entryTime':
+                              parseDate(invoice['modified']?.toString()) ??
+                                  DateTime.now(),
+                          'paidTime': invoice['status']?.toString() == 'Paid'
+                              ? parseDate(invoice['modified']?.toString())
+                              : null,
+                          'isPaid': invoice['status']?.toString() == 'Paid' ||
+                              invoice['status']?.toString() == 'Consolidated',
+                          'paymentMethod': payments.isNotEmpty == true
+                              ? payments[0]['mode_of_payment']?.toString() ??
+                                  'Cash'
+                              : 'Cash',
+                          'm1value': m1Value,
+                          'customerName':
+                              invoice['customer_name']?.toString() ?? 'Guest',
+                          'remarks': invoice['remarks']?.toString() ?? '',
+                          'custom_item_remarks':
+                              invoice['custom_item_remarks']?.toString() ??
+                                  'N/A',
+                          'taxBreakdown': taxBreakdown,
+                          'paidAmount':
+                              (invoice['paid_amount'] as num?)?.toDouble() ??
+                                  0.0,
+                          'changeAmount':
+                              (invoice['change_amount'] as num?)?.toDouble() ??
+                                  0.0,
+                          'base_rounding_adjustment':
+                              (invoice['base_rounding_adjustment'] as num?)
+                                      ?.toDouble() ??
+                                  0.0,
+                          "pos_invoice_number":
+                              invoice['custom_fiuu_invoice_number']
+                                      ?.toString() ??
+                                  '000000',
+                          'total_taxes_and_charges':
+                              (invoice['total_taxes_and_charges'] as num?)
+                                      ?.toDouble() ??
+                                  0.0,
+                          'discount_amount':
+                              (invoice['discount_amount'] as num?)?.toDouble(),
+                          'user_voucher_code': (invoice['user_voucher_code']),
+                        };
+                      } catch (e) {
+                        print(
+                            'Error processing invoice ${invoice['name']}: $e');
+                        return null;
+                      }
+                    })
+                    .where((order) => order != null)
+                    .cast<Map<String, dynamic>>()
+                    .toList();
+
+                // Sort new orders
+                newOrders.sort((a, b) {
+                  final isPayLaterA =
+                      a['status']?.toString().toLowerCase() == 'draft';
+                  final isPayLaterB =
+                      b['status']?.toString().toLowerCase() == 'draft';
+
+                  if (isPayLaterA && isPayLaterB) {
+                    final timeA = a['entryTime'] as DateTime;
+                    final timeB = b['entryTime'] as DateTime;
+                    return timeB.compareTo(timeA);
+                  } else if (isPayLaterA) {
+                    return -1;
+                  } else if (isPayLaterB) {
+                    return 1;
+                  } else {
+                    final idA = a['orderId']?.toString() ?? '';
+                    final idB = b['orderId']?.toString() ?? '';
+                    return idB.compareTo(idA);
+                  }
+                });
+
+                setState(() {
+                  activeOrders.addAll(newOrders);
+                  _currentPage++;
+                });
+              }
+            }
+          } on SessionTimeoutException {
+            await ref.read(authProvider.notifier).logout();
+          }
+        },
+      );
+    } catch (e) {
+      print('Error loading more orders: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
   }
 
   @override
@@ -131,7 +420,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
     if (!mounted) return;
 
-    setState(() => _isOrdersLoading = true);
+    setState(() {
+      _isOrdersLoading = true;
+      _currentPage = 0;
+      _hasMoreOrders = true;
+      _isLoadingMore = false;
+    });
 
     try {
       final authState = ref.read(authProvider);
@@ -197,6 +491,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             if (response['message']?['success'] == true) {
               final List<dynamic> invoices =
                   (response['message']?['message'] as List?) ?? [];
+
+              // Check if we have more orders
+              if (invoices.length < effectivePageLimit) {
+                _hasMoreOrders = false;
+              }
 
               List<Map<String, dynamic>> processedOrders = invoices
                   .map((invoice) {
@@ -345,6 +644,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
               setState(() {
                 activeOrders = processedOrders;
+                _currentPage = 0;
               });
 
               print('Successfully mapped ${activeOrders.length} orders');
@@ -618,27 +918,41 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               onDateChanged: (newDate) {
                 setState(() {
                   _selectedDate = newDate;
-                  _useDateRange = false; // Switch to single date mode
+                  _useDateRange = false;
+                  _currentPage = 0;
+                  _hasMoreOrders = true;
                 });
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
               onLimitChanged: (newLimit) {
-                setState(() => _pageLimit = newLimit);
+                setState(() {
+                  _pageLimit = newLimit;
+                  _currentPage = 0; // Reset pagination when limit changes
+                  _hasMoreOrders = true;
+                });
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
               // Pass filter callbacks to OrdersScreen
               onFilterStatusChanged: (newStatus) {
-                setState(() => _filterStatus = newStatus);
+                setState(() {
+                  _filterStatus = newStatus;
+                  _currentPage = 0; // Reset pagination when filter changes
+                  _hasMoreOrders = true;
+                });
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
               },
               onFilterOrderTypeChanged: (newOrderType) {
-                setState(() => _filterOrderType = newOrderType);
+                setState(() {
+                  _filterOrderType = newOrderType;
+                  _currentPage = 0; // Reset pagination when filter changes
+                  _hasMoreOrders = true;
+                });
                 Future.delayed(Duration(milliseconds: 100), () {
                   _refreshOrders();
                 });
@@ -646,7 +960,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               // Pass current filter values
               currentFilterStatus: _filterStatus,
               currentFilterOrderType: _filterOrderType,
-              // Pass date range methods
               onDateRangeSelected: _selectDateRange,
               onDateRangeCleared: _clearDateRange,
               useDateRange: _useDateRange,
