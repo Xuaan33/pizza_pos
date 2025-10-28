@@ -1080,7 +1080,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           behavior: NoStretchScrollBehavior(),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            controller: _scrollController,
             child: Container(
               width: rowWidth,
               child: Row(
@@ -1119,7 +1118,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           behavior: NoStretchScrollBehavior(),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            controller: _scrollController,
             child: Container(
               width: rowWidth,
               child: Row(
