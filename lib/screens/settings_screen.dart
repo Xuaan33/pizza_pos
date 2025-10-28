@@ -48,6 +48,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool isRequired = false;
   int optionRequiredNo = 1;
   List<Map<String, dynamic>> confirmedOptions = [];
+  bool _isLoadingClosing = false;
 
   // For debug reporting
   final List<Map<String, dynamic>> _connectionLogs = [];
@@ -301,7 +302,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _ipController.text = prefs.getString('pos_ip') ?? '192.168';
-    _portController.text = prefs.getInt('pos_port')?.toString() ?? '8800';
+      _portController.text = prefs.getInt('pos_port')?.toString() ?? '8800';
     });
   }
 
@@ -1919,7 +1920,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildClosingEntryButton(bool hasOpening) {
-    final isDisabled = !hasOpening;
+    final isDisabled = !hasOpening || _isLoadingClosing;
 
     return SizedBox(
       width: double.infinity,
@@ -1934,8 +1935,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             borderRadius: BorderRadius.circular(8),
           ),
         ),
-        child: Text(
-          isDisabled ? 'No Opening Entry' : 'Create Closing Entry',
+        child: _isLoadingClosing
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Text(
+          isDisabled && !_isLoadingClosing
+              ? 'No Opening Entry'
+              : 'Create Closing Entry',
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -1946,6 +1958,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _showClosingEntryDialog() async {
+    setState(() => _isLoadingClosing = true);
     try {
       final authState = ref.read(authProvider);
 
@@ -1989,6 +2002,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           backgroundColor: Colors.red,
           textColor: Colors.white,
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingClosing = false);
       }
     }
   }
