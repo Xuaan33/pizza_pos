@@ -92,6 +92,7 @@ flutter:
     - assets/drinks.jpg
     - assets/gif-do-payment.gif
     - assets/img-sidebar-table.png
+    - assets/img-sidebar-kitchen.png
     - assets/logo_shiokpos_launcher.png
 
   fonts:
