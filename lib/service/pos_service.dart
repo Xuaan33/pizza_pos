@@ -866,6 +866,79 @@ class PosService {
       },
     );
   }
+
+  // Add these methods to the existing PosService class in pos_service.dart
+
+  Future<Map<String, dynamic>> getKitchenStations({
+    required String posProfile,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_kitchen_stations?pos_profile=$posProfile',
+    );
+  }
+
+  Future<Map<String, dynamic>> getKitchenOrders({
+    required String posProfile,
+    required String kitchenStation,
+    required String fromDate,
+    required String toDate,
+  }) async {
+    final params = {
+      'pos_profile': posProfile,
+      'kitchen_station': kitchenStation,
+      'from_date': fromDate,
+      'to_date': toDate,
+    };
+
+    final queryString = Uri(queryParameters: params).query;
+    return makeRequest(
+      endpoint: 'shiok_pos.api.get_kitchen_orders?$queryString',
+    );
+  }
+
+  Future<Map<String, dynamic>> fulfillKitchenItem({
+    required String posInvoiceItem,
+    required int fulfilled,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.fulfill_kitchen_item',
+      method: 'POST',
+      body: {
+        'pos_invoice_item': posInvoiceItem,
+        'fulfilled': fulfilled,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> fulfillKitchenOrder({
+    required String posInvoice,
+    required String kitchenStation,
+    required int fulfilled,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.fulfill_kitchen_order',
+      method: 'POST',
+      body: {
+        'pos_invoice': posInvoice,
+        'kitchen_station': kitchenStation,
+        'fulfilled': fulfilled,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> printSelectedKitchenOrder({
+    required String posInvoice,
+    required List<String> items,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.print_selected_kitchen_order',
+      method: 'POST',
+      body: {
+        'pos_invoice': posInvoice,
+        'items': items,
+      },
+    );
+  }
 }
 
 class OrderMapper {
