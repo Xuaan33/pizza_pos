@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -82,7 +83,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
       },
     );
     if (mounted) {
-      // Check before setState
       setState(() => _isLoadingStations = false);
     }
   }
@@ -978,42 +978,39 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   }
 
   Future<void> _printSelectedKitchenOrder(
-      String posInvoice, List<String> selectedItems) async {
+    String posInvoice,
+    List<String> selectedItems,
+  ) async {
     if (_selectedKitchenStation == null || !mounted) return;
 
     try {
-      final response = await PosService().printSelectedKitchenOrder(
-        posInvoice: posInvoice,
-        items: selectedItems,
+      // Use ReceiptPrinter instead of handling response directly
+      await ReceiptPrinter.printSelectedKitchenOrder(
+        posInvoice,
+        selectedItems,
       );
 
       if (!mounted) return;
 
-      if (response['success'] == true) {
-        if (mounted) {
-          Fluttertoast.showToast(
-            msg: 'Kitchen order sent to printer',
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-            fontSize: 16.0,
-          );
-        }
-      } else {
-        throw Exception(response['message'] ?? 'Failed to print kitchen order');
-      }
+      Fluttertoast.showToast(
+        msg: 'Kitchen order sent to printer',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
     } catch (e) {
-      if (mounted) {
-        Fluttertoast.showToast(
-          msg: 'Error printing kitchen order: $e',
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-          fontSize: 16.0,
-        );
-      }
+      if (!mounted) return;
+
+      Fluttertoast.showToast(
+        msg: 'Error printing kitchen order: $e',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
     }
   }
 
