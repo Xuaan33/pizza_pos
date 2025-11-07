@@ -59,10 +59,10 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
   Future<void> _loadData() async {
     try {
+      if (!mounted) return; // Check if widget is still mounted
       setState(() => isLoading = true);
 
-      final authState =
-          ref.read(authProvider); // Assuming you're using Provider
+      final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
         authenticated: (
           sid,
@@ -88,15 +88,19 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       );
 
       if (posProfile == null) {
-        throw Exception('Not authenticated or posProfile not available');
+        if (!mounted) return;
+        _showErrorToast('Not authenticated or posProfile not available');
+        setState(() => isLoading = false);
+        return;
       }
 
-      // Load all necessary data in parallel with posProfile
       final responses = await Future.wait([
         PosService().getAllItems(posProfile),
         PosService().getItemGroups(),
         PosService().getVariantGroups(),
       ]);
+
+      if (!mounted) return; // Check again after async operations
 
       if (responses[0]['success'] == true) {
         final List<dynamic> itemsData = responses[0]['message']['items'];
@@ -109,6 +113,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         // Then fetch detailed information for each item
         final detailedItems = await _fetchDetailedItems(basicItems);
 
+        if (!mounted) return; // Check before setting state
         setState(() {
           items = detailedItems;
         });
@@ -116,6 +121,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
       if (responses[1]['success'] == true) {
         final List<dynamic> groupsData = responses[1]['message']['item_groups'];
+        if (!mounted) return;
         setState(() {
           itemGroups = groupsData
               .map((group) => ItemGroup.fromJson(group))
@@ -125,6 +131,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       }
 
       if (responses[2]['success'] == true) {
+        if (!mounted) return;
         setState(() {
           variantGroups = (responses[2]['message'] as List)
               .map((json) => VariantGroup.fromJson(json))
@@ -133,8 +140,10 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         });
       }
 
+      if (!mounted) return;
       setState(() => isLoading = false);
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       _showErrorToast('Failed to load data: $e');
     }
@@ -145,6 +154,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
     for (final basicItem in basicItems) {
       try {
+        if (!mounted) break; // Check if widget is still mounted
+
         // Check cache first
         if (_detailedItemsCache.containsKey(basicItem.itemCode)) {
           detailedItems.add(_detailedItemsCache[basicItem.itemCode]!);
@@ -153,6 +164,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
         // Fetch detailed item information
         final response = await PosService().getItem(basicItem.itemCode);
+
+        if (!mounted) break; // Check again after async operation
 
         if (response['success'] == true) {
           final detailedItem =
@@ -166,6 +179,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
           );
         }
       } catch (e) {
+        if (!mounted) break;
         print('Error fetching detailed info for ${basicItem.itemCode}: $e');
         // Same here → mark as not POS
         detailedItems.add(
@@ -182,12 +196,15 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       // Fetch updated detailed information
       final response = await PosService().getItem(item.itemCode);
 
+      if (!mounted) return; // Check if widget is still mounted
+
       if (response['success'] == true) {
         final updatedItem =
             Item.fromDetailedJson(response['message'], baseUrl: baseImageUrl);
         _detailedItemsCache[item.itemCode] = updatedItem;
 
         // Update the item in the list
+        if (!mounted) return;
         setState(() {
           final index = items.indexWhere((i) => i.itemCode == item.itemCode);
           if (index != -1) {
@@ -196,6 +213,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       print('Error refreshing item details: $e');
     }
   }
@@ -319,6 +337,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
   Future<void> _toggleItemStatus(Item item, bool isActive) async {
     try {
+      if (!mounted) return;
       setState(() => isLoading = true);
 
       // Refresh the item details first to get the latest data
@@ -342,6 +361,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       await _refreshItemDetails(item); // Refresh the cached item
 
       // Update the item in the local list
+      if (!mounted) return;
       setState(() {
         final index = items.indexWhere((i) => i.itemCode == item.itemCode);
         if (index != -1) {
@@ -351,11 +371,14 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         }
       });
 
+      if (!mounted) return;
       _showSuccessToast(
           'Item ${isActive ? 'activated' : 'deactivated'} successfully');
     } catch (e) {
+      if (!mounted) return;
       _showErrorToast('Failed to update status: $e');
     } finally {
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
