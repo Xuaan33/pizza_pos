@@ -424,13 +424,20 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
     if (!mounted) return;
 
-    setState(() {
-      _isOrdersLoading = true;
-      _currentPage = 0;
-      _hasMoreOrders = true;
-      _isLoadingMore = false;
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
+      setState(() {
+        _isOrdersLoading = true;
+        _currentPage = 0;
+        _hasMoreOrders = true;
+        _isLoadingMore = false;
+      });
+      _loadOrdersData(forceAllForPayLater);
+    });
+  }
+
+  Future<void> _loadOrdersData(bool forceAllForPayLater) async {
     try {
       final authState = ref.read(authProvider);
 

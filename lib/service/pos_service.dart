@@ -926,18 +926,114 @@ class PosService {
     );
   }
 
-  Future<Map<String, dynamic>> printSelectedKitchenOrder({
+  Future<Uint8List> printSelectedKitchenOrder({
     required String posInvoice,
     required List<String> items,
   }) async {
-    return makeRequest(
-      endpoint: 'shiok_pos.api.print_selected_kitchen_order',
-      method: 'POST',
-      body: {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final uri = Uri.parse(
+          '$_baseUrl/api/method/shiok_pos.api.print_selected_kitchen_order');
+      final headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+      };
+
+      final body = {
         'pos_invoice': posInvoice,
         'items': items,
-      },
-    );
+      };
+
+      print('🖨️ API Request: POST $uri');
+      print('🖨️ Request Body: ${jsonEncode(body)}');
+
+      final response = await http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print('🖨️ API Response Status: ${response.statusCode}');
+      print(
+          '🖨️ API Response Content-Type: ${response.headers['content-type']}');
+      print('🖨️ API Response Body Length: ${response.bodyBytes.length} bytes');
+
+      if (response.statusCode == 200) {
+        // Check if response is JSON or image
+        final contentType =
+            response.headers['content-type']?.toLowerCase() ?? '';
+
+        if (contentType.contains('application/json')) {
+          // Handle JSON response (error case)
+          final responseData = jsonDecode(response.body);
+          if (responseData['success'] == true) {
+            // If success is true but we got JSON, there might be an image in base64
+            if (responseData['message'] is String) {
+              try {
+                return base64.decode(responseData['message']);
+              } catch (e) {
+                throw Exception(
+                    'Failed to decode base64 image from JSON response');
+              }
+            } else {
+              throw Exception('Unexpected JSON response format');
+            }
+          } else {
+            throw Exception(
+                responseData['message'] ?? 'Failed to print kitchen order');
+          }
+        } else if (contentType.contains('image/') ||
+            contentType.contains('application/octet-stream') ||
+            _isImageData(response.bodyBytes)) {
+          // Direct image response - return the bytes as-is
+          return response.bodyBytes;
+        } else {
+          // Try to detect if it's image data by checking the signature
+          if (_isImageData(response.bodyBytes)) {
+            return response.bodyBytes;
+          } else {
+            // Try to parse as JSON in case content-type is wrong
+            try {
+              final responseData = jsonDecode(response.body);
+              throw Exception(
+                  responseData['message'] ?? 'Unknown response format');
+            } catch (e) {
+              throw Exception(
+                  'Unknown response format: ${response.body.substring(0, min(100, response.body.length))}');
+            }
+          }
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('🚨 Print selected kitchen order API error: $e');
+      rethrow;
+    }
+  }
+
+// Helper method to detect image data
+  bool _isImageData(Uint8List data) {
+    if (data.length < 8) return false;
+
+    // PNG signature
+    if (data[0] == 0x89 &&
+        data[1] == 0x50 &&
+        data[2] == 0x4E &&
+        data[3] == 0x47) {
+      return true;
+    }
+
+    // JPEG signature
+    if (data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) {
+      return true;
+    }
+
+    return false;
   }
 }
 

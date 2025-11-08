@@ -187,6 +187,52 @@ class ReceiptPrinter {
     }
   }
 
+  static Future<void> printSelectedKitchenOrder(
+    String posInvoice,
+    List<String> selectedItems,
+  ) async {
+    try {
+      debugPrint('🖨️ Printing selected kitchen order for: $posInvoice');
+      debugPrint('📋 Selected items: ${selectedItems.join(", ")}');
+
+      // Get the image bytes directly
+      final imageBytes = await PosService().printSelectedKitchenOrder(
+        posInvoice: posInvoice,
+        items: selectedItems,
+      );
+
+      if (imageBytes.isEmpty) {
+        throw Exception('No image data received from server');
+      }
+
+      debugPrint('✅ Received image data: ${imageBytes.length} bytes');
+
+      // Print the image
+      await printReceipt(imageBytes, isPdf: false);
+
+      debugPrint('✅ Selected kitchen order printed successfully');
+    } catch (e) {
+      debugPrint('❌ Print selected kitchen order error: $e');
+
+      // Show more specific error messages
+      final errorMsg = e.toString();
+      if (errorMsg.contains('FormatException') ||
+          errorMsg.contains('Unexpected character')) {
+        throw Exception(
+            'Server returned invalid response format. Please check the API endpoint.');
+      } else if (errorMsg.contains('No image data')) {
+        throw Exception('No printable content received from server.');
+      } else if (errorMsg.contains('HTTP 4')) {
+        throw Exception(
+            'Server error: Invalid request or kitchen station configuration.');
+      } else if (errorMsg.contains('HTTP 5')) {
+        throw Exception('Server error: Please try again later.');
+      } else {
+        rethrow;
+      }
+    }
+  }
+
   // Keep the original showPrintDialog for manual printing if needed
   static Future<void> showPrintDialog(
     BuildContext context,
