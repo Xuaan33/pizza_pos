@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,10 +14,12 @@ import 'package:shiok_pos_android_app/components/item_group.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/opening_entry_dialog.dart';
 import 'package:shiok_pos_android_app/components/option_dialog.dart';
+import 'package:shiok_pos_android_app/components/pos_terminal_manager.dart';
 import 'package:shiok_pos_android_app/components/stock_item_card.dart';
 import 'package:shiok_pos_android_app/components/variant_group.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
+import 'package:usb_serial/usb_serial.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -53,6 +54,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // For debug reporting
   final List<Map<String, dynamic>> _connectionLogs = [];
   bool _isGeneratingReport = false;
+
+  // Pos Terminal Management
+  final PosTerminalManager _terminalManager = PosTerminalManager();
+  List<UsbDevice> _availableUsbDevices = [];
+  UsbDevice? _selectedUsbDevice;
+  String _selectedConnectionType = 'TCP/IP'; // 'TCP/IP' or 'Wired'
 
   // Employee Management
   List<Map<String, dynamic>> _employees = [];
@@ -89,6 +96,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadSavedConfig(); // Load saved config when widget initializes
     _loadVariantGroups();
     _loadEmployees(); // Load employees when screen initializes
+    _loadConfiguration();
   }
 
   @override
@@ -306,47 +314,360 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
+  Future<void> _loadConfiguration() async {
+    await _terminalManager.loadConfiguration();
+    setState(() {
+      _selectedConnectionType =
+          _terminalManager.currentConnectionType == ConnectionType.tcpip
+              ? 'TCP/IP'
+              : 'Wired';
+      _isPosConnected = _terminalManager.isConnected;
+    });
+
+    if (_selectedConnectionType == 'Wired') {
+      await _discoverUsbDevices();
+    }
+  }
+
+  Future<void> _discoverUsbDevices() async {
+    try {
+      final devices = await _terminalManager.discoverUsbDevices();
+      setState(() {
+        _availableUsbDevices = devices;
+        if (devices.isNotEmpty && _selectedUsbDevice == null) {
+          _selectedUsbDevice = devices.first;
+          _terminalManager.setUsbDevice(devices.first);
+        }
+      });
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Error discovering USB devices: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
   Future<void> _saveConfig() async {
     setState(() => _isSaving = true);
 
-    final posIp = _ipController.text.trim();
-    final posPort = _portController.text.trim();
+    try {
+      if (_selectedConnectionType == 'TCP/IP') {
+        final posIp = _ipController.text.trim();
+        final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
 
-    // Validation
-    if (posIp.isEmpty || posPort.isEmpty) {
+        if (posIp.isEmpty) {
+          throw Exception('Please enter IP Address');
+        }
+
+        await _terminalManager.saveConfiguration(
+          type: ConnectionType.tcpip,
+          ip: posIp,
+          port: posPort,
+        );
+
+        Fluttertoast.showToast(
+          msg: "TCP/IP configuration saved successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        if (_selectedUsbDevice == null) {
+          throw Exception('Please select a USB device');
+        }
+
+        await _terminalManager.saveConfiguration(
+          type: ConnectionType.wired,
+          usbDevice: _selectedUsbDevice,
+        );
+
+        Fluttertoast.showToast(
+          msg: "USB configuration saved successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
       Fluttertoast.showToast(
-        msg: "Please enter both IP Address and Port",
-        toastLength: Toast.LENGTH_SHORT,
+        msg: "Failed to save configuration: $e",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+    } finally {
       setState(() => _isSaving = false);
-      return;
     }
+  }
 
-    // Validate port number
-    final portNumber = int.tryParse(posPort);
-    if (portNumber == null || portNumber < 1 || portNumber > 65535) {
+  Future<void> _testConnection() async {
+    setState(() => _isTesting = true);
+
+    try {
+      final result = await _terminalManager.testConnection();
+
+      setState(() {
+        _isPosConnected = result;
+        _isTesting = false;
+      });
+
       Fluttertoast.showToast(
-        msg: "Please enter a valid port number (1-65535)",
-        toastLength: Toast.LENGTH_SHORT,
+        msg: result
+            ? 'Connection successful! ${_terminalManager.getConnectionStatusMessage()}'
+            : 'Connection failed',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: result ? Colors.green : Colors.red,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      setState(() => _isTesting = false);
+      Fluttertoast.showToast(
+        msg: 'Connection error: $e',
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
-      setState(() => _isSaving = false);
-      return;
     }
+  }
+
+  Widget _buildConnectionTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Connection Type',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: ListTile(
+                title: const Text('TCP/IP (Wireless)'),
+                leading: Radio<String>(
+                  value: 'TCP/IP',
+                  groupValue: _selectedConnectionType,
+                  onChanged: (value) async {
+                    setState(() {
+                      _selectedConnectionType = value!;
+                      _isPosConnected = false;
+                    });
+                  },
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListTile(
+                title: const Text('USB (Wired)'),
+                leading: Radio<String>(
+                  value: 'Wired',
+                  groupValue: _selectedConnectionType,
+                  onChanged: (value) async {
+                    setState(() {
+                      _selectedConnectionType = value!;
+                      _isPosConnected = false;
+                    });
+                    await _discoverUsbDevices();
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWiredConnectionForm() {
+    return Column(
+      children: [
+        const Text(
+          'USB/Wired Connection',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+
+        // USB Device Selector
+        if (_availableUsbDevices.isEmpty)
+          Column(
+            children: [
+              const Text(
+                'No USB devices found. Please connect your POS terminal and refresh.',
+                style: TextStyle(color: Colors.orange),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _discoverUsbDevices,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Discover USB Devices'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select USB Device:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButton<UsbDevice>(
+                  value: _selectedUsbDevice,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  items: _availableUsbDevices.map((device) {
+                    return DropdownMenuItem<UsbDevice>(
+                      value: device,
+                      child: Text(
+                        '${device.productName ?? 'Unknown Device'} (VID: ${device.vid}, PID: ${device.pid})',
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (device) {
+                    setState(() {
+                      _selectedUsbDevice = device;
+                      _terminalManager.setUsbDevice(device!);
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _discoverUsbDevices,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Refresh Devices'),
+              ),
+            ],
+          ),
+
+        const SizedBox(height: 16),
+        const Text(
+          'Make sure your POS terminal is properly connected via USB cable.',
+          style: TextStyle(color: Colors.grey, fontSize: 12),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isSaving ? null : _saveConfig,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2196F3),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Save USB Configuration',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConnectionStatusIndicator() {
+    return Row(
+      children: [
+        Icon(
+          _isPosConnected ? Icons.check_circle : Icons.error,
+          color: _isPosConnected ? Colors.green : Colors.red,
+          size: 24,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _isPosConnected ? 'Connected' : 'Not Connected',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: _isPosConnected ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (_isPosConnected)
+                Text(
+                  _terminalManager.getConnectionStatusMessage(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _selectedConnectionType == 'TCP/IP'
+                ? Colors.blue.withOpacity(0.1)
+                : Colors.purple.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _selectedConnectionType == 'TCP/IP'
+                  ? Colors.blue
+                  : Colors.purple,
+            ),
+          ),
+          child: Text(
+            _selectedConnectionType,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: _selectedConnectionType == 'TCP/IP'
+                  ? Colors.blue
+                  : Colors.purple,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+// Save wired configuration
+  Future<void> _saveWiredConfig() async {
+    setState(() => _isSaving = true);
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('pos_ip', posIp);
-      await prefs.setInt('pos_port', portNumber);
+      await prefs.setString('connection_type', 'Wired');
 
       Fluttertoast.showToast(
-        msg: "Configuration saved successfully\nIP: $posIp\nPort: $posPort",
-        toastLength: Toast.LENGTH_LONG,
+        msg: "Wired configuration saved successfully",
+        toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.green,
         textColor: Colors.white,
@@ -615,9 +936,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
+
+        // Connection Type Selection
+        _buildConnectionTypeSelector(),
+        const SizedBox(height: 20),
+
         _buildConnectionStatusIndicator(),
         const SizedBox(height: 20),
-        _buildConnectionForm(),
+
+        // Show different connection forms based on selection
+        if (_selectedConnectionType == 'TCP/IP')
+          _buildTcpConnectionForm()
+        else
+          _buildWiredConnectionForm(),
+
         const SizedBox(height: 20),
         _buildTestButton(),
         const SizedBox(height: 20),
@@ -1936,23 +2268,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         child: _isLoadingClosing
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                isDisabled && !_isLoadingClosing
+                    ? 'No Opening Entry'
+                    : 'Create Closing Entry',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            )
-          : Text(
-          isDisabled && !_isLoadingClosing
-              ? 'No Opening Entry'
-              : 'Create Closing Entry',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
   }
@@ -2010,28 +2342,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Widget _buildConnectionStatusIndicator() {
-    return Row(
-      children: [
-        Icon(
-          _isPosConnected ? Icons.check_circle : Icons.error,
-          color: _isPosConnected ? Colors.green : Colors.red,
-          size: 24,
-        ),
-        const SizedBox(width: 8),
-        Text(
-          _isPosConnected ? 'Testing OK' : 'Not Test',
-          style: TextStyle(
-            fontSize: 16,
-            color: _isPosConnected ? Colors.green : Colors.red,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildConnectionForm() {
+  Widget _buildTcpConnectionForm() {
     return Column(
       children: [
         TextField(
@@ -2063,7 +2374,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: ElevatedButton(
             onPressed: _isSaving ? null : _saveConfig,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50), // Green color for save
+              backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -2080,7 +2391,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   )
                 : const Text(
-                    'Save Configuration',
+                    'Save TCP/IP Configuration',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -2096,7 +2407,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isTesting ? null : _testPosConnection,
+        onPressed: _isTesting ? null : _testConnection,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFE732A0),
           foregroundColor: Colors.white,
@@ -2114,9 +2425,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   color: Colors.white,
                 ),
               )
-            : const Text(
-                'Test POS Terminal Connection',
-                style: TextStyle(
+            : Text(
+                'Test ${_selectedConnectionType} Connection',
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -2338,208 +2649,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return (currentQty - quantityToRemove) < 0;
   }
 
-  Future<void> _testPosConnection() async {
-    final connectionAttempt = {
-      'timestamp': DateTime.now().toString(),
-      'success': false,
-      'message': '',
-      'error': null,
-      'response': null,
-    };
-
-    setState(() {
-      _isTesting = true;
-      _isPosConnected = false;
-    });
-
-    final posIp = _ipController.text.trim();
-    final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
-
-    try {
-      // 1. Verify basic network reachability
-      connectionAttempt['message'] = 'Testing host reachability';
-      final isReachable = await _isHostReachable(posIp);
-
-      if (!isReachable) {
-        connectionAttempt['error'] = "Host $posIp is unreachable";
-        connectionAttempt['message'] = 'Host unreachable';
-        _connectionLogs.add(connectionAttempt);
-        _handleConnectionError("Host $posIp is unreachable");
-        setState(() => _isTesting = false);
-        return;
-      }
-
-      connectionAttempt['message'] =
-          'Host reachable, attempting socket connection';
-
-      const pingHexMessage =
-          "02 00 18 36 30 30 30 30 30 30 30 30 30 31 30 46 46 30 30 30 1C 03 30";
-
-      // Extended timeout for initial connection
-      final socket = await Socket.connect(posIp, posPort,
-          timeout: const Duration(seconds: 5));
-
-      // Configure socket for response handling
-      socket.setOption(SocketOption.tcpNoDelay, true);
-
-      // Create completer to handle async response
-      final completer = Completer<void>();
-      Timer? timeoutTimer;
-
-      socket.listen(
-        (data) {
-          timeoutTimer?.cancel();
-          try {
-            final hexResponse =
-                data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-            connectionAttempt['response'] = hexResponse;
-
-            // Handle ACK (06) response
-            if (data.length == 1 && data[0] == 0x06) {
-              connectionAttempt['success'] = true;
-              connectionAttempt['message'] =
-                  'POS Terminal connected! (ACK received)';
-              _handleSuccessfulConnection(
-                  "POS Terminal connected! (ACK received)");
-            } else if (data.isNotEmpty) {
-              connectionAttempt['success'] = true;
-              connectionAttempt['message'] =
-                  'POS Terminal connected successfully!';
-              _handleSuccessfulConnection(
-                  "POS Terminal connected successfully!");
-            }
-          } catch (e) {
-            connectionAttempt['error'] = "Response parsing error: $e";
-            _handleConnectionError("Protocol error: ${e.toString()}");
-          }
-          completer.complete();
-          socket.destroy();
-        },
-        onError: (e) {
-          timeoutTimer?.cancel();
-          connectionAttempt['error'] = e.toString();
-          _handleConnectionError(e.toString());
-          completer.complete();
-          socket.destroy();
-        },
-        onDone: () {
-          timeoutTimer?.cancel();
-          if (!completer.isCompleted) {
-            connectionAttempt['error'] = "Connection closed prematurely";
-            _handleConnectionError("Connection closed prematurely");
-            completer.complete();
-          }
-          socket.destroy();
-        },
-      );
-
-      // Send ping message
-      socket.add(_hexStringToBytes(pingHexMessage));
-
-      // Set timeout for complete transaction
-      timeoutTimer = Timer(const Duration(seconds: 10), () {
-        if (!completer.isCompleted) {
-          connectionAttempt['error'] = "Response timeout";
-          _handleConnectionError("Response timeout");
-          completer.complete();
-          socket.destroy();
-        }
-      });
-
-      await completer.future;
-    } on SocketException catch (e) {
-      connectionAttempt['error'] = "Network error: ${e.message}";
-      _handleConnectionError("Network error: ${e.message}");
-    } on Exception catch (e) {
-      connectionAttempt['error'] = e.toString();
-      _handleConnectionError(e.toString());
-    } finally {
-      // Add to logs
-      _connectionLogs.add(connectionAttempt);
-
-      // Keep only last 10 attempts
-      if (_connectionLogs.length > 10) {
-        _connectionLogs.removeAt(0);
-      }
-
-      if (!_isPosConnected) {
-        setState(() => _isTesting = false);
-      }
-    }
-  }
-
   Future<bool> _isHostReachable(String ip) async {
     try {
       final result = await InternetAddress.lookup(ip);
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (_) {
       return false;
-    }
-  }
-
-  void _handleConnectionError(String error) {
-    setState(() {
-      _isPosConnected = false;
-    });
-    Fluttertoast.showToast(
-      msg: "POS Connection Failed: $error",
-      toastLength: Toast.LENGTH_LONG,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.red,
-      textColor: Colors.white,
-    );
-    debugPrint('POS Connection Error: $error');
-  }
-
-  List<int> _hexStringToBytes(String hexString) {
-    return hexString
-        .split(' ')
-        .map((hex) => int.parse(hex, radix: 16))
-        .toList();
-  }
-
-  void _handleResponse(List<int> data) {
-    try {
-      final hexResponse =
-          data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-      debugPrint('Raw POS Response (Hex): $hexResponse');
-
-      // Handle ACK (06) response
-      if (data.length == 1 && data[0] == 0x06) {
-        _handleSuccessfulConnection("POS Terminal connected! (ACK received)");
-        return;
-      }
-
-      // Validate full message format
-      if (data.length < 5) {
-        throw Exception('Response too short (${data.length} bytes)');
-      }
-
-      // Verify STX (02) and ETX (03) markers
-      if (data.first != 0x02 || data[data.length - 2] != 0x03) {
-        throw Exception('Missing STX/ETX markers');
-      }
-
-      // Calculate LRC
-      int calculatedLrc = 0;
-      for (int i = 0; i < data.length - 1; i++) {
-        calculatedLrc ^= data[i];
-      }
-
-      final receivedLrc = data.last;
-      final shouldAccept =
-          (calculatedLrc == receivedLrc) || (receivedLrc == 0x31);
-
-      if (!shouldAccept) {
-        throw Exception('LRC mismatch');
-      }
-
-      // Success case
-      _handleSuccessfulConnection("POS Terminal connected successfully!");
-      final parsed = parsePosResponse(data);
-      debugPrint(jsonEncode(parsed));
-    } catch (e) {
-      _handleConnectionError("Protocol error: ${e.toString()}");
     }
   }
 
@@ -2565,20 +2680,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       "status": "success",
       "message": "Transaction successful."
     };
-  }
-
-  void _handleSuccessfulConnection(String message) {
-    setState(() {
-      _isPosConnected = true;
-      _isTesting = false;
-    });
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.green,
-      textColor: Colors.white,
-    );
   }
 
   Future<void> _generateDebugReport() async {
@@ -2826,95 +2927,5 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     buffer.writeln('5. Test with ping command from device');
 
     return buffer.toString();
-  }
-
-  Future<void> _saveMobileReport(String fileName, String content) async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsString(content);
-
-      // Show the exact path in a dialog so you can copy it
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Debug Report Saved'),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Report saved to:'),
-                  const SizedBox(height: 10),
-                  SelectableText(
-                    file.path,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text('To view the file:'),
-                  const SizedBox(height: 5),
-                  const Text('1. Open Android Studio'),
-                  const Text(
-                      '2. Go to View → Tool Windows → Device File Explorer'),
-                  const Text('3. Navigate to the path above'),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  // Copy path to clipboard
-                  Clipboard.setData(ClipboardData(text: file.path));
-                  Fluttertoast.showToast(msg: 'Path copied to clipboard');
-                  Navigator.pop(context);
-                },
-                child: const Text('Copy Path'),
-              ),
-            ],
-          ),
-        );
-      }
-
-      debugPrint('=== DEBUG REPORT PATH ===');
-      debugPrint(file.path);
-      debugPrint('=========================');
-    } catch (e) {
-      // Fallback - show content in alert dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Debug Report'),
-            content: SingleChildScrollView(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SelectableText(
-                  content,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: content));
-                  Fluttertoast.showToast(msg: 'Report copied to clipboard');
-                },
-                child: const Text('Copy to Clipboard'),
-              ),
-            ],
-          ),
-        );
-      }
-    }
   }
 }

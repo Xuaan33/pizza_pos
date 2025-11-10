@@ -12,12 +12,15 @@ import 'package:shiok_pos_android_app/components/customer_display_controller.dar
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
+import 'package:shiok_pos_android_app/components/pos_terminal_manager.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/components/split_order_payment_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/service/usb_connection_service.dart';
+import 'package:usb_serial/usb_serial.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> order;
@@ -1877,28 +1880,118 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final prefs = await SharedPreferences.getInstance();
         final posIp = prefs.getString('pos_ip') ?? '192.168.1.10';
         final posPort = 8800;
+        String? connectionType = prefs.getString('connection_type');
 
-        // 3. Connect to POS terminal with longer timeout
-        final socket = await Socket.connect(posIp, posPort,
-            timeout: const Duration(seconds: 10));
-
-        try {
-          // Set up response handler with timeout
-          final response = await _handlePosTransaction(socket, hexMessage);
-
-          if (response['status'] != 'success') {
-            throw Exception(
-                response['response_text'] ?? 'POS transaction declined');
+        if (connectionType == null || connectionType.isEmpty) {
+          // Ask user to choose connection type
+          connectionType = await _showConnectionDialog(context);
+          if (connectionType == null) {
+            Fluttertoast.showToast(
+              msg: "Payment cancelled - connection type not selected",
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.red,
+              textColor: Colors.white,
+            );
+            return;
           }
 
-          // Add POS response details to payment
+          await prefs.setString('connection_type', connectionType);
+        }
+
+        if (connectionType == "Wired") {
+          final posManager = PosTerminalManager();
+
+          // 1. Load any saved configuration
+          await posManager.loadConfiguration();
+
+          // 2. Discover available devices
+          final devices = await posManager.discoverUsbDevices();
+          if (devices.isEmpty) {
+            throw Exception(
+                "No USB devices found. Please plug in the POS terminal.");
+          }
+
+          // 3. Select the first available device (or you can present a selection dialog)
+          posManager.setUsbDevice(devices.first);
+
+          // 4. Save configuration (for future sessions)
+          await posManager.saveConfiguration(
+            type: ConnectionType.wired,
+            usbDevice: devices.first,
+          );
+
+          // 5. Attempt to connect (this internally calls device.create(), no manual permission needed)
+          final connected = await posManager.connect();
+          if (!connected) {
+            throw Exception("Failed to connect to POS terminal via USB");
+          }
+
+          // 6. Generate the purchase hex message as before
+          final transactionId =
+              'INV${invoiceName.replaceAll(RegExp(r'[^0-9]'), '')}';
+          final paddedTransactionId =
+              transactionId.padRight(20, '0').substring(0, 20);
+          final hexMessage = PosHexGenerator.generatePurchaseHexMessage(
+            paddedTransactionId,
+            totalAmount,
+            m1Value, // The value from selected payment method
+          );
+
+          // 7. Convert the hex string to bytes for sending
+          final hexBytes = hexMessage
+              .split(' ')
+              .where((s) => s.isNotEmpty)
+              .map((s) => int.parse(s, radix: 16))
+              .toList();
+
+          // 8. Send the message
+          final sent = await posManager.usbService.sendData(hexBytes);
+          if (!sent) {
+            throw Exception("Failed to send transaction to POS terminal");
+          }
+
+          // 9. Wait for and parse the response
+          final response = await posManager.usbService.processPayment(
+            amount: totalAmount,
+            transactionType: 'SALE',
+          );
+
+          if (response['success'] != true) {
+            throw Exception(response['message'] ?? 'POS transaction declined');
+          }
+
+          // 10. Attach POS response to payment info
           payments[0]['pos_response'] = response;
           payments[0]['reference_no'] = response['transaction_id'] ??
               'POS-${DateTime.now().millisecondsSinceEpoch}';
           payments[0]['pos_reference_no'] =
-              response['pos_invoice_number'] ?? ''; // Add POS reference
-        } finally {
-          socket.destroy();
+              response['pos_invoice_number'] ?? '';
+
+          // 11. Optionally disconnect after transaction
+          await posManager.disconnect();
+        } else {
+          // 3. Connect to POS terminal with longer timeout
+          final socket = await Socket.connect(posIp, posPort,
+              timeout: const Duration(seconds: 10));
+
+          try {
+            // Set up response handler with timeout
+            final response = await _handlePosTransaction(socket, hexMessage);
+
+            if (response['status'] != 'success') {
+              throw Exception(
+                  response['response_text'] ?? 'POS transaction declined');
+            }
+
+            // Add POS response details to payment
+            payments[0]['pos_response'] = response;
+            payments[0]['reference_no'] = response['transaction_id'] ??
+                'POS-${DateTime.now().millisecondsSinceEpoch}';
+            payments[0]['pos_reference_no'] =
+                response['pos_invoice_number'] ?? ''; // Add POS reference
+          } finally {
+            socket.destroy();
+          }
         }
       } else if (isOfflinePayment && !payLater) {
         // For offline payments, add a simple reference number
@@ -2270,6 +2363,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint('Error extracting POS invoice number: $e');
     }
     return '000000';
+  }
+
+  Future<String?> _showConnectionDialog(BuildContext context) async {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Select Connection Type"),
+          content:
+              const Text("Please select how to connect to the card terminal."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('TCP/IP'),
+              child: const Text('Wireless (TCP/IP)'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('Wired'),
+              child: const Text('Wired (USB)'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<bool> _showPrintReceiptDialog() async {
