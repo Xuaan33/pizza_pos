@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
+import 'package:shiok_pos_android_app/screens/kitchen_screen.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -80,22 +81,23 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   int _getOrdersTabIndex() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid,
-              apiKey,
-              apiSecret,
-              username,
-              email,
-              fullName,
-              posProfile,
-              branch,
-              paymentMethods,
-              taxes,
-              hasOpening,
-              tier,
-              printKitchenOrder,
-              openingDate,
-              itemsGroups,
-              ) {
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+          ) {
             return tier.toLowerCase() == 'tier1' ? 1 : 2;
           },
         ) ??
@@ -414,16 +416,28 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     );
   }
 
+  void _refreshKitchenScreen() {
+    // This will force the KitchenScreen to rebuild when navigated to
+    setState(() {});
+  }
+
   Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
     if (!mounted) return;
 
-    setState(() {
-      _isOrdersLoading = true;
-      _currentPage = 0;
-      _hasMoreOrders = true;
-      _isLoadingMore = false;
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
+      setState(() {
+        _isOrdersLoading = true;
+        _currentPage = 0;
+        _hasMoreOrders = true;
+        _isLoadingMore = false;
+      });
+      _loadOrdersData(forceAllForPayLater);
+    });
+  }
+
+  Future<void> _loadOrdersData(bool forceAllForPayLater) async {
     try {
       final authState = ref.read(authProvider);
 
@@ -471,7 +485,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
-            final effectivePageLimit = _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+            final effectivePageLimit =
+                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
 
             final future = PosService().getOrders(
               posProfile: posProfile,
@@ -965,6 +980,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               limitOptions: _limitOptions,
             ),
             DashboardScreen(),
+            KitchenScreen(
+              key: ValueKey(
+                  'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
+            ),
             SettingsScreen(),
           ];
         } else {
@@ -1037,17 +1056,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               limitOptions: _limitOptions,
             ),
             DashboardScreen(),
+            KitchenScreen(
+              key: ValueKey(
+                  'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
+            ),
             SettingsScreen(),
           ];
         }
       },
     );
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchOrders() async {
-    // Simulate network delay
-    await Future.delayed(Duration(milliseconds: 500));
-    return activeOrders.where((o) => !o['isPaid']).toList();
   }
 
   Widget _buildNavigationSidebar() {
@@ -1131,6 +1148,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               _buildNavItem(tier.toLowerCase() == 'tier1' ? 2 : 3,
                   'assets/img-sidebar-dashboard.png', 'Dashboard'),
               _buildNavItem(tier.toLowerCase() == 'tier1' ? 3 : 4,
+                  'assets/img-sidebar-kitchen.png', 'Kitchen'),
+              _buildNavItem(tier.toLowerCase() == 'tier1' ? 4 : 5,
                   'assets/img-sidebar-settings.png', 'Settings'),
               const Spacer(),
               _buildNavItem(
