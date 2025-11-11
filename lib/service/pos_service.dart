@@ -935,7 +935,7 @@ class PosService {
       if (token == null) throw Exception('Not authenticated');
 
       final uri = Uri.parse(
-          '$_baseUrl/api/method/shiok_pos.api.print_selected_kitchen_order');
+          '$_baseUrl/shiok_pos.api.print_selected_kitchen_order');
       final headers = {
         'Authorization': token,
         'Content-Type': 'application/json',

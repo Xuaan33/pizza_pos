@@ -1107,7 +1107,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Qty: ${item['qty'] ?? '1'}'),
+                                Text('Qty: ${item['qty'].toStringAsFixed(0) ?? '1'}'),
                                 if (item['custom_item_remarks'] != null &&
                                     item['custom_item_remarks']
                                         .toString()
