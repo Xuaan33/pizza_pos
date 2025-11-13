@@ -797,7 +797,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    '$baseImageUrl${method['custom_payment_mode_image']}',
+                    baseImageUrl.startsWith('https')
+                        ? "${method['custom_payment_mode_image']}"
+                        : "$baseImageUrl${method['custom_payment_mode_image']}",
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
@@ -1443,6 +1445,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final isCashPayment = _selectedPaymentMethod == 'Cash';
     final paidAmount = isCashPayment ? _amountGiven : totalAmount;
     final changeAmount = isCashPayment ? _amountGiven - totalAmount : 0.0;
+    final taxInfo = _getTaxInfo();
 
     // Calculate original subtotal before any discounts
     final originalSubtotal = orderItems.fold(0.0, (sum, item) {
@@ -1476,9 +1479,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(height: 8),
           ],
-          if (_getGSTRate() != '0')
+          if (taxInfo['rate'] > 0)
             _buildSummaryRow(
-              'GST (${_getGSTRate()}%)',
+              '${taxInfo['name']} (${taxInfo['rate']}%)',
               "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
             ),
           const SizedBox(height: 8),
@@ -2453,7 +2456,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         baseUrl,
         merchantId,
       ) {
-        return tier.toLowerCase() == 'tier1';
+        return tier.toLowerCase() == 'tier 1';
       },
       orElse: () => false,
     );
@@ -3971,7 +3974,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ) {
             // Find the GST tax rate from the taxes array
             final gstTax = taxes.firstWhere(
-              (tax) => tax['description']?.contains('GST') ?? false,
+              (tax) => tax['description']?.isNotEmpty ?? false,
               orElse: () => {'rate': 0.0}, // Default to 0% if not found
             );
             return _calculateSubtotal() * (gstTax['rate'] ?? 0.0) / 100;
@@ -4806,7 +4809,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return options1 == options2;
   }
 
-  String _getGSTRate() {
+  Map<String, dynamic> _getTaxInfo() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
           authenticated: (
@@ -4828,13 +4831,65 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             baseUrl,
             merchantId,
           ) {
-            final gstTax = taxes.firstWhere(
-              (tax) => tax['description']?.contains('GST') ?? false,
-              orElse: () => {'rate': 0.0},
-            );
-            return (gstTax['rate'] ?? 0.0).toStringAsFixed(0);
+            if (taxes.isEmpty) {
+              return {'name': '', 'rate': 0.0};
+            }
+
+            // For multiple taxes, you might want to handle them differently
+            // For now, let's take the first tax and show its description
+            final firstTax = taxes.first;
+            return {
+              'name': firstTax['description'] ?? 'Tax',
+              'rate': firstTax['rate'] ?? 0.0,
+            };
           },
         ) ??
-        '0';
+        {'name': 'Tax', 'rate': 0.0};
+  }
+
+// Keep this method for backward compatibility if needed elsewhere
+  String _getGSTRate() {
+    final taxInfo = _getTaxInfo();
+    return taxInfo['rate'].toStringAsFixed(0);
+  }
+
+  List<Map<String, dynamic>> _getAllTaxes() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            return List<Map<String, dynamic>>.from(taxes);
+          },
+        ) ??
+        [];
+  }
+
+  double _calculateTotalTax() {
+    final taxes = _getAllTaxes();
+    double totalTax = 0.0;
+
+    for (var tax in taxes) {
+      final rate = (tax['rate'] as num?)?.toDouble() ?? 0.0;
+      totalTax += _calculateSubtotal() * rate / 100;
+    }
+
+    return totalTax;
   }
 }

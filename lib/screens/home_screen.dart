@@ -498,6 +498,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Get the correct items list based on selection
     List<Map<String, dynamic>> displayedItems = _getFilteredItems();
     final authState = ref.watch(authProvider);
+
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
@@ -577,7 +578,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           children: [
                                             // Back Button
                                             if (tier.toLowerCase() !=
-                                                'tier1') ...[
+                                                'tier 1') ...[
                                               IconButton(
                                                 icon: const Icon(
                                                     Icons.arrow_back),
@@ -674,7 +675,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                           ],
                                         ),
-                                        if (tier.toLowerCase() != 'tier1') ...[
+                                        if (tier.toLowerCase() != 'tier 1') ...[
                                           Container(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 12, vertical: 6),
@@ -967,17 +968,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           'Discount ${_getDiscountLabel()}',
                                           '-RM ${_getDiscountAmount().toStringAsFixed(2)}',
                                         ),
-                                      if (_getGSTRate() != '0')
-                                        _buildOrderSummaryRow(
-                                            'GST (${_getGSTRate()}%)',
-                                            'RM ${_calculateGST().toStringAsFixed(2)}'),
+                                      _buildTaxSummaryRows(),
                                       _buildOrderSummaryRow(
                                           'Rounding', _getRoundingLabel()),
                                       const SizedBox(height: 10),
                                       Column(
                                         children: [
                                           if (tier.toLowerCase() !=
-                                              'tier1') ...[
+                                              'tier 1') ...[
                                             SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
@@ -1781,7 +1779,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         baseUrl,
         merchantId,
       ) {
-        return tier.toLowerCase() == 'tier1';
+        return tier.toLowerCase() == 'tier 1';
       },
       orElse: () => false,
     );
@@ -2112,7 +2110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         baseUrl,
         merchantId,
       ) async {
-        if (tier.toLowerCase() == "tier1") {
+        if (tier.toLowerCase() == "tier 1") {
           if (!hasOpening) {
             // Show dialog if no opening entry exists
             _showOpeningRequiredDialog();
@@ -2743,6 +2741,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildTaxSummaryRows() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            // Filter out taxes with 0% rate and calculate each tax
+            final applicableTaxes = taxes.where((tax) {
+              final rate = (tax['rate'] ?? 0.0).toDouble();
+              return rate > 0;
+            }).toList();
+
+            if (applicableTaxes.isEmpty) {
+              return SizedBox.shrink();
+            }
+
+            // Calculate subtotal for tax calculation
+            double subtotal = _calculateSubtotal();
+            double discount = _getDiscountAmount();
+            double taxableAmount = subtotal - discount;
+
+            return Column(
+              children: applicableTaxes.map((tax) {
+                final taxName = tax['description'] ?? 'Tax';
+                final taxRate = (tax['rate'] ?? 0.0).toDouble();
+                final taxAmount = taxableAmount * (taxRate / 100);
+
+                return _buildOrderSummaryRow(
+                  '$taxName (${taxRate.toStringAsFixed(1)}%)',
+                  'RM ${taxAmount.toStringAsFixed(2)}',
+                );
+              }).toList(),
+            );
+          },
+        ) ??
+        SizedBox.shrink();
+  }
+
   Future<void> _deleteOrder() async {
     if (widget.existingOrder == null || widget.existingOrder!.isEmpty) return;
 
@@ -3023,15 +3075,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             baseUrl,
             merchantId,
           ) {
-            // Find the GST tax rate from the taxes array
-            final gstTax = taxes.firstWhere(
-              (tax) => tax['description']?.contains('GST') ?? false,
-              orElse: () => {'rate': 0.0}, // Default to 0% if not found
-            );
-            return _calculateSubtotal() * (gstTax['rate'] ?? 0.0) / 100;
+            // Calculate total of all applicable taxes
+            double subtotal = _calculateSubtotal();
+            double discount = _getDiscountAmount();
+            double taxableAmount = subtotal - discount;
+
+            double totalTax = 0.0;
+            for (var tax in taxes) {
+              final taxRate = (tax['rate'] ?? 0.0).toDouble();
+              if (taxRate > 0) {
+                totalTax += taxableAmount * (taxRate / 100);
+              }
+            }
+            return totalTax;
           },
         ) ??
-        0.0; // Return 0 if not authenticated
+        0.0;
   }
 
   // Check if there's a discount applied
@@ -3103,11 +3162,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             baseUrl,
             merchantId,
           ) {
-            final gstTax = taxes.firstWhere(
-              (tax) => tax['description']?.contains('GST') ?? false,
-              orElse: () => {'rate': 0.0},
-            );
-            return (gstTax['rate'] ?? 0.0).toDouble();
+            // Calculate combined tax rate for rounding calculations
+            double combinedRate = 0.0;
+            for (var tax in taxes) {
+              final taxRate = (tax['rate'] ?? 0.0).toDouble();
+              if (taxRate > 0) {
+                combinedRate += taxRate;
+              }
+            }
+            return combinedRate;
           },
         ) ??
         0.0;
@@ -3181,11 +3244,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             baseUrl,
             merchantId,
           ) {
-            final gstTax = taxes.firstWhere(
-              (tax) => tax['description']?.contains('GST') ?? false,
-              orElse: () => {'rate': 0.0},
-            );
-            return (gstTax['rate'] ?? 0.0).toStringAsFixed(0);
+            // For backward compatibility, return the first tax rate if only one exists
+            if (taxes.isNotEmpty) {
+              final firstTax = taxes.first;
+              return (firstTax['rate'] ?? 0.0).toStringAsFixed(0);
+            }
+            return '0';
           },
         ) ??
         '0';

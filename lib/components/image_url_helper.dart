@@ -12,7 +12,6 @@ class ImageUrlHelper {
     }
     
     final baseUrl = await getBaseImageUrl();
-    
     // Handle different image path formats
     if (imagePath.startsWith('/')) {
       return '$baseUrl$imagePath';

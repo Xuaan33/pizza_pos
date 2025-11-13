@@ -376,7 +376,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (tier.toLowerCase() != 'tier1') ...[
+              if (tier.toLowerCase() != 'tier 1') ...[
                 Row(
                   children: [
                     _buildStatPill(

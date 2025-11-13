@@ -117,8 +117,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
             'payment_methods', jsonEncode(response['mode_of_payment']));
         await prefs.setString('taxes', jsonEncode(response['taxes']));
         await prefs.setBool('has_opening', response['has_opening']);
+        await prefs.setInt('print_kitchen_order', response['print_kitchen_order']);
         await prefs.setString('tier',
-            response['tier'] ?? 'tier1'); // Default to tier2 if not provided
+            response['tier'] ?? 'tier 1');
         await prefs.setString('last_login', DateTime.now().toIso8601String());
         await prefs.setString(
             'item_groups', jsonEncode(response['item_groups'] ?? []));
@@ -170,12 +171,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
               List<Map<String, dynamic>>.from(response['mode_of_payment']),
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
-          tier: response['tier'] ?? 'tier1', // Default to tier2 if not provided
+          tier: response['tier'] ?? 'tier 1', // Default to tier2 if not provided
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
           openingDate: openingDate,
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
           baseUrl: response['base_url'] ?? 'https://asdf.byondwave.com',
-          merchantId: response['merchant_id'] ?? merchantId,
+          merchantId: response['merchant_id'] ?? merchantId,      
         );
       } else {
         state = const AuthState.unauthenticated();
