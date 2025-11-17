@@ -38,7 +38,7 @@ class _SplitOrderPaymentDialogState
   double _amountGiven = 0.0;
   bool _isProcessingPayment = false;
   bool _isCashPayment = false;
-  String baseImageUrl = 'https://mejaa.joydivisionpadel.com';
+  String baseImageUrl = 'https://harper.briosocialclub.com';
   bool _isDeletingOrder = false;
   bool _isLoading = true;
   Map<String, dynamic> _orderDetails = {};

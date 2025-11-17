@@ -6,7 +6,7 @@ import 'auth_service.dart';
 
 class PosService {
   static const String _baseUrl =
-      'https://mejaa.joydivisionpadel.com//api/method';
+      'https://harper.briosocialclub.com//api/method';
 
   // Helper method for common request handling
   Future<Map<String, dynamic>> makeRequest({

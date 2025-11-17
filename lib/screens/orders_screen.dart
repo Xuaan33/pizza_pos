@@ -1358,7 +1358,7 @@ Widget _buildLoadingIndicator() {
         // Ensure image URL is properly formatted
         final image = convertedItem['image']?.toString() ?? '';
         if (image.isNotEmpty && !image.startsWith('http')) {
-          convertedItem['image'] = 'https://mejaa.joydivisionpadel.com$image';
+          convertedItem['image'] = 'https://harper.briosocialclub.com$image';
         }
 
         formattedItems.add(convertedItem);

@@ -159,7 +159,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
             // Fetch images from API
             executor.execute {
                 try {
-                    val url = URL("https://mejaa.joydivisionpadel.com/api/method/shiok_pos.api.get_customer_facing_images")
+                    val url = URL("https://harper.briosocialclub.com/api/method/shiok_pos.api.get_customer_facing_images")
                     val connection = url.openConnection() as HttpURLConnection
                     connection.requestMethod = "GET"
 

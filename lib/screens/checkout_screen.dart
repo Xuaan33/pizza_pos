@@ -778,7 +778,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.network(
-                    'https://mejaa.joydivisionpadel.com${method['custom_payment_mode_image']}',
+                    'https://harper.briosocialclub.com${method['custom_payment_mode_image']}',
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
@@ -4496,11 +4496,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'https://mejaa.joydivisionpadel.com$imagePath';
+      return 'https://harper.briosocialclub.com$imagePath';
     }
 
     if (!imagePath.startsWith('assets/')) {
-      return 'https://mejaa.joydivisionpadel.com$imagePath';
+      return 'https://harper.briosocialclub.com$imagePath';
     }
 
     return imagePath; // local asset

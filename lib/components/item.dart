@@ -2109,7 +2109,7 @@ class Item {
       itemGroup: json['item_group'] ?? '',
       price: (json['price_list_rate'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image'] != null
-          ? 'https://mejaa.joydivisionpadel.com${json['image']}'
+          ? 'https://harper.briosocialclub.com${json['image']}'
           : null,
       description: json['description'] as String?,
       variantGroups: (json['structured_variant_info'] as List<dynamic>?)
@@ -2130,7 +2130,7 @@ class Item {
       itemGroup: json['item_group'] ?? '',
       price: (json['standard_rate'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image'] != null
-          ? 'https://mejaa.joydivisionpadel.com${json['image']}'
+          ? 'https://harper.briosocialclub.com${json['image']}'
           : null,
       description: json['description'] as String?,
       variantGroups: (json['custom_variant_group_table'] as List<dynamic>?)
