@@ -110,7 +110,7 @@ class CustomerDisplay(
         taxRate: String
     ) {
         handler.post {
-            orderTaxLabel.text = "GST (${taxRate}%):"
+            orderTaxLabel.text = "Tax (${taxRate}%):"
            if (taxRate == "0" || taxRate.isEmpty()) {
         orderTaxLabel.visibility = View.GONE
         orderTax.visibility = View.GONE
@@ -255,19 +255,34 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun showCustomerScreen() {
+    try {
         val displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val displays = displayManager.displays
-        if (displays.size > 1) {
-            val secondaryDisplay = displays[1]
-            
+        
+        // More robust display detection
+        val secondaryDisplay = displays.find { 
+            it.displayId != Display.DEFAULT_DISPLAY && it.isValid 
+        }
+        
+        if (secondaryDisplay != null) {
             // Get base URL from SharedPreferences
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             val baseUrl = prefs.getString("flutter.base_url", "https://asdf.byondwave.com") ?: "https://asdf.byondwave.com"
             
+            // Clean up existing display first
+            hideCustomerScreen()
+            
             customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken, baseUrl)
             customerDisplay?.show()
+        } else {
+            // Log or handle no secondary display
+            println("No secondary display found")
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        // Handle exception gracefully
     }
+}
 
     private fun hideCustomerScreen() {
         customerDisplay?.cleanup()   
