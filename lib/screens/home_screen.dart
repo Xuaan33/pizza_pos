@@ -11,7 +11,7 @@ import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
-import 'package:shiok_pos_android_app/seondary%20screen/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
