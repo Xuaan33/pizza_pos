@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
-import 'package:shiok_pos_android_app/components/item_group.dart';
-import 'package:shiok_pos_android_app/components/variant_group.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
+import 'package:shiok_pos_android_app/screens/Settings%20Screen/item_group.dart';
+import 'package:shiok_pos_android_app/screens/Settings%20Screen/variant_group.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class ItemManagement extends ConsumerStatefulWidget {
