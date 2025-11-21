@@ -2028,6 +2028,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
 
         if (response['success'] == true) {
+          // In the _completePayment method, around line 1320, modify the cash payment section:
+          if (_selectedPaymentMethod == 'Cash') {
+            // Open cash drawer for cash payments
+            try {
+              await ReceiptPrinter.openCashDrawer();
+            } catch (e) {
+              debugPrint('⚠️ Cash drawer error: $e');
+              // Continue with payment even if cash drawer fails
+            }
+          }
           // Show print receipt dialog
           if (shouldPrintKitchenOrder) {
             await _printKitchenOrderOnly(invoiceName);

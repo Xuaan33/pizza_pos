@@ -4,9 +4,11 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
+  flutter_thermal_printer
   permission_handler_windows
   printing
   share_plus
+  universal_ble
   url_launcher_windows
 )
 

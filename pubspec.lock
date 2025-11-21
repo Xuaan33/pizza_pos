@@ -73,6 +73,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.13"
+  bluez:
+    dependency: transitive
+    description:
+      name: bluez
+      sha256: "61a7204381925896a374301498f2f5399e59827c6498ae1e924aaa598751b545"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.8.3"
   boolean_selector:
     dependency: transitive
     description:
@@ -281,6 +289,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
+  esc_pos_utils_plus:
+    dependency: "direct main"
+    description:
+      name: esc_pos_utils_plus
+      sha256: "2a22d281cb6f04600ba3ebd607ad8df03a4b2446d814007d22525bab4d50c2ff"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.4"
   fake_async:
     dependency: transitive
     description:
@@ -363,6 +379,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_thermal_printer:
+    dependency: "direct main"
+    description:
+      name: flutter_thermal_printer
+      sha256: "9f7dea4f658176e0dd33ff79f2285c54538d8a2de021b61f850177a404753964"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.4"
+  flutter_web_bluetooth:
+    dependency: transitive
+    description:
+      name: flutter_web_bluetooth
+      sha256: ad26a1b3fef95b86ea5f63793b9a0cdc1a33490f35d754e4e711046cae3ebbf8
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -816,6 +848,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.28.0"
+  screenshot:
+    dependency: transitive
+    description:
+      name: screenshot
+      sha256: "63817697a7835e6ce82add4228e15d233b74d42975c143ad8cfe07009fab866b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
   scrollable_positioned_list:
     dependency: "direct main"
     description:
@@ -1077,6 +1117,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  universal_ble:
+    dependency: transitive
+    description:
+      name: universal_ble
+      sha256: "6a5c6c1fb295015934a5aef3dc751ae7e00721535275f8478bfe74db77b238c5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.21.1"
   universal_io:
     dependency: transitive
     description:

@@ -19,24 +19,44 @@ class _VariantManagementScreenState
   bool _isSaving = false;
   String? _selectedVariantGroup;
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _optionRequiredController = TextEditingController();
+  final TextEditingController _maximumSelectionController = TextEditingController();
   final List<Map<String, dynamic>> _variantInfoTable = [];
   bool _isRequired = true;
-  int _optionRequiredNo = 1; // Changed from bool to int
-  int _maximumSelection = 1; // Added maximum selection
+  int _optionRequiredNo = 1;
+  int _maximumSelection = 1;
   bool _allowMultipleSelection = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize with null to ensure dropdown starts in a valid state
     _selectedVariantGroup = null;
+    _optionRequiredController.text = _optionRequiredNo.toString();
+    _maximumSelectionController.text = _maximumSelection.toString();
     _loadVariantGroups();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    _optionRequiredController.dispose();
+    _maximumSelectionController.dispose();
     super.dispose();
+  }
+
+  // Helper method to parse integer input with better error handling
+  int _parseInt(String value, {int defaultValue = 1, int minValue = 0, int maxValue = 999}) {
+    if (value.isEmpty) return defaultValue;
+    final parsed = int.tryParse(value);
+    if (parsed == null || parsed < minValue) return defaultValue;
+    if (parsed > maxValue) return maxValue;
+    return parsed;
+  }
+
+  // Helper method to handle text changes for integer fields
+  void _handleIntFieldChange(String value, Function(int) onChanged) {
+    final parsedValue = _parseInt(value, defaultValue: 1);
+    onChanged(parsedValue);
   }
 
   Future<void> _loadVariantGroups() async {
@@ -45,7 +65,6 @@ class _VariantManagementScreenState
       final response = await PosService().getVariantGroups();
       final newVariantGroups = response['message'] ?? [];
 
-      // Map API response to expected format
       final mappedVariantGroups = newVariantGroups.map((group) {
         return {
           'name': group['variant_group']?.toString(),
@@ -65,13 +84,11 @@ class _VariantManagementScreenState
   }
 
   void _validateSelectedVariantGroup() {
-    // Check if the currently selected variant group still exists
     if (_selectedVariantGroup != null) {
       final exists = _variantGroups
           .any((group) => group['name']?.toString() == _selectedVariantGroup);
 
       if (!exists) {
-        // Reset if the selected variant group no longer exists
         _selectedVariantGroup = null;
         _resetForm();
       }
@@ -98,9 +115,13 @@ class _VariantManagementScreenState
           );
         }
         _isRequired = data['required'] == 1;
-        _optionRequiredNo = data['option_required_no'];
-        _maximumSelection = data['maximum_selection'];
-        _allowMultipleSelection = data['allow_multiple_selection'];
+        _optionRequiredNo = data['option_required_no'] ?? 1;
+        _maximumSelection = data['maximum_selection'] ?? 1;
+        _allowMultipleSelection = data['allow_multiple_selection'] ?? false;
+        
+        // Update controllers
+        _optionRequiredController.text = _optionRequiredNo.toString();
+        _maximumSelectionController.text = _maximumSelection.toString();
       });
     } catch (e) {
       _showError('Failed to load variant group details: $e');
@@ -114,7 +135,6 @@ class _VariantManagementScreenState
 
     setState(() => _isSaving = true);
     try {
-      // Prepare variant info table with correct field names
       final mappedVariantInfoTable = _variantInfoTable.map((option) {
         return {
           'option': option['option'],
@@ -123,7 +143,6 @@ class _VariantManagementScreenState
       }).toList();
 
       if (_selectedVariantGroup == null) {
-        // Create new
         await PosService().createVariantGroup(
           title: _titleController.text,
           variantInfoTable: mappedVariantInfoTable,
@@ -134,7 +153,6 @@ class _VariantManagementScreenState
         );
         _showSuccess('Variant group created successfully');
       } else {
-        // Update existing
         await PosService().updateVariantGroup(
           name: _selectedVariantGroup!,
           variantInfoTable: mappedVariantInfoTable,
@@ -197,9 +215,11 @@ class _VariantManagementScreenState
       _titleController.clear();
       _variantInfoTable.clear();
       _isRequired = true;
-      _optionRequiredNo = 0;
+      _optionRequiredNo = 1;
       _maximumSelection = 1;
       _allowMultipleSelection = false;
+      _optionRequiredController.text = _optionRequiredNo.toString();
+      _maximumSelectionController.text = _maximumSelection.toString();
     });
   }
 
@@ -238,7 +258,6 @@ class _VariantManagementScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Only show dropdown if variant groups are loaded
                     if (_variantGroups.isNotEmpty ||
                         _selectedVariantGroup == null)
                       _buildVariantGroupDropdown()
@@ -261,7 +280,6 @@ class _VariantManagementScreenState
   }
 
   Widget _buildVariantGroupDropdown() {
-    // Build the items list first
     final dropdownItems = <DropdownMenuItem<String>>[
       const DropdownMenuItem<String>(
         value: null,
@@ -269,7 +287,6 @@ class _VariantManagementScreenState
       ),
     ];
 
-    // Add variant groups with null safety
     for (final group in _variantGroups) {
       final groupName = group['name']?.toString();
       if (groupName != null && groupName.isNotEmpty) {
@@ -282,17 +299,14 @@ class _VariantManagementScreenState
       }
     }
 
-    // Get all available values from items
     final availableValues = dropdownItems.map((item) => item.value).toSet();
 
-    // Force reset to null if current selection is invalid
     String? validSelectedValue = null;
     if (_selectedVariantGroup != null &&
         availableValues.contains(_selectedVariantGroup)) {
       validSelectedValue = _selectedVariantGroup;
     }
 
-    // If we have an invalid selection, schedule a reset
     if (_selectedVariantGroup != null &&
         !availableValues.contains(_selectedVariantGroup)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -341,11 +355,57 @@ class _VariantManagementScreenState
               value?.isEmpty ?? true ? 'Required field' : null,
         ),
         const SizedBox(height: 16),
+        
+        // Required Switch
         SwitchListTile(
           title: const Text('Required'),
           value: _isRequired,
           onChanged: (value) => setState(() => _isRequired = value),
         ),
+        
+        // Option Required Number
+        TextFormField(
+          controller: _optionRequiredController,
+          decoration: const InputDecoration(
+            labelText: 'Minimum Options Required',
+            border: OutlineInputBorder(),
+            helperText: 'Number of options customer must select (0 if optional)',
+          ),
+          keyboardType: TextInputType.number,
+          onChanged: (value) {
+            _handleIntFieldChange(value, (parsedValue) {
+              setState(() => _optionRequiredNo = parsedValue);
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        
+        // Allow Multiple Selection Switch
+        SwitchListTile(
+          title: const Text('Allow Multiple Selection'),
+          value: _allowMultipleSelection,
+          onChanged: (value) => setState(() => _allowMultipleSelection = value),
+        ),
+        
+        // Maximum Selection (only show if multiple selection is allowed)
+        if (_allowMultipleSelection) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _maximumSelectionController,
+            decoration: const InputDecoration(
+              labelText: 'Maximum Selections Allowed',
+              border: OutlineInputBorder(),
+              helperText: 'Maximum number of options customer can select',
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (value) {
+              _handleIntFieldChange(value, (parsedValue) {
+                setState(() => _maximumSelection = parsedValue);
+              });
+            },
+          ),
+        ],
+        
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -415,15 +475,17 @@ class _VariantManagementScreenState
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            TextFormField(
               controller: optionController,
               decoration: const InputDecoration(
                 labelText: 'Option Name',
                 border: OutlineInputBorder(),
               ),
+              validator: (value) =>
+                  value?.isEmpty ?? true ? 'Required field' : null,
             ),
             const SizedBox(height: 16),
-            TextField(
+            TextFormField(
               controller: priceController,
               decoration: const InputDecoration(
                 labelText: 'Price Adjustment',
@@ -432,6 +494,7 @@ class _VariantManagementScreenState
               ),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              initialValue: '0.00',
             ),
           ],
         ),

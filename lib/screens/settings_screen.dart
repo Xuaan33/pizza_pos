@@ -77,7 +77,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ];
 
     // Only add Employee Management for tier 2 and above
-    if (tier.toLowerCase() != 'tier1') {
+    if (tier.toLowerCase() != 'tier 1') {
       sections.add('Employee Management');
     }
 
@@ -314,20 +314,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
-  Future<void> _loadConfiguration() async {
-    await _terminalManager.loadConfiguration();
-    setState(() {
-      _selectedConnectionType =
-          _terminalManager.currentConnectionType == ConnectionType.tcpip
-              ? 'TCP/IP'
-              : 'Wired';
-      _isPosConnected = _terminalManager.isConnected;
-    });
+  // Future<void> _loadConfiguration() async {
+  //   await _terminalManager.loadConfiguration();
+  //   setState(() {
+  //     _selectedConnectionType =
+  //         _terminalManager.currentConnectionType == ConnectionType.tcpip
+  //             ? 'TCP/IP'
+  //             : 'Wired';
+  //     _isPosConnected = _terminalManager.isConnected;
+  //   });
 
-    if (_selectedConnectionType == 'Wired') {
-      await _discoverUsbDevices();
-    }
-  }
+  //   if (_selectedConnectionType == 'Wired') {
+  //     await _discoverUsbDevices();
+  //   }
+  // }
 
   Future<void> _discoverUsbDevices() async {
     try {
@@ -349,58 +349,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _saveConfig() async {
-    setState(() => _isSaving = true);
+  // Future<void> _saveConfig() async {
+  //   setState(() => _isSaving = true);
 
-    try {
-      if (_selectedConnectionType == 'TCP/IP') {
-        final posIp = _ipController.text.trim();
-        final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
+  //   try {
+  //     if (_selectedConnectionType == 'TCP/IP') {
+  //       final posIp = _ipController.text.trim();
+  //       final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
 
-        if (posIp.isEmpty) {
-          throw Exception('Please enter IP Address');
-        }
+  //       if (posIp.isEmpty) {
+  //         throw Exception('Please enter IP Address');
+  //       }
 
-        await _terminalManager.saveConfiguration(
-          type: ConnectionType.tcpip,
-          ip: posIp,
-          port: posPort,
-        );
+  //       await _terminalManager.saveConfiguration(
+  //         type: ConnectionType.tcpip,
+  //         ip: posIp,
+  //         port: posPort,
+  //       );
 
-        Fluttertoast.showToast(
-          msg: "TCP/IP configuration saved successfully",
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
-      } else {
-        if (_selectedUsbDevice == null) {
-          throw Exception('Please select a USB device');
-        }
+  //       Fluttertoast.showToast(
+  //         msg: "TCP/IP configuration saved successfully",
+  //         gravity: ToastGravity.BOTTOM,
+  //         backgroundColor: Colors.green,
+  //         textColor: Colors.white,
+  //       );
+  //     } else {
+  //       if (_selectedUsbDevice == null) {
+  //         throw Exception('Please select a USB device');
+  //       }
 
-        await _terminalManager.saveConfiguration(
-          type: ConnectionType.wired,
-          usbDevice: _selectedUsbDevice,
-        );
+  //       await _terminalManager.saveConfiguration(
+  //         type: ConnectionType.wired,
+  //         usbDevice: _selectedUsbDevice,
+  //       );
 
-        Fluttertoast.showToast(
-          msg: "USB configuration saved successfully",
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
-      }
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: "Failed to save configuration: $e",
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
-    } finally {
-      setState(() => _isSaving = false);
-    }
-  }
+  //       Fluttertoast.showToast(
+  //         msg: "USB configuration saved successfully",
+  //         gravity: ToastGravity.BOTTOM,
+  //         backgroundColor: Colors.green,
+  //         textColor: Colors.white,
+  //       );
+  //     }
+  //   } catch (e) {
+  //     Fluttertoast.showToast(
+  //       msg: "Failed to save configuration: $e",
+  //       gravity: ToastGravity.BOTTOM,
+  //       backgroundColor: Colors.red,
+  //       textColor: Colors.white,
+  //     );
+  //   } finally {
+  //     setState(() => _isSaving = false);
+  //   }
+  // }
 
   Future<void> _testConnection() async {
     setState(() => _isTesting = true);
@@ -432,6 +432,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  // In the _buildConnectionTypeSelector() method, modify the Wired connection radio button:
   Widget _buildConnectionTypeSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,11 +466,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   value: 'Wired',
                   groupValue: _selectedConnectionType,
                   onChanged: (value) async {
-                    setState(() {
-                      _selectedConnectionType = value!;
-                      _isPosConnected = false;
-                    });
-                    await _discoverUsbDevices();
+                    // Show toast message that wired connection is not supported
+                    Fluttertoast.showToast(
+                      msg: 'Wired connection currently not supported',
+                      gravity: ToastGravity.BOTTOM,
+                      backgroundColor: Colors.orange,
+                      textColor: Colors.white,
+                    );
+                    // Don't change the selection
                   },
                 ),
               ),
@@ -480,122 +484,243 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildWiredConnectionForm() {
-    return Column(
-      children: [
-        const Text(
-          'USB/Wired Connection',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
+// Comment out the entire _buildWiredConnectionForm() method:
+/*
+Widget _buildWiredConnectionForm() {
+  return Column(
+    children: [
+      const Text(
+        'USB/Wired Connection',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 10),
 
-        // USB Device Selector
-        if (_availableUsbDevices.isEmpty)
-          Column(
-            children: [
-              const Text(
-                'No USB devices found. Please connect your POS terminal and refresh.',
-                style: TextStyle(color: Colors.orange),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _discoverUsbDevices,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Discover USB Devices'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          )
-        else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Select USB Device:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButton<UsbDevice>(
-                  value: _selectedUsbDevice,
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  items: _availableUsbDevices.map((device) {
-                    return DropdownMenuItem<UsbDevice>(
-                      value: device,
-                      child: Text(
-                        '${device.productName ?? 'Unknown Device'} (VID: ${device.vid}, PID: ${device.pid})',
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (device) {
-                    setState(() {
-                      _selectedUsbDevice = device;
-                      _terminalManager.setUsbDevice(device!);
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                onPressed: _discoverUsbDevices,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Refresh Devices'),
-              ),
-            ],
-          ),
-
-        const SizedBox(height: 16),
-        const Text(
-          'Make sure your POS terminal is properly connected via USB cable.',
-          style: TextStyle(color: Colors.grey, fontSize: 12),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isSaving ? null : _saveConfig,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2196F3),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+      // USB Device Selector
+      if (_availableUsbDevices.isEmpty)
+        Column(
+          children: [
+            const Text(
+              'No USB devices found. Please connect your POS terminal and refresh.',
+              style: TextStyle(color: Colors.orange),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _discoverUsbDevices,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Discover USB Devices'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
               ),
             ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+          ],
+        )
+      else
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select USB Device:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: DropdownButton<UsbDevice>(
+                value: _selectedUsbDevice,
+                isExpanded: true,
+                underline: const SizedBox(),
+                items: _availableUsbDevices.map((device) {
+                  return DropdownMenuItem<UsbDevice>(
+                    value: device,
+                    child: Text(
+                      '${device.productName ?? 'Unknown Device'} (VID: ${device.vid}, PID: ${device.pid})',
                     ),
-                  )
-                : const Text(
-                    'Save USB Configuration',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-          ),
+                  );
+                }).toList(),
+                onChanged: (device) {
+                  setState(() {
+                    _selectedUsbDevice = device;
+                    _terminalManager.setUsbDevice(device!);
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _discoverUsbDevices,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Refresh Devices'),
+            ),
+          ],
         ),
-      ],
+
+      const SizedBox(height: 16),
+      const Text(
+        'Make sure your POS terminal is properly connected via USB cable.',
+        style: TextStyle(color: Colors.grey, fontSize: 12),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 16),
+
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: _isSaving ? null : _saveConfig,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2196F3),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: _isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  'Save USB Configuration',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+        ),
+      ),
+    ],
+  );
+}
+*/
+
+// Comment out the _saveWiredConfig() method:
+/*
+Future<void> _saveWiredConfig() async {
+  setState(() => _isSaving = true);
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('connection_type', 'Wired');
+
+    Fluttertoast.showToast(
+      msg: "Wired configuration saved successfully",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.green,
+      textColor: Colors.white,
+    );
+  } catch (e) {
+    Fluttertoast.showToast(
+      msg: "Failed to save configuration: $e",
+      toastLength: Toast.LENGTH_LONG,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+  } finally {
+    setState(() => _isSaving = false);
+  }
+}
+*/
+
+// In the _loadConfiguration() method, comment out the wired connection discovery:
+  Future<void> _loadConfiguration() async {
+    await _terminalManager.loadConfiguration();
+    setState(() {
+      _selectedConnectionType =
+          _terminalManager.currentConnectionType == ConnectionType.tcpip
+              ? 'TCP/IP'
+              : 'Wired';
+      _isPosConnected = _terminalManager.isConnected;
+    });
+
+    // Comment out USB device discovery
+    /*
+  if (_selectedConnectionType == 'Wired') {
+    await _discoverUsbDevices();
+  }
+  */
+  }
+
+// Comment out the _discoverUsbDevices() method:
+/*
+Future<void> _discoverUsbDevices() async {
+  try {
+    final devices = await _terminalManager.discoverUsbDevices();
+    setState(() {
+      _availableUsbDevices = devices;
+      if (devices.isNotEmpty && _selectedUsbDevice == null) {
+        _selectedUsbDevice = devices.first;
+        _terminalManager.setUsbDevice(devices.first);
+      }
+    });
+  } catch (e) {
+    Fluttertoast.showToast(
+      msg: 'Error discovering USB devices: $e',
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
     );
   }
+}
+*/
+
+// In the _saveConfig() method, modify to only handle TCP/IP:
+  Future<void> _saveConfig() async {
+    setState(() => _isSaving = true);
+
+    try {
+      // Only handle TCP/IP connection
+      if (_selectedConnectionType == 'TCP/IP') {
+        final posIp = _ipController.text.trim();
+        final posPort = int.tryParse(_portController.text.trim()) ?? 8800;
+
+        if (posIp.isEmpty) {
+          throw Exception('Please enter IP Address');
+        }
+
+        await _terminalManager.saveConfiguration(
+          type: ConnectionType.tcpip,
+          ip: posIp,
+          port: posPort,
+        );
+
+        Fluttertoast.showToast(
+          msg: "TCP/IP configuration saved successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        // Show message for wired connection
+        throw Exception('Wired connection currently not supported');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save configuration: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
+// In the build method section for POS Terminal, modify to only show TCP/IP form:
+// In _buildPosTerminalSection() method, replace the connection forms section with:
+// Show different connection forms based on selection
 
   Widget _buildConnectionStatusIndicator() {
     return Row(
@@ -948,7 +1073,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if (_selectedConnectionType == 'TCP/IP')
           _buildTcpConnectionForm()
         else
-          _buildWiredConnectionForm(),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange, size: 48),
+                SizedBox(height: 16),
+                Text(
+                  'Wired Connection Not Supported',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Please use TCP/IP connection for now. Wired connection support will be added in a future update.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
 
         const SizedBox(height: 20),
         _buildTestButton(),
