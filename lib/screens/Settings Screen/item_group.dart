@@ -11,7 +11,13 @@ class ItemGroupManagement extends StatefulWidget {
 
 class _ItemGroupManagementState extends State<ItemGroupManagement> {
   List<ItemGroup> itemGroups = [];
+  List<ItemGroup> filteredItemGroups = [];
   bool isLoading = true;
+
+  // New state variables for search and sorting
+  String _searchQuery = '';
+  String _sortBy = 'name'; // Default sort by name
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -32,6 +38,7 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
               .where((group) =>
                   group.name != 'All' && group.name != 'All Item Groups')
               .toList();
+          _applyFilters(); // Apply initial filters
           isLoading = false;
         });
       }
@@ -39,6 +46,50 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
       setState(() => isLoading = false);
       _showErrorToast('Failed to load item groups: $e');
     }
+  }
+
+  void _applyFilters() {
+    List<ItemGroup> filtered = itemGroups.where((group) {
+      // Search filter
+      final matchesSearch = _searchQuery.isEmpty ||
+          group.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          group.value.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesSearch;
+    }).toList();
+
+    // Apply sorting
+    filtered.sort((a, b) {
+      int compareResult;
+      switch (_sortBy) {
+        case 'name':
+          compareResult = a.name.compareTo(b.name);
+          break;
+        case 'value':
+          compareResult = a.value.compareTo(b.value);
+          break;
+        case 'status':
+          compareResult = a.disabled.compareTo(b.disabled);
+          break;
+        default:
+          compareResult = a.name.compareTo(b.name);
+      }
+
+      return _sortAscending ? compareResult : -compareResult;
+    });
+
+    setState(() {
+      filteredItemGroups = filtered;
+    });
+  }
+
+  // Reset all filters
+  void _resetFilters() {
+    setState(() {
+      _searchQuery = '';
+      _sortBy = 'name';
+      _sortAscending = true;
+    });
+    _applyFilters();
   }
 
   void _showCreateItemGroupDialog() {
@@ -130,18 +181,102 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
           ),
           const SizedBox(height: 16),
 
+          // Search and Sort Section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Search Bar
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search by name or value...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                setState(() {
+                                  _searchQuery = '';
+                                });
+                                _applyFilters();
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                      _applyFilters();
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Sort Row
+                  Row(
+                    children: [
+                      // Sort Button
+                      ElevatedButton.icon(
+                        onPressed: () => _showSortDialog(),
+                        icon: Icon(
+                          _sortAscending
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward,
+                          size: 16,
+                        ),
+                        label: const Text(
+                          'Sort',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[200],
+                          foregroundColor: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Reset Filters Button
+                      if (_hasActiveFilters)
+                        TextButton.icon(
+                          onPressed: _resetFilters,
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Clear Filters'),
+                        ),
+                    ],
+                  ),
+
+                  // Active Filters Indicator
+                  if (_hasActiveFilters) ...[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: _activeFilterChips,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Item Groups List
           if (isLoading)
             const Center(child: CircularProgressIndicator())
-          else if (itemGroups.isEmpty)
+          else if (filteredItemGroups.isEmpty)
             const Center(child: Text('No item groups found'))
           else
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: itemGroups.length,
+              itemCount: filteredItemGroups.length,
               itemBuilder: (context, index) {
-                final group = itemGroups[index];
+                final group = filteredItemGroups[index];
                 return ItemGroupCard(
                   itemGroup: group,
                   onEdit: () => _showEditItemGroupDialog(group),
@@ -152,6 +287,159 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
             ),
         ],
       ),
+    );
+  }
+
+  // Check if any filters are active
+  bool get _hasActiveFilters {
+    return _searchQuery.isNotEmpty || _sortBy != 'name' || !_sortAscending;
+  }
+
+  // Get active filter chips
+  List<Widget> get _activeFilterChips {
+    final chips = <Widget>[];
+
+    if (_searchQuery.isNotEmpty) {
+      chips.add(Chip(
+        label: Text('Search: "$_searchQuery"'),
+        onDeleted: () {
+          setState(() {
+            _searchQuery = '';
+          });
+          _applyFilters();
+        },
+      ));
+    }
+
+    if (_sortBy != 'name' || !_sortAscending) {
+      String sortText = '';
+      switch (_sortBy) {
+        case 'name':
+          sortText = 'Name ${_sortAscending ? 'A-Z' : 'Z-A'}';
+          break;
+        case 'value':
+          sortText = 'Value ${_sortAscending ? 'A-Z' : 'Z-A'}';
+          break;
+        case 'status':
+          sortText =
+              'Status ${_sortAscending ? 'Active First' : 'Inactive First'}';
+          break;
+      }
+
+      chips.add(Chip(
+        label: Text('Sort: $sortText'),
+        onDeleted: () {
+          setState(() {
+            _sortBy = 'name';
+            _sortAscending = true;
+          });
+          _applyFilters();
+        },
+      ));
+    }
+
+    return chips;
+  }
+
+  // Show sort dialog
+  void _showSortDialog() {
+    String? tempSortBy = _sortBy;
+    bool? tempSortAscending = _sortAscending;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text(
+                'Sort Item Groups',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Colors.white,
+              content: SizedBox(
+                width: 300,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sort by options
+                    const Text('Sort by:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text('Name'),
+                          value: 'name',
+                          groupValue: tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortBy = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sort order
+                    const Text('Order:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Radio<bool>(
+                          value: true,
+                          groupValue: tempSortAscending,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortAscending = value;
+                            });
+                          },
+                        ),
+                        const Text('Ascending'),
+                        Radio<bool>(
+                          value: false,
+                          groupValue: tempSortAscending,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortAscending = value;
+                            });
+                          },
+                        ),
+                        const Text('Descending'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Apply the sort options
+                    setState(() {
+                      _sortBy = tempSortBy!;
+                      _sortAscending = tempSortAscending!;
+                    });
+                    _applyFilters();
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Apply Sort',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

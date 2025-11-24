@@ -51,6 +51,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   List<Map<String, dynamic>> confirmedOptions = [];
   bool _isLoadingClosing = false;
 
+  //Variant Group
+  String _searchQuery = '';
+  String _sortBy = 'name'; // Default sort by name
+  bool _sortAscending = true;
+  List<VariantGroup> _filteredVariantGroups = [];
+
   // For debug reporting
   final List<Map<String, dynamic>> _connectionLogs = [];
   bool _isGeneratingReport = false;
@@ -1191,6 +1197,9 @@ Future<void> _discoverUsbDevices() async {
   }
 
   Widget _buildVariantSection() {
+    if (_filteredVariantGroups.isEmpty && variantGroups.isNotEmpty) {
+      _applyFilters();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1217,17 +1226,101 @@ Future<void> _discoverUsbDevices() async {
         ),
         const SizedBox(height: 16),
 
+        // Search and Sort Section
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search Bar
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search by variant group name...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                              _applyFilters();
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                    _applyFilters();
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Sort Row
+                Row(
+                  children: [
+                    // Sort Button
+                    ElevatedButton.icon(
+                      onPressed: () => _showSortDialog(),
+                      icon: Icon(
+                        _sortAscending
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
+                        size: 16,
+                      ),
+                      label: const Text(
+                        'Sort',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Reset Filters Button
+                    if (_hasActiveFilters)
+                      TextButton.icon(
+                        onPressed: _resetFilters,
+                        icon: const Icon(Icons.clear, size: 16),
+                        label: const Text('Clear Filters'),
+                      ),
+                  ],
+                ),
+
+                // Active Filters Indicator
+                if (_hasActiveFilters) ...[
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _activeFilterChips,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
         // Body expands with scrollable list
         Expanded(
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
-              : variantGroups.isEmpty
+              : _filteredVariantGroups.isEmpty
                   ? const Center(child: Text('No variant groups found'))
                   : ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: variantGroups.length,
+                      itemCount: _filteredVariantGroups.length,
                       itemBuilder: (context, index) {
-                        final group = variantGroups[index];
+                        final group = _filteredVariantGroups[index];
                         return VariantGroupCard(
                           variantGroup: group,
                           onEdit: () => _showEditVariantGroupDialog(group),
@@ -3130,5 +3223,212 @@ Future<void> _discoverUsbDevices() async {
     buffer.writeln('5. Test with ping command from device');
 
     return buffer.toString();
+  }
+
+  // Apply filters function
+  void _applyFilters() {
+    List<VariantGroup> filtered = variantGroups.where((group) {
+      // Search filter
+      final matchesSearch = _searchQuery.isEmpty ||
+          group.variantGroup.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesSearch;
+    }).toList();
+
+    // Apply sorting
+    filtered.sort((a, b) {
+      int compareResult;
+      switch (_sortBy) {
+        case 'name':
+          compareResult = a.variantGroup.compareTo(b.variantGroup);
+          break;
+        case 'options':
+          compareResult = a.options.length.compareTo(b.options.length);
+          break;
+        case 'status':
+          compareResult = a.disabled.compareTo(b.disabled);
+          break;
+        default:
+          compareResult = a.variantGroup.compareTo(b.variantGroup);
+      }
+
+      return _sortAscending ? compareResult : -compareResult;
+    });
+
+    setState(() {
+      _filteredVariantGroups = filtered;
+    });
+  }
+
+  // Reset all filters
+  void _resetFilters() {
+    setState(() {
+      _searchQuery = '';
+      _sortBy = 'name';
+      _sortAscending = true;
+    });
+    _applyFilters();
+  }
+
+  // Check if any filters are active
+  bool get _hasActiveFilters {
+    return _searchQuery.isNotEmpty || _sortBy != 'name' || !_sortAscending;
+  }
+
+  // Get active filter chips
+  List<Widget> get _activeFilterChips {
+    final chips = <Widget>[];
+
+    if (_searchQuery.isNotEmpty) {
+      chips.add(Chip(
+        label: Text('Search: "$_searchQuery"'),
+        onDeleted: () {
+          setState(() {
+            _searchQuery = '';
+          });
+          _applyFilters();
+        },
+      ));
+    }
+
+    if (_sortBy != 'name' || !_sortAscending) {
+      String sortText = '';
+      switch (_sortBy) {
+        case 'name':
+          sortText = 'Name ${_sortAscending ? 'A-Z' : 'Z-A'}';
+          break;
+        case 'options':
+          sortText = 'Options ${_sortAscending ? 'Few-Many' : 'Many-Few'}';
+          break;
+        case 'status':
+          sortText =
+              'Status ${_sortAscending ? 'Active First' : 'Inactive First'}';
+          break;
+      }
+
+      chips.add(Chip(
+        label: Text('Sort: $sortText'),
+        onDeleted: () {
+          setState(() {
+            _sortBy = 'name';
+            _sortAscending = true;
+          });
+          _applyFilters();
+        },
+      ));
+    }
+
+    return chips;
+  }
+
+  // Show sort dialog
+  void _showSortDialog() {
+    String? tempSortBy = _sortBy;
+    bool? tempSortAscending = _sortAscending;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text(
+                'Sort Variant Groups',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Colors.white,
+              content: SizedBox(
+                width: 300,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sort by options
+                    const Text('Sort by:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text('Name'),
+                          value: 'name',
+                          groupValue: tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortBy = value;
+                            });
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Number of Options'),
+                          value: 'options',
+                          groupValue: tempSortBy,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortBy = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sort order
+                    const Text('Order:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Radio<bool>(
+                          value: true,
+                          groupValue: tempSortAscending,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortAscending = value;
+                            });
+                          },
+                        ),
+                        const Text('Ascending'),
+                        Radio<bool>(
+                          value: false,
+                          groupValue: tempSortAscending,
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              tempSortAscending = value;
+                            });
+                          },
+                        ),
+                        const Text('Descending'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Apply the sort options
+                    setState(() {
+                      _sortBy = tempSortBy!;
+                      _sortAscending = tempSortAscending!;
+                    });
+                    _applyFilters();
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Apply Sort',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }

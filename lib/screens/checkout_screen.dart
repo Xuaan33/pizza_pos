@@ -4362,78 +4362,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     });
   }
 
-  Future<void> _selectItemForSplit(int index, Map<String, dynamic> item) async {
-    if (item['quantity'] > 1) {
-      final quantity = await showDialog<int>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Select Quantity to Split'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('How many of "${item['name']}" to split?'),
-              SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.remove),
-                    onPressed: () {
-                      Navigator.pop(
-                          context, max<int>((item['quantity'] as int) - 1, 1));
-                    },
-                  ),
-                  Text('${item['quantity']}'),
-                  IconButton(
-                    icon: Icon(Icons.add),
-                    onPressed: () {
-                      Navigator.pop(
-                          context,
-                          min<int>(item['quantity'] + 1 as int,
-                              item['quantity'] as int));
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, 0),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, item['quantity']),
-              child: Text('Split All'),
-            ),
-          ],
-        ),
-      );
-
-      if (quantity == null || quantity <= 0) return;
-
-      setState(() {
-        _itemsToSplit.add({
-          ...item,
-          'original_index': index,
-          'split_quantity': quantity,
-          'unique_key':
-              '${item['item_code']}_${index}_${DateTime.now().millisecondsSinceEpoch}',
-        });
-      });
-    } else {
-      setState(() {
-        _itemsToSplit.add({
-          ...item,
-          'original_index': index,
-          'split_quantity': 1,
-          'unique_key':
-              '${item['item_code']}_${index}_${DateTime.now().millisecondsSinceEpoch}',
-        });
-      });
-    }
-  }
-
   Future<void> _confirmSplit() async {
     if (orderItems.length <= 1) {
       Fluttertoast.showToast(
@@ -4842,31 +4770,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       return true;
     }
-
-    // If one is Map and other is List, convert and compare
-    if (options1 is Map && options2 is List) {
-      return _compareOptions(options1, _convertListToMap(options2));
-    }
-
-    if (options1 is List && options2 is Map) {
-      return _compareOptions(_convertListToMap(options1), options2);
-    }
-
     // Fallback to simple equality
     return options1 == options2;
-  }
-
-  Map<String, dynamic> _convertListToMap(List<dynamic> list) {
-    final Map<String, dynamic> result = {};
-    for (int i = 0; i < list.length; i++) {
-      if (list[i] is Map) {
-        final map = Map<String, dynamic>.from(list[i] as Map);
-        result['item_$i'] = map;
-      } else {
-        result['item_$i'] = list[i];
-      }
-    }
-    return result;
   }
 
   Map<String, dynamic> _getTaxInfo() {
