@@ -263,8 +263,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     (serverItem['discount_percentage'] as num?)?.toDouble() ??
                         0.0,
                 'additional_cost':
-                    (serverItem['additional_cost'] as num?)?.toDouble() ??
-                        0.0,
+                    (serverItem['additional_cost'] as num?)?.toDouble() ?? 0.0,
                 'custom_item_remarks': serverItem['custom_item_remarks'] ??
                     existingItem['custom_item_remarks'],
                 'custom_serve_later': serverItem['custom_serve_later'] ??
@@ -1312,27 +1311,37 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             value: _itemsToSplit.any((splitItem) =>
                                 splitItem['item_code'] ==
                                     items[i]['item_code'] &&
-                                _compareOptions(
-                                    splitItem['options'], items[i]['options'])),
+                                _compareOptions(splitItem['options'],
+                                    items[i]['options']) &&
+                                splitItem['original_index'] ==
+                                    i), // Add original_index check
                             onChanged: (value) async {
                               if (value == true) {
                                 if ((items[i]['quantity'] as num).toInt() > 1) {
-                                  await _showQuantitySelectorDialog(items[i]);
+                                  await _showQuantitySelectorDialog(
+                                      items[i], i); // Pass index
                                 } else {
                                   setState(() {
                                     _itemsToSplit.add({
                                       ...items[i],
                                       'split_quantity': 1,
+                                      'original_index':
+                                          i, // Ensure index is stored
+                                      'unique_key':
+                                          '${items[i]['item_code']}_${i}_${DateTime.now().millisecondsSinceEpoch}', // Add unique key
                                     });
                                   });
                                 }
                               } else {
                                 setState(() {
                                   _itemsToSplit.removeWhere((splitItem) =>
-                                      splitItem['item_code'] ==
-                                          items[i]['item_code'] &&
-                                      _compareOptions(splitItem['options'],
-                                          items[i]['options']));
+                                      splitItem['unique_key'] ==
+                                          '${items[i]['item_code']}_${i}' ||
+                                      (splitItem['item_code'] ==
+                                              items[i]['item_code'] &&
+                                          _compareOptions(splitItem['options'],
+                                              items[i]['options']) &&
+                                          splitItem['original_index'] == i));
                                 });
                               }
                             },
@@ -2477,7 +2486,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         baseUrl,
         merchantId,
       ) {
-        return tier.toLowerCase() == 'tier 1';
+        return tier.toLowerCase() != 'tier 3';
       },
       orElse: () => false,
     );
@@ -4408,6 +4417,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ...item,
           'original_index': index,
           'split_quantity': quantity,
+          'unique_key':
+              '${item['item_code']}_${index}_${DateTime.now().millisecondsSinceEpoch}',
         });
       });
     } else {
@@ -4416,6 +4427,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ...item,
           'original_index': index,
           'split_quantity': 1,
+          'unique_key':
+              '${item['item_code']}_${index}_${DateTime.now().millisecondsSinceEpoch}',
         });
       });
     }
@@ -4541,7 +4554,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Future<void> _showQuantitySelectorDialog(Map<String, dynamic> item) async {
+  Future<void> _showQuantitySelectorDialog(
+      Map<String, dynamic> item, int index) async {
     final quantity = (item['quantity'] as num).toDouble();
     double selectedQuantity = quantity > 1 ? 1 : quantity;
 
@@ -4658,6 +4672,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ...item,
           'split_quantity': result,
           'original_quantity': quantity,
+          'original_index': index,
+          'unique_key':
+              '${item['item_code']}_${index}_${DateTime.now().millisecondsSinceEpoch}',
         });
       });
     }
@@ -4826,8 +4843,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return true;
     }
 
+    // If one is Map and other is List, convert and compare
+    if (options1 is Map && options2 is List) {
+      return _compareOptions(options1, _convertListToMap(options2));
+    }
+
+    if (options1 is List && options2 is Map) {
+      return _compareOptions(_convertListToMap(options1), options2);
+    }
+
     // Fallback to simple equality
     return options1 == options2;
+  }
+
+  Map<String, dynamic> _convertListToMap(List<dynamic> list) {
+    final Map<String, dynamic> result = {};
+    for (int i = 0; i < list.length; i++) {
+      if (list[i] is Map) {
+        final map = Map<String, dynamic>.from(list[i] as Map);
+        result['item_$i'] = map;
+      } else {
+        result['item_$i'] = list[i];
+      }
+    }
+    return result;
   }
 
   Map<String, dynamic> _getTaxInfo() {

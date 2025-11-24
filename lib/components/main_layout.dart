@@ -110,7 +110,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               itemsGroups,
               baseUrl,
               merchantId) {
-            return tier.toLowerCase() == 'tier 1' ? 1 : 2;
+            return tier.toLowerCase() != 'tier 3' ? 1 : 2;
           },
         ) ??
         2;
@@ -876,7 +876,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         baseUrl,
         merchantId,
       ) {
-        if (tier.toLowerCase() == 'tier 1') {
+        if (tier.toLowerCase() != 'tier 3') {
           return [
             FutureBuilder(
               future: _getDefaultTable(),
@@ -891,7 +891,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   tableNumber: defaultTable != null
                       ? defaultTable['name'] ??
                           'adsf 1' // Use the full table name directly
-                      : 'zxcv 1', // Fallback to string
+                      : 'Not Found', // Fallback to string
                   existingOrder: null,
                   isTier1: true,
                 );
@@ -1114,13 +1114,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 _buildNavItem(0, 'assets/img-sidebar-table.png', 'Tables'),
                 _buildNavItem(1, 'assets/img-sidebar-delivery.png', 'Delivery'),
               ],
-              _buildNavItem(tier.toLowerCase() == 'tier 1' ? 1 : 2,
+              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 1 : 2,
                   'assets/img-sidebar-orders.png', 'Orders'),
-              _buildNavItem(tier.toLowerCase() == 'tier 1' ? 2 : 3,
+              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 2 : 3,
                   'assets/img-sidebar-dashboard.png', 'Dashboard'),
-              _buildNavItem(tier.toLowerCase() == 'tier 1' ? 3 : 4,
+              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 3 : 4,
                   'assets/img-sidebar-kitchen.png', 'Kitchen'),
-              _buildNavItem(tier.toLowerCase() == 'tier 1' ? 4 : 5,
+              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 4 : 5,
                   'assets/img-sidebar-settings.png', 'Settings'),
               const Spacer(),
               _buildNavItem(
@@ -1167,7 +1167,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   baseUrl,
                   mechantId,
                 ) {
-                  if (tier.toLowerCase() == 'tier 1') {
+                  if (tier.toLowerCase() != 'tier 3') {
                     isOrdersScreen = index == 1; // Orders is index 1 for tier1
                   } else {
                     isOrdersScreen = index == 2; // Orders is index 2 for tier2

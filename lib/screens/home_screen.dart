@@ -577,8 +577,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         Row(
                                           children: [
                                             // Back Button
-                                            if (tier.toLowerCase() !=
-                                                'tier 1') ...[
+                                            if (tier.toLowerCase() ==
+                                                'tier 3') ...[
                                               IconButton(
                                                 icon: const Icon(
                                                     Icons.arrow_back),
@@ -675,7 +675,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                           ],
                                         ),
-                                        if (tier.toLowerCase() != 'tier 1') ...[
+                                        if (tier.toLowerCase() == 'tier 3') ...[
                                           Container(
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 12, vertical: 6),
@@ -974,8 +974,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       const SizedBox(height: 10),
                                       Column(
                                         children: [
-                                          if (tier.toLowerCase() !=
-                                              'tier 1') ...[
+                                          if (tier.toLowerCase() ==
+                                              'tier 3') ...[
                                             SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
@@ -1779,7 +1779,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         baseUrl,
         merchantId,
       ) {
-        return tier.toLowerCase() == 'tier 1';
+        return tier.toLowerCase() != 'tier 3';
       },
       orElse: () => false,
     );
@@ -2110,13 +2110,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         baseUrl,
         merchantId,
       ) async {
-        if (tier.toLowerCase() == "tier 1") {
-          if (!hasOpening) {
-            // Show dialog if no opening entry exists
-            _showOpeningRequiredDialog();
-            return;
-          }
+        if (!hasOpening) {
+          // Show dialog if no opening entry exists
+          _showOpeningRequiredDialog();
+          return;
         }
+
         // Auto-save all remarks before proceeding
         _autoSaveAllRemarks();
 

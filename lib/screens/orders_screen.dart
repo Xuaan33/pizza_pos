@@ -66,9 +66,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
   String baseImageUrl = '';
-
-  @override
-  bool get wantKeepAlive => true;
+  String tier = '';
 
   @override
   void initState() {
@@ -84,7 +82,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   Future<void> _loadBaseUrl() async {
     baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
-    setState(() {}); // Refresh UI
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      tier = prefs.getString('tier') ?? 'tier 1';
+      print('CHECK TIER: $tier');
+    }); // Refresh UI
   }
 
   @override
@@ -703,15 +705,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        if (order['tableNumber'] != null) ...[
-                          Text(
-                            order['tableNumber'] == 0
-                                ? 'Instant Order'
-                                : '${order['tableNumber']}',
-                            style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.w600),
-                          ),
+                        if (tier.toLowerCase() == 'tier 3') ...[
+                          if (order['tableNumber'] != null) ...[
+                            Text(
+                              order['tableNumber'] == 0
+                                  ? 'Instant Order'
+                                  : '${order['tableNumber']}',
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ]
                         ],
                         Text(
                           _formatDate(_parseDateTime(order['entryTime'])),
