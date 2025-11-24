@@ -262,6 +262,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'discount_percentage':
                     (serverItem['discount_percentage'] as num?)?.toDouble() ??
                         0.0,
+                'additional_cost':
+                    (serverItem['additional_cost'] as num?)?.toDouble() ??
+                        0.0,
                 'custom_item_remarks': serverItem['custom_item_remarks'] ??
                     existingItem['custom_item_remarks'],
                 'custom_serve_later': serverItem['custom_serve_later'] ??
@@ -803,7 +806,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.payment, size: 60),
+                        baseImageUrl.startsWith('https')
+                            ? Image.network(
+                                "$baseImageUrl${method['custom_payment_mode_image']}",
+                                height: 60,
+                                width: 60,
+                              )
+                            : const Icon(Icons.payment, size: 60),
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -1340,7 +1349,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original price if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${((items[i]['price']) + items[i]['discount_amount']).toStringAsFixed(2)}',
+                        'RM${((items[i]['price'] - items[i]['additional_cost']) + items[i]['discount_amount']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1350,7 +1359,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current price
                     Text(
-                      'RM${(items[i]['price']).toStringAsFixed(2)}',
+                      items[i]['additional_cost'] != null
+                          ? 'RM${(items[i]['price'] - items[i]['additional_cost']).toStringAsFixed(2)}'
+                          : 'RM${(items[i]['price']).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: (items[i]['discount_amount'] ?? 0) > 0

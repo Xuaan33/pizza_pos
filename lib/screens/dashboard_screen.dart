@@ -24,8 +24,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
   String _selectedPopularItemsLimit = '10';
-  String _selectedVouchersLimit = '10';
-  int _customVouchersLimit = 10;
+  // String _selectedVouchersLimit = '10';
+  // int _customVouchersLimit = 10;
   int _customLimit = 10;
   late Future<double> _payLaterData;
 
@@ -206,12 +206,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
 
         // Determine limit for applied vouchers
-        int vouchersLimit;
-        if (_selectedVouchersLimit == 'Custom') {
-          vouchersLimit = _customVouchersLimit;
-        } else {
-          vouchersLimit = int.parse(_selectedVouchersLimit);
-        }
+        // int vouchersLimit;
+        // if (_selectedVouchersLimit == 'Custom') {
+        //   vouchersLimit = _customVouchersLimit;
+        // } else {
+        //   vouchersLimit = int.parse(_selectedVouchersLimit);
+        // }
 
         final grouping = _determineTimeGrouping(fromDate, toDate);
         final xaxisParam = _getXAxisParameter(grouping);
@@ -249,12 +249,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             toDate: dateFormat.format(toDate),
           ),
           // 6: Applied vouchers
-          PosService().getAppliedUserVouchers(
-            posProfile: posProfile,
-            fromDate: dateFormat.format(fromDate),
-            toDate: dateFormat.format(toDate),
-            limit: vouchersLimit,
-          ),
+          // PosService().getAppliedUserVouchers(
+          //   posProfile: posProfile,
+          //   fromDate: dateFormat.format(fromDate),
+          //   toDate: dateFormat.format(toDate),
+          //   limit: vouchersLimit,
+          // ),
         ]);
 
         print(
@@ -266,12 +266,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         });
 
         // NEW: Calculate total voucher redemption amount
-        final appliedVouchers =
-            _convertListToProperType(results[6]['message'] ?? []);
-        final totalVoucherRedemption =
-            appliedVouchers.fold(0.0, (sum, voucher) {
-          return sum + _convertToDouble(voucher['voucher_amount']);
-        });
+        // final appliedVouchers =
+        //     _convertListToProperType(results[6]['message'] ?? []);
+        // final totalVoucherRedemption =
+        //     appliedVouchers.fold(0.0, (sum, voucher) {
+        //   return sum + _convertToDouble(voucher['voucher_amount']);
+        // });
 
         // Convert to proper types - UPDATED: Include totalVoucherRedemption
         return <String, dynamic>{
@@ -282,8 +282,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'peakTimes': _convertListToProperType(results[1]['message']),
           'topItems': _convertListToProperType(results[4]['message']),
           'paymentMethods': _convertListToProperType(results[5]['message']),
-          'appliedVouchers': appliedVouchers,
-          'totalVoucherRedemption': totalVoucherRedemption, // NEW
+          // 'appliedVouchers': appliedVouchers,
+          // 'totalVoucherRedemption': totalVoucherRedemption, // NEW
           'fromDate': fromDate,
           'toDate': toDate,
         };
@@ -475,8 +475,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final appliedVouchers =
                 data['appliedVouchers'] as List<Map<String, dynamic>>? ??
                     <Map<String, dynamic>>[];
-            final totalVoucherRedemption =
-                data['totalVoucherRedemption'] as double? ?? 0.0; // NEW
+            // final totalVoucherRedemption =
+            //     data['totalVoucherRedemption'] as double? ?? 0.0; // NEW
 
             final fromDate = data['fromDate'] as DateTime? ?? DateTime.now();
             final toDate = data['toDate'] as DateTime? ?? DateTime.now();
@@ -491,8 +491,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     const SizedBox(height: 10),
                     _buildTopSection(fromDate, toDate),
                     const SizedBox(height: 20),
-                    _buildSummaryCards(totalSales, totalOrders, todayInfo,
-                        totalVoucherRedemption),
+                    _buildSummaryCards(totalSales, totalOrders, todayInfo),
                     const SizedBox(height: 30),
                     _buildRevenueChart(revenueData, fromDate, toDate),
                     const SizedBox(height: 30),
@@ -500,8 +499,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         Expanded(
                             child: _buildPaymentMethodChart(paymentMethods)),
-                        const SizedBox(width: 20),
-                        Expanded(child: _buildAppliedVouchers(appliedVouchers)),
+                        // const SizedBox(width: 20),
+                        // Expanded(child: _buildAppliedVouchers(appliedVouchers)),
                       ],
                     ),
                     const SizedBox(height: 30),
@@ -597,7 +596,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildSummaryCards(double totalSales, int totalOrders,
-      Map<String, dynamic> todayInfo, double totalVoucherRedemption) {
+      Map<String, dynamic> todayInfo) {
     // UPDATED: Added parameter
     final totalRevenue = _convertToDouble(todayInfo['total_revenue']);
     final totalCost = _convertToDouble(todayInfo['total_cost']);
@@ -625,12 +624,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         const SizedBox(width: 15),
         // NEW: Total Voucher Redemption card
-        _buildSummaryCard(
-          title: 'Voucher Redemption',
-          value: 'RM ${totalVoucherRedemption.toStringAsFixed(2)}',
-          icon: Icons.card_giftcard,
-          isProfit: false, // Typically red since it's discount/cost
-        ),
+        // _buildSummaryCard(
+        //   title: 'Voucher Redemption',
+        //   value: 'RM ${totalVoucherRedemption.toStringAsFixed(2)}',
+        //   icon: Icons.card_giftcard,
+        //   isProfit: false, // Typically red since it's discount/cost
+        // ),
       ],
     );
   }
@@ -1277,214 +1276,220 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildAppliedVouchers(List<Map<String, dynamic>> appliedVouchers) {
-    // Calculate total voucher amount
-    final totalVoucherAmount = appliedVouchers.fold(0.0, (sum, voucher) {
-      return sum + _convertToDouble(voucher['voucher_amount']);
-    });
+  // =============================================================
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(
-        minHeight: 315,
-        maxHeight: 315,
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Applied Vouchers',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                // NEW: Dropdown for vouchers limit
-                DropdownButton<String>(
-                  value: _selectedVouchersLimit,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                  dropdownColor: Colors.white,
-                  items: ['10', '30', '50', 'Custom'].map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        if (newValue == 'Custom') {
-                          _showCustomVouchersLimitDialog();
-                        } else {
-                          _selectedVouchersLimit = newValue;
-                          _loadData();
-                        }
-                      });
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Total Discount: RM ${totalVoucherAmount.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (appliedVouchers.isEmpty)
-              const Expanded(
-                child: Center(
-                  child: Text(
-                    'No vouchers applied',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ScrollConfiguration(
-                  behavior: NoStretchScrollBehavior(),
-                  child: ListView(
-                    physics: const BouncingScrollPhysics(),
-                    shrinkWrap: true,
-                    children: appliedVouchers.map((voucher) {
-                      final voucherCode =
-                          voucher['voucher_code'] as String? ?? 'Unknown';
-                      final userVoucher =
-                          voucher['user_voucher'] as String? ?? 'Unknown';
-                      final amount =
-                          _convertToDouble(voucher['voucher_amount']);
-                      final orderID = voucher['name'] as String? ?? 'Unknown';
-                      final voucherName =
-                          voucher['name'] as String? ?? 'Unknown';
+  //           NOT SHOWING VOUCHER LIST ANYMORE 
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[200]!),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        voucherCode,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFFE732A0),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Code: $userVoucher',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Order: $orderID',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.black,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'RM ${amount.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.green[700],
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Discount',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              width: double.infinity,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: FractionallySizedBox(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: 1.0, // Full width for consistency
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE732A0),
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  // =============================================================
+
+  // Widget _buildAppliedVouchers(List<Map<String, dynamic>> appliedVouchers) {
+  //   // Calculate total voucher amount
+  //   final totalVoucherAmount = appliedVouchers.fold(0.0, (sum, voucher) {
+  //     return sum + _convertToDouble(voucher['voucher_amount']);
+  //   });
+
+  //   return ConstrainedBox(
+  //     constraints: const BoxConstraints(
+  //       minHeight: 315,
+  //       maxHeight: 315,
+  //     ),
+  //     child: Container(
+  //       padding: const EdgeInsets.all(16),
+  //       decoration: BoxDecoration(
+  //         color: Colors.white,
+  //         borderRadius: BorderRadius.circular(10),
+  //         boxShadow: [
+  //           BoxShadow(
+  //             color: Colors.grey.withOpacity(0.1),
+  //             spreadRadius: 1,
+  //             blurRadius: 5,
+  //             offset: const Offset(0, 2),
+  //           ),
+  //         ],
+  //       ),
+  //       child: Column(
+  //         crossAxisAlignment: CrossAxisAlignment.start,
+  //         children: [
+  //           Row(
+  //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //             children: [
+  //               const Text(
+  //                 'Applied Vouchers',
+  //                 style: TextStyle(
+  //                   fontSize: 16,
+  //                   fontWeight: FontWeight.bold,
+  //                 ),
+  //               ),
+  //               // NEW: Dropdown for vouchers limit
+  //               DropdownButton<String>(
+  //                 value: _selectedVouchersLimit,
+  //                 style: const TextStyle(
+  //                   fontSize: 12,
+  //                   fontWeight: FontWeight.bold,
+  //                   color: Colors.black,
+  //                 ),
+  //                 dropdownColor: Colors.white,
+  //                 items: ['10', '30', '50', 'Custom'].map((String value) {
+  //                   return DropdownMenuItem<String>(
+  //                     value: value,
+  //                     child: Text(value),
+  //                   );
+  //                 }).toList(),
+  //                 onChanged: (String? newValue) {
+  //                   if (newValue != null) {
+  //                     setState(() {
+  //                       if (newValue == 'Custom') {
+  //                         _showCustomVouchersLimitDialog();
+  //                       } else {
+  //                         _selectedVouchersLimit = newValue;
+  //                         _loadData();
+  //                       }
+  //                     });
+  //                   }
+  //                 },
+  //               ),
+  //             ],
+  //           ),
+  //           const SizedBox(height: 10),
+  //           Text(
+  //             'Total Discount: RM ${totalVoucherAmount.toStringAsFixed(2)}',
+  //             style: TextStyle(
+  //               fontSize: 16,
+  //               color: Colors.green,
+  //               fontWeight: FontWeight.bold,
+  //             ),
+  //           ),
+  //           const SizedBox(height: 10),
+  //           if (appliedVouchers.isEmpty)
+  //             const Expanded(
+  //               child: Center(
+  //                 child: Text(
+  //                   'No vouchers applied',
+  //                   style: TextStyle(
+  //                     color: Colors.grey,
+  //                     fontWeight: FontWeight.bold,
+  //                   ),
+  //                 ),
+  //               ),
+  //             )
+  //           else
+  //             Expanded(
+  //               child: ScrollConfiguration(
+  //                 behavior: NoStretchScrollBehavior(),
+  //                 child: ListView(
+  //                   physics: const BouncingScrollPhysics(),
+  //                   shrinkWrap: true,
+  //                   children: appliedVouchers.map((voucher) {
+  //                     final voucherCode =
+  //                         voucher['voucher_code'] as String? ?? 'Unknown';
+  //                     final userVoucher =
+  //                         voucher['user_voucher'] as String? ?? 'Unknown';
+  //                     final amount =
+  //                         _convertToDouble(voucher['voucher_amount']);
+  //                     final orderID = voucher['name'] as String? ?? 'Unknown';
+  //                     final voucherName =
+  //                         voucher['name'] as String? ?? 'Unknown';
+
+  //                     return Container(
+  //                       margin: const EdgeInsets.only(bottom: 8),
+  //                       padding: const EdgeInsets.all(12),
+  //                       decoration: BoxDecoration(
+  //                         color: Colors.grey[50],
+  //                         borderRadius: BorderRadius.circular(8),
+  //                         border: Border.all(color: Colors.grey[200]!),
+  //                       ),
+  //                       child: Column(
+  //                         crossAxisAlignment: CrossAxisAlignment.start,
+  //                         children: [
+  //                           Row(
+  //                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                             children: [
+  //                               Expanded(
+  //                                 child: Column(
+  //                                   crossAxisAlignment:
+  //                                       CrossAxisAlignment.start,
+  //                                   children: [
+  //                                     Text(
+  //                                       voucherCode,
+  //                                       style: const TextStyle(
+  //                                         fontSize: 14,
+  //                                         fontWeight: FontWeight.bold,
+  //                                         color: Color(0xFFE732A0),
+  //                                       ),
+  //                                     ),
+  //                                     const SizedBox(height: 4),
+  //                                     Text(
+  //                                       'Code: $userVoucher',
+  //                                       style: TextStyle(
+  //                                         fontSize: 12,
+  //                                         color: Colors.black,
+  //                                       ),
+  //                                     ),
+  //                                     const SizedBox(height: 2),
+  //                                     Text(
+  //                                       'Order: $orderID',
+  //                                       style: TextStyle(
+  //                                         fontSize: 12,
+  //                                         color: Colors.black,
+  //                                         fontStyle: FontStyle.italic,
+  //                                       ),
+  //                                     ),
+  //                                   ],
+  //                                 ),
+  //                               ),
+  //                               Column(
+  //                                 crossAxisAlignment: CrossAxisAlignment.end,
+  //                                 children: [
+  //                                   Text(
+  //                                     'RM ${amount.toStringAsFixed(2)}',
+  //                                     style: TextStyle(
+  //                                       fontSize: 14,
+  //                                       color: Colors.green[700],
+  //                                       fontWeight: FontWeight.bold,
+  //                                     ),
+  //                                   ),
+  //                                   Text(
+  //                                     'Discount',
+  //                                     style: TextStyle(
+  //                                       fontSize: 12,
+  //                                       color: Colors.grey[600],
+  //                                     ),
+  //                                   ),
+  //                                 ],
+  //                               ),
+  //                             ],
+  //                           ),
+  //                           const SizedBox(height: 8),
+  //                           Container(
+  //                             width: double.infinity,
+  //                             height: 6,
+  //                             decoration: BoxDecoration(
+  //                               color: Colors.grey[200],
+  //                               borderRadius: BorderRadius.circular(3),
+  //                             ),
+  //                             child: FractionallySizedBox(
+  //                               alignment: Alignment.centerLeft,
+  //                               widthFactor: 1.0, // Full width for consistency
+  //                               child: Container(
+  //                                 decoration: BoxDecoration(
+  //                                   color: const Color(0xFFE732A0),
+  //                                   borderRadius: BorderRadius.circular(3),
+  //                                 ),
+  //                               ),
+  //                             ),
+  //                           ),
+  //                         ],
+  //                       ),
+  //                     );
+  //                   }).toList(),
+  //                 ),
+  //               ),
+  //             ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildPayLaterSection() {
     return FutureBuilder<double>(
@@ -1636,62 +1641,62 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Future<void> _showCustomVouchersLimitDialog() async {
-    final TextEditingController limitController = TextEditingController(
-      text: _customVouchersLimit.toString(),
-    );
+  // Future<void> _showCustomVouchersLimitDialog() async {
+  //   final TextEditingController limitController = TextEditingController(
+  //     text: _customVouchersLimit.toString(),
+  //   );
 
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
-            'Custom Vouchers Limit',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: TextField(
-            controller: limitController,
-            decoration: const InputDecoration(
-              labelText: 'Number of vouchers to show',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text(
-                'Cancel',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE732A0),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text(
-                'Apply',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              onPressed: () {
-                final newLimit = int.tryParse(limitController.text) ?? 10;
-                setState(() {
-                  _customVouchersLimit =
-                      newLimit.clamp(1, 50); // Limit to reasonable range
-                  _selectedVouchersLimit = 'Custom';
-                  _loadData();
-                });
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+  //   return showDialog<void>(
+  //     context: context,
+  //     barrierDismissible: false,
+  //     builder: (BuildContext context) {
+  //       return AlertDialog(
+  //         backgroundColor: Colors.white,
+  //         title: const Text(
+  //           'Custom Vouchers Limit',
+  //           style: TextStyle(fontWeight: FontWeight.bold),
+  //         ),
+  //         content: TextField(
+  //           controller: limitController,
+  //           decoration: const InputDecoration(
+  //             labelText: 'Number of vouchers to show',
+  //             border: OutlineInputBorder(),
+  //           ),
+  //           keyboardType: TextInputType.number,
+  //         ),
+  //         actions: <Widget>[
+  //           TextButton(
+  //             child: const Text(
+  //               'Cancel',
+  //               style: TextStyle(fontWeight: FontWeight.bold),
+  //             ),
+  //             onPressed: () => Navigator.of(context).pop(),
+  //           ),
+  //           ElevatedButton(
+  //             style: ElevatedButton.styleFrom(
+  //               backgroundColor: const Color(0xFFE732A0),
+  //               foregroundColor: Colors.white,
+  //             ),
+  //             child: const Text(
+  //               'Apply',
+  //               style: TextStyle(fontWeight: FontWeight.bold),
+  //             ),
+  //             onPressed: () {
+  //               final newLimit = int.tryParse(limitController.text) ?? 10;
+  //               setState(() {
+  //                 _customVouchersLimit =
+  //                     newLimit.clamp(1, 50); // Limit to reasonable range
+  //                 _selectedVouchersLimit = 'Custom';
+  //                 _loadData();
+  //               });
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
 
   _TimeGrouping _determineTimeGrouping(DateTime fromDate, DateTime toDate) {
     final difference = toDate.difference(fromDate).inDays;
@@ -1772,47 +1777,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 // Custom painter for progress bars (more efficient than LinearProgressIndicator)
-class _ProgressBarPainter extends CustomPainter {
-  final double value;
-  final Color color;
-  final Color backgroundColor;
+// class _ProgressBarPainter extends CustomPainter {
+//   final double value;
+//   final Color color;
+//   final Color backgroundColor;
 
-  _ProgressBarPainter({
-    required this.value,
-    required this.color,
-    required this.backgroundColor,
-  });
+//   _ProgressBarPainter({
+//     required this.value,
+//     required this.color,
+//     required this.backgroundColor,
+//   });
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Draw background
-    final backgroundPaint = Paint()..color = backgroundColor;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        Radius.circular(size.height / 2),
-      ),
-      backgroundPaint,
-    );
+//   @override
+//   void paint(Canvas canvas, Size size) {
+//     // Draw background
+//     final backgroundPaint = Paint()..color = backgroundColor;
+//     canvas.drawRRect(
+//       RRect.fromRectAndRadius(
+//         Rect.fromLTWH(0, 0, size.width, size.height),
+//         Radius.circular(size.height / 2),
+//       ),
+//       backgroundPaint,
+//     );
 
-    // Draw progress
-    if (value > 0) {
-      final progressPaint = Paint()..color = color;
-      final progressWidth = size.width * value.clamp(0.0, 1.0);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, progressWidth, size.height),
-          Radius.circular(size.height / 2),
-        ),
-        progressPaint,
-      );
-    }
-  }
+//     // Draw progress
+//     if (value > 0) {
+//       final progressPaint = Paint()..color = color;
+//       final progressWidth = size.width * value.clamp(0.0, 1.0);
+//       canvas.drawRRect(
+//         RRect.fromRectAndRadius(
+//           Rect.fromLTWH(0, 0, progressWidth, size.height),
+//           Radius.circular(size.height / 2),
+//         ),
+//         progressPaint,
+//       );
+//     }
+//   }
 
-  @override
-  bool shouldRepaint(covariant _ProgressBarPainter oldDelegate) {
-    return value != oldDelegate.value ||
-        color != oldDelegate.color ||
-        backgroundColor != oldDelegate.backgroundColor;
-  }
-}
+//   @override
+//   bool shouldRepaint(covariant _ProgressBarPainter oldDelegate) {
+//     return value != oldDelegate.value ||
+//         color != oldDelegate.color ||
+//         backgroundColor != oldDelegate.backgroundColor;
+//   }
+// }

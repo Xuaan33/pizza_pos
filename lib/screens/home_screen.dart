@@ -2179,12 +2179,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
-
-            // 2. Print kitchen order immediately if enabled
-            if (printKitchenOrder == 1) {
-              await ReceiptPrinter.printKitchenOrderOnly(
-                  response['message']['name']);
-            }
           } else {
             throw Exception('Failed to update order');
           }
@@ -2200,24 +2194,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
-
-            // 2. Print kitchen order immediately if enabled
-            if (printKitchenOrder == 1) {
-              await ReceiptPrinter.printKitchenOrderOnly(
-                  response['message']['name']);
-            }
-
-// Add error handling wrapper:
-            if (printKitchenOrder == 1) {
-              try {
-                await ReceiptPrinter.printKitchenOrderOnly(
-                    response['message']['name']);
-              } catch (e) {
-                // This catch might not be needed now since printKitchenOrderOnly handles it internally,
-                // but keeping it for extra safety
-                debugPrint('Kitchen order printing completed with note: $e');
-              }
-            }
           } else {
             throw Exception('Failed to submit order');
           }

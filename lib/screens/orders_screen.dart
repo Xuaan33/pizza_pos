@@ -25,7 +25,6 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final DateTime selectedDate;
   final int pageLimit;
   final Function(DateTime) onDateChanged;
-  final Function(int) onLimitChanged;
   final Function(String) onFilterStatusChanged;
   final Function(String) onFilterOrderTypeChanged;
   final String currentFilterStatus;
@@ -35,7 +34,6 @@ class OrdersScreen extends ConsumerStatefulWidget {
   final useDateRange;
   final fromDate;
   final toDate;
-  final List<int> limitOptions;
 
   const OrdersScreen({
     Key? key,
@@ -47,7 +45,6 @@ class OrdersScreen extends ConsumerStatefulWidget {
     required this.selectedDate,
     required this.pageLimit,
     required this.onDateChanged,
-    required this.onLimitChanged,
     required this.onFilterStatusChanged,
     required this.onFilterOrderTypeChanged,
     required this.currentFilterStatus,
@@ -57,7 +54,6 @@ class OrdersScreen extends ConsumerStatefulWidget {
     required this.useDateRange,
     this.fromDate,
     this.toDate,
-    required this.limitOptions,
   }) : super(key: key);
 
   @override
@@ -309,10 +305,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                         // Add a filter status indicator
                         if (widget.currentFilterStatus == 'Pay Later')
                           Text(
-                            widget.useDateRange ||
-                                    widget.selectedDate != DateTime.now()
-                                ? 'Pay Later orders with date filter'
-                                : 'All Pay Later orders',
+                            'Pay Later orders with date filter',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -382,9 +375,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                                   _clearDateRange, // This will reset to show all dates for Pay Later
                               icon: Icon(Icons.clear, size: 24),
                               color: Colors.grey,
-                              tooltip: widget.currentFilterStatus == 'Pay Later'
-                                  ? 'Reset to All Dates'
-                                  : 'Clear Date Filter',
+                              tooltip: 'Clear Date Filter',
                             ),
                           ),
                         ],
@@ -426,54 +417,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       ),
                     ),
                     SizedBox(width: 16),
-
-                    // Limit Dropdown
-                    Expanded(
-                      flex: 1,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Limit',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black,
-                                fontWeight: FontWeight.w600),
-                          ),
-                          SizedBox(height: 4),
-                          Container(
-                            height: 48,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade400),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: widget.pageLimit,
-                                isExpanded: true,
-                                items: widget.limitOptions.map((int value) {
-                                  return DropdownMenuItem<int>(
-                                    value: value,
-                                    child: Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(horizontal: 12),
-                                      child: Text('$value'),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (int? newValue) {
-                                  if (newValue != null) {
-                                    // Call parent callback to update the limit
-                                    widget.onLimitChanged(newValue);
-                                    // The refresh will be triggered by the parent callback
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
 
@@ -507,50 +450,52 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           ),
           SizedBox(height: 5),
           // Order list with infinite scrolling
-        Expanded(
-          child: widget.isLoading
-              ? Center(child: CircularProgressIndicator())
-              : orders.isEmpty
-                  ? Center(child: Text('No orders found'))
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: (scrollNotification) {
-                        // This will be handled by the scroll controller in main_layout
-                        return false;
-                      },
-                      child: ListView.builder(
-                        controller: MainLayout.of(context)?.ordersScrollController,
-                        itemCount: orders.length + 1, // +1 for loading indicator
-                        itemBuilder: (context, index) {
-                          if (index < orders.length) {
-                            return _buildOrderListItem(orders[index]);
-                          } else {
-                            // Show loading indicator at the bottom
-                            return _buildLoadingIndicator();
-                          }
+          Expanded(
+            child: widget.isLoading
+                ? Center(child: CircularProgressIndicator())
+                : orders.isEmpty
+                    ? Center(child: Text('No orders found'))
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (scrollNotification) {
+                          // This will be handled by the scroll controller in main_layout
+                          return false;
                         },
+                        child: ListView.builder(
+                          controller:
+                              MainLayout.of(context)?.ordersScrollController,
+                          itemCount:
+                              orders.length + 1, // +1 for loading indicator
+                          itemBuilder: (context, index) {
+                            if (index < orders.length) {
+                              return _buildOrderListItem(orders[index]);
+                            } else {
+                              // Show loading indicator at the bottom
+                              return _buildLoadingIndicator();
+                            }
+                          },
+                        ),
                       ),
-                    ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildLoadingIndicator() {
-  final mainLayout = MainLayout.of(context);
-  if (mainLayout == null || 
-      !mainLayout.hasMoreOrders || 
-      mainLayout.isLoadingMore == false) {
-    return SizedBox.shrink();
+          ),
+        ],
+      ),
+    );
   }
-  
-  return Padding(
-    padding: EdgeInsets.symmetric(vertical: 16),
-    child: Center(
-      child: CircularProgressIndicator(),
-    ),
-  );
-}
+
+  Widget _buildLoadingIndicator() {
+    final mainLayout = MainLayout.of(context);
+    if (mainLayout == null ||
+        !mainLayout.hasMoreOrders ||
+        mainLayout.isLoadingMore == false) {
+      return SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
 
   Widget _buildOrderListItem(Map<String, dynamic> order) {
     final isSelected = _selectedOrder != null &&

@@ -13,6 +13,7 @@ import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
 import 'package:shiok_pos_android_app/screens/delivery_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
+import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
@@ -31,8 +32,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool _customerScreenShown = false;
   Future<void>? _refreshFuture;
   DateTime _selectedDate = DateTime.now();
-  int _pageLimit = 30;
-  String _filterStatus = 'Pay Later'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
+  String _filterStatus = 'All'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -44,8 +44,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   ScrollController get ordersScrollController => _ordersScrollController;
   bool get hasMoreOrders => _hasMoreOrders;
   bool get isLoadingMore => _isLoadingMore;
-
-  final List<int> _limitOptions = [30, 50, 100];
+  bool _customerDisplayInitialized = false;
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -54,10 +53,24 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   void initState() {
     super.initState();
     _ordersScrollController.addListener(_onOrdersScroll);
-    // Check auth state when widget initializes
+    // Initialize customer display once
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeCustomerDisplay();
       ref.read(authProvider.notifier).loadSession();
     });
+  }
+
+  Future<void> _initializeCustomerDisplay() async {
+    if (!_customerDisplayInitialized) {
+      try {
+        await CustomerDisplayController.showCustomerScreen();
+        setState(() {
+          _customerDisplayInitialized = true;
+        });
+      } catch (e) {
+        print('Error initializing customer display: $e');
+      }
+    }
   }
 
   @override
@@ -134,18 +147,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           try {
             String? fromDateStr;
             String? toDateStr;
-
-            if (_filterStatus == 'Pay Later') {
-              fromDateStr = null;
-              toDateStr = null;
+            if (_useDateRange && _fromDate != null && _toDate != null) {
+              fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
+              toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
             } else {
-              if (_useDateRange && _fromDate != null && _toDate != null) {
-                fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
-                toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
-              } else {
-                fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-                toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-              }
+              fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+              toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
             }
 
             String? apiStatus;
@@ -157,8 +164,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
-            final effectivePageLimit =
-                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+            final effectivePageLimit = 30;
             final nextStart = (_currentPage + 1) * effectivePageLimit;
 
             final response = await PosService().getOrders(
@@ -468,17 +474,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             String? fromDateStr;
             String? toDateStr;
 
-            if (_filterStatus == 'Pay Later' || forceAllForPayLater) {
-              fromDateStr = null;
-              toDateStr = null;
+            if (_useDateRange && _fromDate != null && _toDate != null) {
+              fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
+              toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
             } else {
-              if (_useDateRange && _fromDate != null && _toDate != null) {
-                fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
-                toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
-              } else {
-                fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-                toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-              }
+              fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+              toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
             }
 
             String? apiStatus;
@@ -490,8 +491,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
-            final effectivePageLimit =
-                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+            final effectivePageLimit = 30;
 
             final future = PosService().getOrders(
               posProfile: posProfile,
@@ -633,30 +633,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   .cast<Map<String, dynamic>>()
                   .toList();
 
-              // Sort orders: Pay Later orders by timestamp, others by order ID
+              // Sort orders: All orders by timestamp
               processedOrders.sort((a, b) {
-                final isPayLaterA =
-                    a['status']?.toString().toLowerCase() == 'draft';
-                final isPayLaterB =
-                    b['status']?.toString().toLowerCase() == 'draft';
-
-                if (isPayLaterA && isPayLaterB) {
-                  // Both are Pay Later - sort by entryTime descending (newest first)
-                  final timeA = a['entryTime'] as DateTime;
-                  final timeB = b['entryTime'] as DateTime;
-                  return timeB.compareTo(timeA);
-                } else if (isPayLaterA) {
-                  // Only A is Pay Later - A comes first
-                  return -1;
-                } else if (isPayLaterB) {
-                  // Only B is Pay Later - B comes first
-                  return 1;
-                } else {
-                  // Both are not Pay Later - sort by order ID
-                  final idA = a['orderId']?.toString() ?? '';
-                  final idB = b['orderId']?.toString() ?? '';
-                  return idB.compareTo(idA); // Descending order
-                }
+                final idA = a['entryTime'] as DateTime;
+                final idB = b['entryTime'] as DateTime;
+                return idB.compareTo(idA); // Descending order
               });
 
               setState(() {
@@ -933,22 +914,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 await _refreshOrders();
               },
               selectedDate: _selectedDate,
-              pageLimit: _pageLimit,
+              pageLimit: 30,
               onDateChanged: (newDate) {
                 setState(() {
                   _selectedDate = newDate;
                   _useDateRange = false;
                   _currentPage = 0;
-                  _hasMoreOrders = true;
-                });
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              onLimitChanged: (newLimit) {
-                setState(() {
-                  _pageLimit = newLimit;
-                  _currentPage = 0; // Reset pagination when limit changes
                   _hasMoreOrders = true;
                 });
                 Future.delayed(Duration(milliseconds: 100), () {
@@ -984,7 +955,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               useDateRange: _useDateRange,
               fromDate: _fromDate,
               toDate: _toDate,
-              limitOptions: _limitOptions,
             ),
             DashboardScreen(),
             KitchenScreen(
@@ -1006,62 +976,54 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             ),
             DeliveryScreen(),
             OrdersScreen(
-              orders: activeOrders,
-              isLoading: _isOrdersLoading,
-              onOrderPaid: (order) {
-                handleOrderPaid(order);
-                setState(() => _isOrdersLoading = true);
-                Future.delayed(Duration(seconds: 1), () {
-                  if (mounted) {
-                    setState(() => _isOrdersLoading = false);
-                  }
-                });
-              },
-              onEditOrder: _handleEditOrder,
-              onRefresh: () async {
-                await _refreshOrders();
-              },
-              selectedDate: _selectedDate,
-              pageLimit: _pageLimit,
-              onDateChanged: (newDate) {
-                setState(() {
-                  _selectedDate = newDate;
-                  _useDateRange = false; // Switch to single date mode
-                });
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              onLimitChanged: (newLimit) {
-                setState(() => _pageLimit = newLimit);
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              // Pass filter callbacks to OrdersScreen
-              onFilterStatusChanged: (newStatus) {
-                setState(() => _filterStatus = newStatus);
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              onFilterOrderTypeChanged: (newOrderType) {
-                setState(() => _filterOrderType = newOrderType);
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              // Pass current filter values
-              currentFilterStatus: _filterStatus,
-              currentFilterOrderType: _filterOrderType,
-              // Pass date range methods
-              onDateRangeSelected: _selectDateRange,
-              onDateRangeCleared: _clearDateRange,
-              useDateRange: _useDateRange,
-              fromDate: _fromDate,
-              toDate: _toDate,
-              limitOptions: _limitOptions,
-            ),
+                orders: activeOrders,
+                isLoading: _isOrdersLoading,
+                onOrderPaid: (order) {
+                  handleOrderPaid(order);
+                  setState(() => _isOrdersLoading = true);
+                  Future.delayed(Duration(seconds: 1), () {
+                    if (mounted) {
+                      setState(() => _isOrdersLoading = false);
+                    }
+                  });
+                },
+                onEditOrder: _handleEditOrder,
+                onRefresh: () async {
+                  await _refreshOrders();
+                },
+                selectedDate: _selectedDate,
+                pageLimit: 30,
+                onDateChanged: (newDate) {
+                  setState(() {
+                    _selectedDate = newDate;
+                    _useDateRange = false; // Switch to single date mode
+                  });
+                  Future.delayed(Duration(milliseconds: 100), () {
+                    _refreshOrders();
+                  });
+                },
+                // Pass filter callbacks to OrdersScreen
+                onFilterStatusChanged: (newStatus) {
+                  setState(() => _filterStatus = newStatus);
+                  Future.delayed(Duration(milliseconds: 100), () {
+                    _refreshOrders();
+                  });
+                },
+                onFilterOrderTypeChanged: (newOrderType) {
+                  setState(() => _filterOrderType = newOrderType);
+                  Future.delayed(Duration(milliseconds: 100), () {
+                    _refreshOrders();
+                  });
+                },
+                // Pass current filter values
+                currentFilterStatus: _filterStatus,
+                currentFilterOrderType: _filterOrderType,
+                // Pass date range methods
+                onDateRangeSelected: _selectDateRange,
+                onDateRangeCleared: _clearDateRange,
+                useDateRange: _useDateRange,
+                fromDate: _fromDate,
+                toDate: _toDate),
             DashboardScreen(),
             KitchenScreen(
               key: ValueKey(
@@ -1213,12 +1175,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 },
               );
 
-              final previousLimit = _pageLimit;
+              final previousLimit = 30;
 
-              // If this is the Orders screen, set filter to "Pay Later" and limit to 1000
               if (isOrdersScreen) {
                 setState(() {
-                  _filterStatus = 'Pay Later';
+                  _filterStatus = 'All';
                 });
                 // Refresh orders with the new filters
                 WidgetsBinding.instance.addPostFrameCallback((_) {

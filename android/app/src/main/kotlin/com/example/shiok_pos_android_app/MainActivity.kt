@@ -231,17 +231,22 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "updateOrderDisplay" -> {
-                        val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
-                        val subtotal = call.argument<Double>("subtotal") ?: 0.0
-                        val tax = call.argument<Double>("tax") ?: 0.0
-                        val discount = call.argument<Double>("discount") ?: 0.0
-                        val rounding = call.argument<Double>("rounding") ?: 0.0
-                        val total = call.argument<Double>("total") ?: 0.0
-                        val taxRate = call.argument<String>("taxRate") ?: ""
+    // Ensure display exists before updating
+    if (customerDisplay == null || !isDisplayStillValid()) {
+        showCustomerScreen()
+    }
+    
+    val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
+    val subtotal = call.argument<Double>("subtotal") ?: 0.0
+    val tax = call.argument<Double>("tax") ?: 0.0
+    val discount = call.argument<Double>("discount") ?: 0.0
+    val rounding = call.argument<Double>("rounding") ?: 0.0
+    val total = call.argument<Double>("total") ?: 0.0
+    val taxRate = call.argument<String>("taxRate") ?: ""
 
-                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total, taxRate)
-                        result.success(null)
-                    }
+    customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total, taxRate)
+    result.success(null)
+}
                     "showDefaultDisplay" -> {
                         customerDisplay?.showDefaultView()
                         result.success(null)
@@ -256,33 +261,35 @@ class MainActivity : FlutterActivity() {
 
     private fun showCustomerScreen() {
     try {
-        val displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val displays = displayManager.displays
-        
-        // More robust display detection
-        val secondaryDisplay = displays.find { 
-            it.displayId != Display.DEFAULT_DISPLAY && it.isValid 
-        }
-        
-        if (secondaryDisplay != null) {
-            // Get base URL from SharedPreferences
-            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val baseUrl = prefs.getString("flutter.base_url", "https://asdf.byondwave.com") ?: "https://asdf.byondwave.com"
+        // Only create new display if one doesn't exist
+        if (customerDisplay == null) {
+            val displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            val displays = displayManager.displays
             
-            // Clean up existing display first
-            hideCustomerScreen()
+            val secondaryDisplay = displays.find { 
+                it.displayId != Display.DEFAULT_DISPLAY && it.isValid 
+            }
             
-            customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken, baseUrl)
-            customerDisplay?.show()
-        } else {
-            // Log or handle no secondary display
-            println("No secondary display found")
+            if (secondaryDisplay != null) {
+                val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+                val baseUrl = prefs.getString("flutter.base_url", "https://asdf.byondwave.com") ?: "https://asdf.byondwave.com"
+                
+                customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken, baseUrl)
+                customerDisplay?.show()
+            } else {
+                println("No secondary display found")
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
-        // Handle exception gracefully
     }
 }
+
+// Add a method to check if display is still valid
+private fun isDisplayStillValid(): Boolean {
+    return customerDisplay?.display?.isValid == true
+}
+
 
     private fun hideCustomerScreen() {
         customerDisplay?.cleanup()   

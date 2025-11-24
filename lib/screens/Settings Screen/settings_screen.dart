@@ -1562,6 +1562,12 @@ Future<void> _discoverUsbDevices() async {
     int maximumSelection = group.maximumSelection ?? 1;
     bool allowMultipleSelection = (group.allowMultipleSelection ?? 0) == 1;
 
+    // Create controllers for the number fields
+    final minSelectionController =
+        TextEditingController(text: optionRequiredNo.toString());
+    final maxSelectionController =
+        TextEditingController(text: maximumSelection.toString());
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -1571,7 +1577,7 @@ Future<void> _discoverUsbDevices() async {
               style: TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: 400,
-            height: MediaQuery.of(context).size.height * 0.8, // Fixed height
+            height: MediaQuery.of(context).size.height * 0.8,
             child: ScrollConfiguration(
               behavior: NoStretchScrollBehavior(),
               child: SingleChildScrollView(
@@ -1626,11 +1632,14 @@ Future<void> _discoverUsbDevices() async {
                               // If disabling multiple selection, ensure max selection is 1
                               if (!value && maximumSelection > 1) {
                                 maximumSelection = 1;
+                                maxSelectionController.text = '1';
                               }
                               // If enabling multiple selection and min is > 1, ensure max >= min
                               if (value &&
                                   maximumSelection < optionRequiredNo) {
                                 maximumSelection = optionRequiredNo;
+                                maxSelectionController.text =
+                                    optionRequiredNo.toString();
                               }
                             });
                           },
@@ -1650,15 +1659,21 @@ Future<void> _discoverUsbDevices() async {
                             decoration: const InputDecoration(
                                 border: OutlineInputBorder()),
                             keyboardType: TextInputType.number,
-                            controller: TextEditingController(
-                                text: optionRequiredNo.toString()),
+                            controller: minSelectionController,
                             onChanged: (value) {
-                              final newValue = int.tryParse(value) ?? 1;
+                              // Allow empty or invalid input temporarily for editing
+                              if (value.isEmpty) return;
+
+                              final newValue = int.tryParse(value);
+                              if (newValue == null || newValue < 1) return;
+
                               setDialogState(() {
                                 optionRequiredNo = newValue;
                                 // Ensure maximum is not less than minimum
                                 if (maximumSelection < newValue) {
                                   maximumSelection = newValue;
+                                  maxSelectionController.text =
+                                      newValue.toString();
                                 }
                                 // If min > 1, automatically enable multiple selection
                                 if (newValue > 1 && !allowMultipleSelection) {
@@ -1690,15 +1705,21 @@ Future<void> _discoverUsbDevices() async {
                             decoration: const InputDecoration(
                                 border: OutlineInputBorder()),
                             keyboardType: TextInputType.number,
-                            controller: TextEditingController(
-                                text: maximumSelection.toString()),
+                            controller: maxSelectionController,
                             onChanged: (value) {
-                              final newValue = int.tryParse(value) ?? 1;
+                              // Allow empty or invalid input temporarily for editing
+                              if (value.isEmpty) return;
+
+                              final newValue = int.tryParse(value);
+                              if (newValue == null || newValue < 1) return;
+
                               setDialogState(() {
                                 maximumSelection = newValue;
                                 // Ensure minimum is not more than maximum
                                 if (optionRequiredNo > newValue) {
                                   optionRequiredNo = newValue;
+                                  minSelectionController.text =
+                                      newValue.toString();
                                 }
                                 // If max > 1, automatically enable multiple selection
                                 if (newValue > 1 && !allowMultipleSelection) {
@@ -1747,7 +1768,7 @@ Future<void> _discoverUsbDevices() async {
 
                     // Scrollable list of current variants with fixed height
                     SizedBox(
-                      height: 200, // Fixed height for the variants list
+                      height: 200,
                       child: ListView.builder(
                         shrinkWrap: true,
                         itemCount: confirmedOptions.length,
@@ -1785,6 +1806,36 @@ Future<void> _discoverUsbDevices() async {
                   );
                   return;
                 }
+
+                // Validate minimum selection field
+                if (minSelectionController.text.isEmpty ||
+                    int.tryParse(minSelectionController.text) == null ||
+                    int.parse(minSelectionController.text) < 1) {
+                  Fluttertoast.showToast(
+                    msg: 'Minimum selection must be at least 1',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
+                // Validate maximum selection field
+                if (maxSelectionController.text.isEmpty ||
+                    int.tryParse(maxSelectionController.text) == null ||
+                    int.parse(maxSelectionController.text) < 1) {
+                  Fluttertoast.showToast(
+                    msg: 'Maximum selection must be at least 1',
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.orange,
+                    textColor: Colors.white,
+                  );
+                  return;
+                }
+
+                // Update values from controllers
+                optionRequiredNo = int.parse(minSelectionController.text);
+                maximumSelection = int.parse(maxSelectionController.text);
 
                 // Validate that maximum is not less than minimum
                 if (maximumSelection < optionRequiredNo) {
