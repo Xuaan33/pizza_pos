@@ -172,6 +172,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
+      debugPrint('=== FETCHING ORDER DETAILS FROM SERVER ===');
       final response = await PosService().getOrders(
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -201,11 +202,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         search: invoiceName,
       );
 
+      debugPrint('Server response: ${jsonEncode(response)}');
+
       if (response['message']?['success'] == true) {
         final List<dynamic> invoices = response['message']?['message'] ?? [];
         if (invoices.isNotEmpty) {
           final invoice = invoices.first;
           final List<dynamic> serverItems = invoice['items'] ?? [];
+
+          debugPrint('=== SERVER ORDER DATA ===');
+          debugPrint('Grand Total: ${invoice['grand_total']}');
+          debugPrint('Subtotal (total): ${invoice['total']}');
+          debugPrint('Discount: ${invoice['discount_amount']}');
+          debugPrint('Taxes: ${invoice['total_taxes_and_charges']}');
+          debugPrint('Rounding: ${invoice['base_rounding_adjustment']}');
+
+          debugPrint('=== SERVER ITEMS ===');
+          for (final serverItem in serverItems) {
+            debugPrint('Item: ${serverItem['item_name']}');
+            debugPrint('  - Rate: ${serverItem['rate']}');
+            debugPrint('  - Qty: ${serverItem['qty']}');
+            debugPrint(
+                '  - Amount: ${(serverItem['rate'] as num?)?.toDouble() ?? 0.0 * (serverItem['qty'] as num?)!.toDouble() ?? 1.0}');
+            debugPrint(
+                '  - Variant Info: ${serverItem['custom_variant_info']}');
+          }
 
           setState(() {
             // Update order details
@@ -220,7 +241,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             widget.order['coupon_code'] = invoice['coupon_code'];
             widget.order['custom_user_voucher'] =
                 invoice['custom_user_voucher'];
-            // ADD THIS: Store user_voucher_code from backend
             widget.order['user_voucher_code'] = invoice['user_voucher_code'];
             widget.order['taxes'] = invoice['taxes'];
             widget.order['total_taxes_and_charges'] =
@@ -233,7 +253,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             _discountAmount = widget.order['discount_amount'];
             total_taxes_and_charges = widget.order['total_taxes_and_charges'];
 
-            // Update voucher code - use user_voucher_code if available, otherwise nothing
+            // Update voucher code
             _voucherCode = widget.order['user_voucher_code'] ?? '';
 
             // Update remarks
@@ -277,6 +297,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       }
     } catch (e) {
+      debugPrint('Error fetching order details: $e');
       if (mounted) {
         Fluttertoast.showToast(
           msg: 'Failed to fetch order details: $e',
@@ -445,8 +466,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            final currentItems = _isEditing ? _editableItems : orderItems;
             CustomerDisplayController.updateOrderDisplay(
-              items: orderItems.map((item) {
+              items: currentItems.map((item) {
                 return {
                   'name': item['name'] ?? 'Unknown',
                   'price': (item['price'] is int)
@@ -1168,7 +1190,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Widget _buildOrderItemsList() {
     final items = _isEditing ? _editableItems : orderItems;
+    debugPrint('=== ITEMS DEBUG INFO ===');
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      final basePrice = item['price'] ?? 0.0;
+      final quantity = item['quantity'] ?? 1.0;
+      final variantInfo = item['custom_variant_info'];
+      final variantCost = _calculateVariantCost(variantInfo);
+      final totalItemPrice = basePrice + variantCost;
+      final amount = totalItemPrice * quantity;
 
+      debugPrint('Item $i: ${item['name']}');
+      debugPrint('  - Base Price: RM$basePrice');
+      debugPrint('  - Variant Cost: RM$variantCost');
+      debugPrint('  - Total Price (base + variant): RM$totalItemPrice');
+      debugPrint('  - Quantity: $quantity');
+      debugPrint('  - Amount: RM$amount');
+      debugPrint('  - Variant Info: $variantInfo');
+    }
+    debugPrint('=== END ITEMS DEBUG ===');
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column
@@ -1327,8 +1367,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                       'split_quantity': 1,
                                       'original_index':
                                           i, // Ensure index is stored
-                                      'unique_key':
-                                          '${items[i]['item_code']}_${i}_${DateTime.now().millisecondsSinceEpoch}', // Add unique key
+                                      'unique_key': _generateUniqueKey(
+                                          items[i], i), // Add unique key
                                     });
                                   });
                                 }
@@ -1336,12 +1376,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 setState(() {
                                   _itemsToSplit.removeWhere((splitItem) =>
                                       splitItem['unique_key'] ==
-                                          '${items[i]['item_code']}_${i}' ||
-                                      (splitItem['item_code'] ==
-                                              items[i]['item_code'] &&
-                                          _compareOptions(splitItem['options'],
-                                              items[i]['options']) &&
-                                          splitItem['original_index'] == i));
+                                      _generateUniqueKey(items[i], i));
                                 });
                               }
                             },
@@ -1358,7 +1393,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original price if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${((items[i]['price'] - items[i]['additional_cost']) + items[i]['discount_amount']).toStringAsFixed(2)}',
+                        'RM${((items[i]['price']) + items[i]['discount_amount']).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1368,9 +1403,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current price
                     Text(
-                      items[i]['additional_cost'] != null
-                          ? 'RM${(items[i]['price'] - items[i]['additional_cost']).toStringAsFixed(2)}'
-                          : 'RM${(items[i]['price']).toStringAsFixed(2)}',
+                      'RM${(items[i]['price']).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1391,7 +1424,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original amount if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${((items[i]['price']) * items[i]['quantity'] + items[i]['discount_amount']).toStringAsFixed(2)}',
+                        'RM${(((items[i]['price'] + _calculateVariantCost(items[i]['custom_variant_info']) * items[i]['quantity'])) + ((items[i]['discount_amount'] ?? 0) * items[i]['quantity'])).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1401,7 +1434,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current amount with proper discount calculation
                     Text(
-                      'RM${((items[i]['price'] * items[i]['quantity'])).toStringAsFixed(2)}',
+                      'RM${((items[i]['price'] + _calculateVariantCost(items[i]['custom_variant_info']) * items[i]['quantity'])).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: (items[i]['discount_amount'] ?? 0) > 0
@@ -1412,11 +1445,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show discount amount if any
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'Discount: RM${(items[i]['discount_amount'] * items[i]['quantity']).toStringAsFixed(2)}',
+                        'Discount: RM${((items[i]['discount_amount'] ?? 0) * items[i]['quantity']).toStringAsFixed(2)}',
                         style: TextStyle(
                           color: Colors.green,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                    // DEBUG: Show variant cost breakdown
+                    if (_calculateVariantCost(items[i]['custom_variant_info']) >
+                        0) ...[
+                      Text(
+                        '(+RM${_calculateVariantCost(items[i]['custom_variant_info']).toStringAsFixed(2)} variant)',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 10,
                         ),
                       ),
                     ],
@@ -1485,7 +1529,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           // Show subtotal
           _buildSummaryRow(
             'Subtotal',
-            "RM ${originalSubtotal.toStringAsFixed(2)}",
+            "RM ${_calculateSubtotal().toStringAsFixed(2)}",
           ),
           const SizedBox(height: 8),
 
@@ -3956,9 +4000,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   double _calculateSubtotal() {
     // Use server value if available, otherwise calculate from items
-    return (widget.order['total'] as num?)?.toDouble() ??
-        orderItems.fold(
-            0.0, (sum, item) => sum + (item['price'] * item['quantity']));
+    final serverSubtotal = (widget.order['total'] as num?)?.toDouble();
+
+    if (serverSubtotal != null) {
+      debugPrint('Using server subtotal: RM$serverSubtotal');
+      return serverSubtotal;
+    }
+
+    // Calculate local subtotal including variant costs
+    final items = _isEditing ? _editableItems : orderItems;
+    double localSubtotal = items.fold(0.0, (sum, item) {
+      final basePrice = item['price'];
+      final variantCost = _calculateVariantCost(item['custom_variant_info']);
+      final totalPrice = basePrice + variantCost;
+      final quantity = item['quantity'];
+      final itemTotal = totalPrice * quantity;
+
+      debugPrint(
+          'Item "${item['name']}": base=RM$basePrice, variant=RM$variantCost, total=RM$totalPrice, qty=$quantity, itemTotal=RM$itemTotal');
+
+      return sum + itemTotal;
+    });
+
+    debugPrint('Calculated local subtotal: RM$localSubtotal');
+    return localSubtotal;
   }
 
   double _calculateRounding() {
@@ -3978,6 +4043,51 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     } else {
       return total;
     }
+  }
+
+  double _calculateVariantCost(dynamic variantInfo) {
+    if (variantInfo == null) return 0.0;
+
+    double totalVariantCost = 0.0;
+
+    try {
+      // Handle case where variantInfo is a JSON string
+      dynamic parsedVariant = variantInfo;
+      if (variantInfo is String) {
+        try {
+          parsedVariant = jsonDecode(variantInfo);
+        } catch (e) {
+          debugPrint('Error parsing variant info: $e');
+          return 0.0;
+        }
+      }
+
+      // Handle case where variantInfo is a List (new format)
+      if (parsedVariant is List) {
+        for (var variant in parsedVariant) {
+          if (variant is Map && variant['options'] is List) {
+            for (var option in variant['options']) {
+              if (option is Map) {
+                final additionalCost =
+                    (option['additional_cost'] as num?)?.toDouble() ?? 0.0;
+                totalVariantCost += additionalCost;
+              }
+            }
+          }
+        }
+      }
+
+      // Handle case where variantInfo is a Map (old format)
+      if (parsedVariant is Map) {
+        // Old format might not have additional cost info
+        // You might need to adjust this based on your actual data structure
+        debugPrint('Old variant format detected: $parsedVariant');
+      }
+    } catch (e) {
+      debugPrint('Error calculating variant cost: $e');
+    }
+
+    return totalVariantCost;
   }
 
   double _calculateGST() {
@@ -4058,6 +4168,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  String _generateUniqueKey(Map<String, dynamic> item, int index) {
+    final itemCode = item['item_code']?.toString() ?? 'unknown';
+    final variantInfo = item['custom_variant_info'];
+
+    // Create a consistent variant key
+    String variantKey = 'no_variant';
+    if (variantInfo != null) {
+      try {
+        if (variantInfo is String) {
+          // Parse and normalize the JSON string
+          final parsed = jsonDecode(variantInfo);
+          variantKey = jsonEncode(parsed);
+        } else {
+          // Directly encode if it's already an object
+          variantKey = jsonEncode(variantInfo);
+        }
+        // Remove whitespace for consistency
+        variantKey = variantKey.replaceAll(RegExp(r'\s+'), '');
+      } catch (e) {
+        variantKey = variantInfo.toString();
+      }
+    }
+
+    final key = '${itemCode}_${variantKey}_$index';
+    debugPrint('🔑 Generated unique key: $key');
+    return key;
+  }
+
   void _toggleEditMode() {
     setState(() {
       _isEditing = !_isEditing;
@@ -4084,6 +4222,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _previousEditableItems = [];
       }
     });
+
+    _updateCustomerDisplay();
   }
 
   void _saveEditState() {
@@ -4110,6 +4250,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         debugPrint(
             'Restored state: ${_editableItems.map((item) => "${item['name']}: ${item['quantity']}").toList()}');
       });
+      _updateCustomerDisplay();
     } else {
       Fluttertoast.showToast(
         msg: "Nothing to undo",
@@ -4130,6 +4271,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       _editHistory = [List<Map<String, dynamic>>.from(_editableItems)];
       _isEditing = false; // Exit edit mode
     });
+    _updateCustomerDisplay();
   }
 
   void _deleteItem(int index) async {
@@ -4141,6 +4283,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         debugPrint('Deleted item at index $index');
         _saveEditState(); // Save state AFTER change
       });
+      _updateCustomerDisplay();
       return;
     }
     // Only show confirmation dialog for last item
@@ -4209,6 +4352,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           'Increased quantity for ${itemCode} to ${currentQuantity + 1}');
       _saveEditState(); // Save state AFTER change
     });
+    _updateCustomerDisplay();
   }
 
   void _decreaseQuantity(int index) {
@@ -4232,6 +4376,38 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       debugPrint(
           'Decreased quantity for ${_editableItems[index]['item_code']} to ${currentQuantity - 1}');
       _saveEditState(); // Save state AFTER change
+    });
+
+    _updateCustomerDisplay();
+  }
+
+  void _updateCustomerDisplay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentItems = _isEditing ? _editableItems : orderItems;
+      CustomerDisplayController.updateOrderDisplay(
+        items: currentItems.map((item) {
+          return {
+            'name': item['name'] ?? 'Unknown',
+            'price': (item['price'] is int)
+                ? (item['price'] as int).toDouble()
+                : item['price'] as double,
+            'quantity': (item['quantity'] is int)
+                ? item['quantity'] as int
+                : (item['quantity'] as double).toInt(),
+            'discount_amount': item['discount_amount'] ?? 0.0,
+            'custom_serve_later': item['custom_serve_later'] ?? false,
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_variant_info':
+                item['custom_variant_info']?.toString() ?? '',
+          };
+        }).toList(),
+        subtotal: _calculateSubtotal(),
+        tax: _calculateGST(),
+        discount: _discountAmount,
+        rounding: _calculateRounding(),
+        total: _calculateTotal(),
+        taxRate: _getGSTRate(),
+      );
     });
   }
 
@@ -4601,8 +4777,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           'split_quantity': result,
           'original_quantity': quantity,
           'original_index': index,
-          'unique_key':
-              '${item['item_code']}_${index}_${DateTime.now().millisecondsSinceEpoch}',
+          'unique_key': _generateUniqueKey(item, index),
         });
       });
     }
@@ -4650,34 +4825,64 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
-      // Create updated items list by reducing quantities or removing items
+      // Create a DEEP copy of the original items to preserve all properties
       final updatedItems =
-          List<Map<String, dynamic>>.from(widget.order['items']);
+          List<Map<String, dynamic>>.from(widget.order['items'])
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+
+      debugPrint(
+          '🔄 Updating original order after split - initial items: ${updatedItems.length}');
 
       for (var splitItem in _itemsToSplit) {
-        final originalItemIndex = updatedItems.indexWhere(
-          (item) =>
-              item['item_code'] == splitItem['item_code'] &&
-              _compareOptions(item['options'], splitItem['options']),
-        );
+        final originalIndex = splitItem['original_index'];
 
-        if (originalItemIndex != -1) {
-          final originalItem = updatedItems[originalItemIndex];
-          final remainingQty = (originalItem['quantity'] as num).toDouble() -
-              (splitItem['split_quantity'] as num).toDouble();
+        if (originalIndex >= 0 && originalIndex < updatedItems.length) {
+          final originalItem = updatedItems[originalIndex];
 
-          if (remainingQty <= 0) {
-            updatedItems.removeAt(originalItemIndex);
+          // Verify this is the correct item by comparing unique identifiers
+          final currentUniqueKey =
+              _generateUniqueKey(originalItem, originalIndex);
+          final splitUniqueKey = splitItem['unique_key'];
+
+          if (currentUniqueKey == splitUniqueKey) {
+            final remainingQty = (originalItem['quantity'] as num).toDouble() -
+                (splitItem['split_quantity'] as num).toDouble();
+
+            debugPrint('📊 Updating item: ${originalItem['name']}');
+            debugPrint('   Original quantity: ${originalItem['quantity']}');
+            debugPrint('   Split quantity: ${splitItem['split_quantity']}');
+            debugPrint('   Remaining quantity: $remainingQty');
+            debugPrint('   Original price: ${originalItem['price']}');
+
+            if (remainingQty <= 0) {
+              updatedItems.removeAt(originalIndex);
+              debugPrint('   ✅ Item removed completely');
+            } else {
+              // Preserve ALL original properties including price
+              updatedItems[originalIndex] = {
+                ...originalItem, // Keep all original properties
+                'quantity': remainingQty,
+                // Explicitly preserve the price to prevent server recalculation
+                'price': originalItem['price'],
+                'rate': originalItem['price'], // Also update rate if it exists
+              };
+              debugPrint('   ✅ Item quantity updated to: $remainingQty');
+            }
           } else {
-            updatedItems[originalItemIndex] = {
-              ...originalItem,
-              'quantity': remainingQty,
-            };
+            debugPrint('⚠️ Item mismatch at index $originalIndex');
+            debugPrint('   Current key: $currentUniqueKey');
+            debugPrint('   Split key: $splitUniqueKey');
           }
+        } else {
+          debugPrint(
+              '❌ Invalid original index: $originalIndex for item: ${splitItem['name']}');
         }
       }
 
-      // Submit updated order
+      debugPrint('📦 Final updated items count: ${updatedItems.length}');
+
+      // Submit updated order with preserved prices
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
         authenticated: (
@@ -4698,40 +4903,56 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           itemsGroups,
           baseUrl,
           merchantId,
-        ) {
-          return posProfile;
-        },
+        ) =>
+            posProfile,
         orElse: () => null,
       );
 
       if (posProfile == null) throw Exception('Not authenticated');
 
-      await PosService().submitOrder(
+      // Prepare items for submission, ensuring prices are preserved
+      final itemsToSubmit = updatedItems.map((item) {
+        final itemData = {
+          'item_code': item['item_code'],
+          'qty': item['quantity'],
+          'price_list_rate': (item['price'] +
+              _calculateVariantCost(item['custom_variant_info'])),
+          'custom_item_remarks': item['custom_item_remarks'] ?? '',
+          'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+        };
+
+        // Preserve variant info if it exists
+        if (item['custom_variant_info'] != null) {
+          itemData['custom_variant_info'] = item['custom_variant_info'];
+        }
+
+        return itemData;
+      }).toList();
+
+      debugPrint('🔄 Submitting updated order to server...');
+
+      final response = await PosService().submitOrder(
           name: invoiceName,
           posProfile: posProfile,
           customer: 'Guest',
-          items: updatedItems.map((item) {
-            return {
-              'item_code': item['item_code'],
-              'qty': item['quantity'],
-              'price_list_rate': item['price'],
-              'custom_item_remarks': item['custom_item_remarks'] ?? '',
-              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-              if (item['custom_variant_info'] != null)
-                'custom_variant_info': item['custom_variant_info'],
-            };
-          }).toList(),
+          items: itemsToSubmit,
           remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
           orderChannel: 'Dine In');
 
-      // Update local state
-      if (mounted) {
-        setState(() {
-          widget.order['items'] = updatedItems;
-        });
+      if (response['success'] == true) {
+        // Update local state with the preserved items
+        if (mounted) {
+          setState(() {
+            widget.order['items'] = updatedItems;
+          });
+        }
+        debugPrint('✅ Original order successfully updated after split');
+      } else {
+        throw Exception('Failed to update order: ${response['message']}');
       }
     } catch (e) {
+      debugPrint('❌ Error updating original order: $e');
       Fluttertoast.showToast(
         msg: "Error updating original order: ${e.toString()}",
         gravity: ToastGravity.BOTTOM,

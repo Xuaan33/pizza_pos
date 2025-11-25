@@ -101,65 +101,108 @@ class CustomerDisplay(
     }
 
     fun updateOrderDetails(
-        items: List<Map<String, Any>>, 
-        subtotal: Double, 
-        tax: Double, 
-        discount: Double,
-        rounding: Double,
-        total: Double,
-        taxRate: String
-    ) {
-        handler.post {
-            orderTaxLabel.text = "Tax (${taxRate}%):"
-           if (taxRate == "0" || taxRate.isEmpty()) {
-        orderTaxLabel.visibility = View.GONE
-        orderTax.visibility = View.GONE
-    } else {
-        orderTaxLabel.visibility = View.VISIBLE
-        orderTax.visibility = View.VISIBLE
-    }
+    items: List<Map<String, Any>>, 
+    subtotal: Double, 
+    tax: Double, 
+    discount: Double,
+    rounding: Double,
+    total: Double,
+    taxRate: String
+) {
+    handler.post {
+        orderTaxLabel.text = "Tax (${taxRate}%):"
+        if (taxRate == "0" || taxRate.isEmpty()) {
+            orderTaxLabel.visibility = View.GONE
+            orderTax.visibility = View.GONE
+        } else {
+            orderTaxLabel.visibility = View.VISIBLE
+            orderTax.visibility = View.VISIBLE
+        }
+        
+        val itemStrings = items.map { item ->
+            val name = item["name"]?.toString() ?: "Unnamed"
+            val price = when (val p = item["price"]) {
+                is Double -> p
+                is Int -> p.toDouble()
+                else -> 0.0
+            }
+            val quantity = when (val q = item["quantity"]) {
+                is Int -> q
+                is Double -> q.toInt()
+                else -> 0
+            }
+            val discountAmount = when (val d = item["discount_amount"]) {
+                is Double -> d
+                is Int -> d.toDouble()
+                else -> 0.0
+            }
+            val serveLater = item["custom_serve_later"] == true
+            val remarks = item["custom_item_remarks"]?.toString() ?: ""
+            val variantInfo = item["custom_variant_info"]?.toString() ?: ""
+            
+            val priceAfterDiscount = price
+            val itemTotal = priceAfterDiscount * quantity
+            
+            val serveStatus = if (serveLater) "[SERVE LATER]" else ""
+            val remarksText = if (remarks.isNotEmpty()) "\nRemarks: $remarks" else ""
+            val variantText = if (variantInfo.isNotEmpty()) "\nOptions: $variantInfo" else ""
+            
+            "$quantity x $name $serveStatus\nRM ${"%.2f".format(priceAfterDiscount)} x $quantity = RM ${"%.2f".format(itemTotal)}$remarksText$variantText"
+        }
+        
+        // Check if we need to create a new adapter or update existing one
+        val currentAdapter = orderItemsList.adapter as? ArrayAdapter<String>
+        if (currentAdapter != null) {
+            // Get current scroll position
+            val firstVisiblePosition = orderItemsList.firstVisiblePosition
+            val currentScrollPosition = if (firstVisiblePosition >= 0) firstVisiblePosition else 0
+            
+            // Update existing adapter for better performance
+            currentAdapter.clear()
+            currentAdapter.addAll(itemStrings)
+            
+            // Auto-scroll to the bottom to show newest items
+            orderItemsList.post {
+                val adapter = orderItemsList.adapter
+                if (adapter != null && adapter.count > 0) {
+                    // Only scroll if we're already near the bottom or if new items were added
+                    val lastVisiblePosition = orderItemsList.lastVisiblePosition
+                    val totalItems = adapter.count
+                    
+                    // If user was already viewing the bottom or new items were added, scroll to bottom
+                    if (lastVisiblePosition >= totalItems - 2 || itemStrings.size > totalItems) {
+                        orderItemsList.setSelection(adapter.count - 1) // Immediate scroll without animation
+                    } else {
+                        // Otherwise, maintain current scroll position
+                        orderItemsList.setSelection(currentScrollPosition)
+                    }
+                }
+            }
+        } else {
+            // Create new adapter
             val adapter = ArrayAdapter(
                 context,
                 android.R.layout.simple_list_item_1,
-                items.map { item ->
-                    val name = item["name"]?.toString() ?: "Unnamed"
-                    val price = when (val p = item["price"]) {
-                        is Double -> p
-                        is Int -> p.toDouble()
-                        else -> 0.0
-                    }
-                    val quantity = when (val q = item["quantity"]) {
-                        is Int -> q
-                        is Double -> q.toInt()
-                        else -> 0
-                    }
-                    val discountAmount = when (val d = item["discount_amount"]) {
-                        is Double -> d
-                        is Int -> d.toDouble()
-                        else -> 0.0
-                    }
-                    val serveLater = item["custom_serve_later"] == true
-                    val remarks = item["custom_item_remarks"]?.toString() ?: ""
-                    val variantInfo = item["custom_variant_info"]?.toString() ?: ""
-                    
-                    val priceAfterDiscount = price
-                    val itemTotal = priceAfterDiscount * quantity
-                    
-                    val serveStatus = if (serveLater) "[SERVE LATER]" else ""
-                    val remarksText = if (remarks.isNotEmpty()) "\nRemarks: $remarks" else ""
-                    val variantText = if (variantInfo.isNotEmpty()) "\nOptions: $variantInfo" else ""
-                    
-                    "$quantity x $name $serveStatus\nRM ${"%.2f".format(priceAfterDiscount)} x $quantity = RM ${"%.2f".format(itemTotal)}$remarksText$variantText"
-                }
+                itemStrings
             )
             orderItemsList.adapter = adapter
-            orderSubtotal.text = "RM ${"%.2f".format(subtotal)}"
-            orderTax.text = "RM ${"%.2f".format(tax)}"
-            orderDiscount.text = "RM ${"%.2f".format(discount)}"
-            orderRounding.text = "RM ${"%.2f".format(rounding)}"
-            orderTotal.text = "RM ${"%.2f".format(total)}"
+            
+            // Auto-scroll to the bottom for new adapter
+            orderItemsList.post {
+                val adapter = orderItemsList.adapter
+                if (adapter != null && adapter.count > 0) {
+                    orderItemsList.setSelection(adapter.count - 1) // Immediate scroll without animation
+                }
+            }
         }
+        
+        orderSubtotal.text = "RM ${"%.2f".format(subtotal)}"
+        orderTax.text = "RM ${"%.2f".format(tax)}"
+        orderDiscount.text = "RM ${"%.2f".format(discount)}"
+        orderRounding.text = "RM ${"%.2f".format(rounding)}"
+        orderTotal.text = "RM ${"%.2f".format(total)}"
     }
+}
 
     fun showDefaultView() {
     executor.execute {

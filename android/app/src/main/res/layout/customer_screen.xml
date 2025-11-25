@@ -12,11 +12,11 @@
         android:background="#FFF0F0"
         android:visibility="visible">
 
-        <!-- Logo and Video Section (60%) -->
+        <!-- Logo and Video Section (50%) -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="6"
+            android:layout_weight="5"
             android:gravity="center"
             android:orientation="vertical"
             android:background="#FCE4EC">
@@ -26,7 +26,7 @@
                 android:id="@+id/logoView"
                 android:layout_width="200dp"
                 android:layout_height="0dp"
-                android:layout_weight="5"
+                android:layout_weight="3"
                 android:src="@drawable/splash" />
 
             <!-- Video (70% height) -->
@@ -34,15 +34,15 @@
                 android:id="@+id/videoView"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="5"
+                android:layout_weight="7"
                 android:scaleType="centerCrop" />
         </LinearLayout>
 
-        <!-- Order Details Section (40%) -->
+        <!-- Order Details Section (50%) -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="4"
+            android:layout_weight="5"
             android:orientation="vertical"
             android:padding="16dp">
 
