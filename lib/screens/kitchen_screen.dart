@@ -266,20 +266,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     return SizedBox();
   }
 
-  String _getElapsedTime(String? orderTime) {
-    if (orderTime == null) return '';
-    try {
-      final time = DateTime.parse(orderTime);
-      final diff = DateTime.now().difference(time);
-      if (diff.inMinutes < 60) {
-        return '${diff.inMinutes}m';
-      }
-      return '${diff.inHours}h ${diff.inMinutes % 60}m';
-    } catch (e) {
-      return '';
-    }
-  }
-
   Color _getUrgencyColor(String? orderTime) {
     if (orderTime == null) return Colors.grey;
     try {
@@ -486,7 +472,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     required bool isOrderFulfilled,
     required int unfulfilledItems,
   }) {
-    final elapsedTime = _getElapsedTime(order['order_time']);
     final urgencyColor = _getUrgencyColor(order['order_time']);
 
     return Card(

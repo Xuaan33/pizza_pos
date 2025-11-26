@@ -64,6 +64,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
   List<Map<String, dynamic>> _paymentMethods = [];
+  // ignore: unused_field
   bool _isLoadingPaymentMethods = true;
   String baseImageUrl = '';
   String tier = '';
@@ -928,11 +929,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       _buildSummaryRow(
                           'Discount Amount (${order['user_voucher_code']})',
                           -totalDiscount),
-                    if (taxBreakdown != null)
-                      _buildSummaryRow(
-                        'GST (${taxBreakdown['rate']?.toStringAsFixed(0) ?? '6.0'}%)',
-                        tax,
-                      ),
+                    ..._buildTaxSummaryRows(order),
                     _buildSummaryRow('Rounding Adjustment', rounding),
                     _buildSummaryRow('Total', total, isTotal: true),
                     if (isPaid) ...[
@@ -1037,22 +1034,25 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final orderLevelDiscount =
         (order['discount_amount'] as num?)?.toDouble() ?? 0.0;
 
-    // Calculate base subtotal from items
+    // Calculate base subtotal from items INCLUDING variant costs
     double baseSubtotal = items.fold(0.0, (sum, item) {
       final quantity = (item['quantity'] ?? 1).toDouble();
       final price = (item['price'] ?? 0).toDouble();
-      return sum + (price * quantity);
+      final variantCost = _calculateVariantCost(item['custom_variant_info']);
+      final totalPrice = price + variantCost;
+      return sum + (totalPrice * quantity);
     });
 
-    // If there's an order-level discount, add it back to get original
+    // If there's an order-level discount, return original with variants
     if (orderLevelDiscount > 0) {
       return baseSubtotal;
     }
 
-    // For item-level discounts, calculate original prices
+    // For item-level discounts, calculate original prices with variants
     return items.fold(0.0, (sum, item) {
       final quantity = (item['quantity'] ?? 1).toDouble();
       final currentPrice = (item['price'] ?? 0).toDouble();
+      final variantCost = _calculateVariantCost(item['custom_variant_info']);
       final discountAmount =
           (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
       final discountPercentage =
@@ -1068,75 +1068,95 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         originalPricePerUnit = currentPrice;
       }
 
-      return sum + (originalPricePerUnit * quantity);
+      // Add variant cost to the original price
+      return sum + ((originalPricePerUnit + variantCost) * quantity);
     });
   }
 
 // Helper method to build item price column with proper original/discounted price display
   List<Widget> _buildItemPriceColumn(Map<String, dynamic> item) {
     final quantity = (item['quantity'] ?? 1).toDouble();
-    final currentPrice = (item['price'] ?? 0).toDouble();
+    final basePrice = (item['price'] ?? 0).toDouble();
+    final variantCost = _calculateVariantCost(item['custom_variant_info']);
+    final totalPricePerItem = basePrice + variantCost;
     final discountAmount = (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
     final discountPercentage =
         (item['discount_percentage'] as num?)?.toDouble() ?? 0.0;
 
-    final currentTotal = currentPrice * quantity;
+    final itemSubtotal = totalPricePerItem * quantity;
 
     // Check if this item has any discount
     final hasDiscount = discountAmount > 0 || discountPercentage > 0;
 
     if (hasDiscount) {
-      // For draft orders, we need to calculate the original price
-      double originalPricePerUnit;
+      // Calculate original amount including discount
+      double originalAmount;
 
       if (discountAmount > 0) {
-        // Fixed amount discount: original = current + (discount/quantity)
-        originalPricePerUnit = currentPrice + (discountAmount / quantity);
+        // For fixed discount: original = current + discount
+        originalAmount = itemSubtotal + (discountAmount * quantity);
       } else {
-        // Percentage discount: original = current / (1 - percentage/100)
-        originalPricePerUnit = currentPrice / (1 - (discountPercentage / 100));
+        // For percentage discount: original = current / (1 - percentage/100)
+        originalAmount = itemSubtotal / (1 - (discountPercentage / 100));
       }
-
-      final originalTotal = originalPricePerUnit * quantity;
 
       return [
         // Show original price with strikethrough
         Text(
-          'RM ${originalTotal.toStringAsFixed(2)}',
+          'RM ${originalAmount.toStringAsFixed(2)}',
           style: TextStyle(
+            fontSize: 12,
             decoration: TextDecoration.lineThrough,
             color: Colors.grey,
-            fontSize: 12,
           ),
         ),
-        // Show discounted price
+        // Show current amount
         Text(
-          'RM ${currentTotal.toStringAsFixed(2)}',
-          style:
-              TextStyle(color: Color(0xFFE732A0), fontWeight: FontWeight.w600),
+          'RM ${itemSubtotal.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFE732A0),
+          ),
         ),
         // Show discount details
         if (discountAmount > 0)
           Text(
-            'Discount: RM ${discountAmount.toStringAsFixed(2)}',
+            'Discount: RM ${(discountAmount * quantity).toStringAsFixed(2)}',
             style: TextStyle(
-                color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+              color: Colors.green,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        if (discountPercentage > 0)
+        // Show variant cost breakdown if any
+        if (variantCost > 0)
           Text(
-            'Discount: ${discountPercentage.toStringAsFixed(1)}%',
+            '(+RM${variantCost.toStringAsFixed(2)} variant)',
             style: TextStyle(
-                color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+              color: Colors.blue,
+              fontSize: 10,
+            ),
           ),
       ];
     } else {
-      // No discount, just show the price
+      // No discount, just show the price with variant cost
       return [
         Text(
-          'RM ${currentTotal.toStringAsFixed(2)}',
-          style:
-              TextStyle(color: Color(0xFFE732A0), fontWeight: FontWeight.w600),
+          'RM ${itemSubtotal.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFE732A0),
+          ),
         ),
+        // Show variant cost breakdown if any
+        if (variantCost > 0)
+          Text(
+            '(+RM${variantCost.toStringAsFixed(2)} variant)',
+            style: TextStyle(
+              color: Colors.blue,
+              fontSize: 10,
+            ),
+          ),
       ];
     }
   }
@@ -1250,7 +1270,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           order['status']?.toString().toLowerCase() == 'cancelled';
       final isDraft = !isCancelled &&
           (order['status']?.toString().toLowerCase() == 'draft');
-      final isPaid = !isCancelled && !isDraft;
 
       final String orderStatus;
       if (isCancelled) {
@@ -1275,11 +1294,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Future<void> _selectDateRange() async {
     // Simply call the parent callback - MainLayout will handle the date selection
     widget.onDateRangeSelected();
-  }
-
-  void _resetToToday() {
-    // Call parent to reset to today
-    widget.onDateChanged(DateTime.now());
   }
 
 // Replace the _clearDateRange method with this:
@@ -1728,7 +1742,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     return items.fold(0.0, (sum, item) {
       final price = (item['price'] as num?)?.toDouble() ?? 0.0;
       final quantity = (item['quantity'] as num?)?.toDouble() ?? 1.0;
-      return sum + (price * quantity);
+      final variantCost = _calculateVariantCost(item['custom_variant_info']);
+      final totalPrice = price + variantCost;
+      return sum + (totalPrice * quantity);
     });
   }
 
@@ -1775,6 +1791,112 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
     // Ensure total is not negative
     return total < 0 ? 0.00 : total;
+  }
+
+  double _calculateVariantCost(dynamic variantInfo) {
+    if (variantInfo == null) return 0.0;
+
+    double totalVariantCost = 0.0;
+
+    try {
+      // Handle case where variantInfo is a JSON string
+      dynamic parsedVariant = variantInfo;
+      if (variantInfo is String) {
+        try {
+          parsedVariant = jsonDecode(variantInfo);
+        } catch (e) {
+          debugPrint('Error parsing variant info: $e');
+          return 0.0;
+        }
+      }
+
+      // Handle case where variantInfo is a List (new format)
+      if (parsedVariant is List) {
+        for (var variant in parsedVariant) {
+          if (variant is Map && variant['options'] is List) {
+            for (var option in variant['options']) {
+              if (option is Map) {
+                final additionalCost =
+                    (option['additional_cost'] as num?)?.toDouble() ?? 0.0;
+                totalVariantCost += additionalCost;
+              }
+            }
+          }
+        }
+      }
+
+      // Handle case where variantInfo is a Map (old format)
+      if (parsedVariant is Map) {
+        debugPrint('Old variant format detected: $parsedVariant');
+      }
+    } catch (e) {
+      debugPrint('Error calculating variant cost: $e');
+    }
+
+    return totalVariantCost;
+  }
+
+  List<Widget> _buildTaxSummaryRows(Map<String, dynamic> order) {
+    final authState = ref.read(authProvider);
+
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            // Filter out taxes with 0% rate
+            final applicableTaxes = taxes.where((tax) {
+              final rate = (tax['rate'] ?? 0.0).toDouble();
+              return rate > 0;
+            }).toList();
+
+            if (applicableTaxes.isEmpty) {
+              return <Widget>[SizedBox.shrink()];
+            }
+
+            // Get discount and subtotal for tax calculation
+            final orderLevelDiscount =
+                (order['discount_amount'] as num?)?.toDouble() ?? 0.0;
+            final itemLevelDiscounts = _calculateItemLevelDiscounts(order);
+            final totalDiscount = orderLevelDiscount > 0
+                ? orderLevelDiscount
+                : itemLevelDiscounts;
+
+            final originalSubtotal = _calculateOriginalSubtotal(order);
+            final taxableAmount = originalSubtotal - totalDiscount;
+
+            List<Widget> taxRows = [];
+
+            for (var tax in applicableTaxes) {
+              final taxName = tax['description'] ?? 'Tax';
+              final taxRate = (tax['rate'] ?? 0.0).toDouble();
+              final taxAmount = taxableAmount * (taxRate / 100);
+
+              taxRows.add(_buildSummaryRow(
+                '$taxName (${taxRate.toStringAsFixed(1)}%)',
+                taxAmount,
+              ));
+            }
+
+            return taxRows;
+          },
+        ) ??
+        [SizedBox.shrink()];
   }
 
   DateTime _parseDateTime(dynamic dateTime) {

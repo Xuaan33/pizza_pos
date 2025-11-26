@@ -130,9 +130,6 @@ class _SplitOrderPaymentDialogState
     final items = List<Map<String, dynamic>>.from(widget.order['items'] ?? []);
 
     final isCashPayment = _selectedPaymentMethod == 'Cash';
-    final paidAmount = isCashPayment
-        ? _amountGiven
-        : (_orderDetails['rounded_total'] ?? 0).toDouble();
     final changeAmount = isCashPayment
         ? _amountGiven - (_orderDetails['rounded_total'] ?? 0).toDouble()
         : 0.0;
@@ -681,15 +678,6 @@ class _SplitOrderPaymentDialogState
     setState(() => _isProcessingPayment = true);
 
     try {
-      final items =
-          List<Map<String, dynamic>>.from(widget.order['items'] ?? []);
-      final subtotal = items.fold<double>(
-          0,
-          (sum, item) =>
-              sum +
-              ((item['price'] ?? item['price_list_rate'] ?? 0).toDouble() *
-                  (item['quantity'] ?? item['qty'] ?? 1).toDouble()));
-      final gst = subtotal * 0.06;
       final total = (_orderDetails['rounded_total'] ?? 0).toDouble();
 
       // Prepare payment data

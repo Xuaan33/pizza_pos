@@ -29,7 +29,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Set<int> tablesWithSubmittedOrders = {};
   bool _isOrdersLoading = false;
   bool _isLoggingOut = false;
-  bool _customerScreenShown = false;
   Future<void>? _refreshFuture;
   DateTime _selectedDate = DateTime.now();
   String _filterStatus = 'All'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
@@ -46,8 +45,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool get isLoadingMore => _isLoadingMore;
   bool _customerDisplayInitialized = false;
 
-  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
-      GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
@@ -425,10 +422,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     );
   }
 
-  void _refreshKitchenScreen() {
-    // This will force the KitchenScreen to rebuild when navigated to
-    setState(() {});
-  }
 
   Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
     if (!mounted) return;
@@ -714,110 +707,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     });
   }
 
-  int _extractTableNumber(String? tableFullName) {
-    if (tableFullName == null || tableFullName.isEmpty) return 0;
 
-    try {
-      // Extract from formats like "MK-Floor 1-Table 1" → 1
-      final RegExpMatch? match =
-          RegExp(r'Table (\d+)$').firstMatch(tableFullName);
-      return match != null ? int.tryParse(match.group(1) ?? '0') ?? 0 : 0;
-    } catch (e) {
-      print('Error parsing table number from $tableFullName: $e');
-      return 0;
-    }
-  }
-
-  Map<String, dynamic> _mapApiInvoiceToOrder(Map<String, dynamic> invoice) {
-    final items = ((invoice['items'] as List?) ?? []).map((item) {
-      // Always include the raw custom_variant_info exactly as received
-      dynamic customVariantInfo = item['custom_variant_info'];
-
-      // Parse options if variant info exists
-      Map<String, dynamic> options = {};
-      String optionText = '';
-
-      // Parse the variant info if it exists
-      if (customVariantInfo != null) {
-        try {
-          // Handle both string (JSON) and direct list formats
-          dynamic parsed = customVariantInfo is String
-              ? jsonDecode(customVariantInfo)
-              : customVariantInfo;
-
-          if (parsed is List && parsed.isNotEmpty) {
-            // New format - list of direct option maps
-            if (parsed[0] is Map) {
-              options = Map<String, dynamic>.from(parsed[0]);
-              optionText =
-                  options.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-            }
-          }
-        } catch (e) {
-          debugPrint('Variant parsing error: $e');
-        }
-      }
-
-      return {
-        'item_code': item['item_code'] ?? '',
-        'name': item['item_name'] ?? item['name'] ?? '',
-        'price': (item['price_list_rate'] ?? item['rate'] ?? 0).toDouble(),
-        'image': item['image'] ?? 'assets/pizza.png',
-        'quantity': (item['qty'] ?? item['quantity'] ?? 1).toDouble(),
-        'options': options,
-        'option_text': optionText,
-        'custom_serve_later': item['custom_serve_later'] == 1,
-        'custom_item_remarks': item['custom_item_remarks'] ?? '',
-        'custom_variant_info': customVariantInfo, // Include exactly as received
-        'discount_amount': (item['discount_amount']).toDouble(),
-      };
-    }).toList();
-
-    return {
-      'orderId': invoice['name']?.toString() ?? 'Unknown',
-      'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
-      'status': invoice['status']?.toString() ?? 'Draft',
-      'orderType': invoice['custom_order_channel']?.toString() ?? 'Dine in',
-      'tableNumber': _extractTableNumber(invoice['custom_table']),
-      'items': items,
-      'subtotal': (invoice['net_total'] as num?)?.toDouble() ?? 0.0,
-      'tax': (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
-      'total': (invoice['grand_total'] as num?)?.toDouble() ?? 0.0,
-      'total_taxes_and_charges':
-          (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
-      'discount_amount':
-          (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0,
-      'user_voucher_code': (invoice['user_voucher_code']),
-      'entryTime': DateTime.tryParse(invoice['modified']?.toString() ?? '') ??
-          DateTime.now(),
-      'paidTime': invoice['status']?.toString() == 'Paid'
-          ? DateTime.tryParse(invoice['modified']?.toString() ?? '')
-          : null,
-      'isPaid': invoice['status']?.toString() == 'Paid',
-      'paymentMethod':
-          invoice['payments'][0]['mode_of_payment']?.toString() ?? 'Cash',
-      'customerName': invoice['customer_name']?.toString() ?? 'Guest',
-      'custom_item_remarks':
-          invoice['custom_item_remarks']?.toString() ?? 'N/A',
-      'taxBreakdown': _parseTaxBreakdown(invoice),
-    };
-  }
-
-  Map<String, dynamic>? _parseTaxBreakdown(Map<String, dynamic> invoice) {
-    try {
-      final taxes = invoice['taxes'] as List?;
-      if (taxes == null || taxes.isEmpty) return null;
-
-      final tax = taxes.first;
-      return {
-        'rate': (tax['rate'] ?? 0).toDouble(),
-        'amount': (tax['amount'] ?? 0).toDouble(),
-        'description': tax['account_head'] ?? 'Tax',
-      };
-    } catch (e) {
-      return null;
-    }
-  }
 
   List<Widget> _getScreensWithOrders() {
     final authState = ref.read(authProvider);
@@ -1175,7 +1065,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 },
               );
 
-              final previousLimit = 30;
 
               if (isOrdersScreen) {
                 setState(() {
@@ -1238,7 +1127,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
       if (index != -1) {
         activeOrders[index] = {
-          ...activeOrders[index] as Map<String, dynamic>,
+          ...activeOrders[index],
           ...paidOrder,
           'isPaid': true,
           'status': 'Paid',

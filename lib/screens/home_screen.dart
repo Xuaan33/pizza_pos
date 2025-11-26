@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
-import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';

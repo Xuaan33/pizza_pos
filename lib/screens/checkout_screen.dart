@@ -1543,12 +1543,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
             const SizedBox(height: 8),
           ],
-          if (taxInfo['rate'] > 0)
-            _buildSummaryRow(
-              '${taxInfo['name']} (${taxInfo['rate']}%)',
-              "RM ${total_taxes_and_charges.toStringAsFixed(2)}",
-            ),
-          const SizedBox(height: 8),
+          
+          ..._buildTaxSummaryRows(),
 
           _buildSummaryRow(
             'Rounding',
@@ -1584,6 +1580,63 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildTaxSummaryRows() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            // Filter out taxes with 0% rate and calculate each tax
+            final applicableTaxes = taxes.where((tax) {
+              final rate = (tax['rate'] ?? 0.0).toDouble();
+              return rate > 0;
+            }).toList();
+
+            if (applicableTaxes.isEmpty) {
+              return <Widget>[SizedBox.shrink()];
+            }
+
+            // Calculate subtotal for tax calculation
+            double subtotal = _calculateSubtotal();
+            double discount = _discountAmount;
+            double taxableAmount = subtotal - discount;
+
+            List<Widget> taxRows = [];
+
+            for (var tax in applicableTaxes) {
+              final taxName = tax['description'] ?? 'Tax';
+              final taxRate = (tax['rate'] ?? 0.0).toDouble();
+              final taxAmount = taxableAmount * (taxRate / 100);
+
+              taxRows.add(_buildSummaryRow(
+                '$taxName (${taxRate.toStringAsFixed(1)}%)',
+                'RM ${taxAmount.toStringAsFixed(2)}',
+              ));
+              taxRows.add(const SizedBox(height: 8));
+            }
+
+            return taxRows;
+          },
+        ) ??
+        [SizedBox.shrink()];
   }
 
   Widget _buildRemarksField() {
@@ -3261,7 +3314,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         itemCount: itemsWithDiscounts.length,
                         itemBuilder: (context, index) {
                           final item = itemsWithDiscounts[index];
-                          final itemTotal = item['price'] * item['quantity'];
+                          final itemTotal = (item['price'] +
+                                  _calculateVariantCost(
+                                      item['custom_variant_info'])) *
+                              item['quantity'];
 
                           // Real-time calculation functions
                           void updateFromPercentage(String value) {
@@ -3482,8 +3538,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                     item['discount_amount'] ?? 0;
                                 final discountPercentage =
                                     item['discount_percentage'] ?? 0;
-                                final itemTotal =
-                                    item['price'] * item['quantity'];
+                                final itemTotal = (item['price'] +
+                                        _calculateVariantCost(
+                                            item['custom_variant_info'])) *
+                                    item['quantity'];
 
                                 if (discountAmount > itemTotal) {
                                   hasInvalidDiscounts = true;
@@ -3709,7 +3767,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           return {
             'item_code': item['item_code'] ?? '',
             'qty': item['quantity'],
-            'price_list_rate': item['price'],
+            'price_list_rate': item['price'] +
+                _calculateVariantCost(item['custom_variant_info']),
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
             if (item['custom_variant_info'] != null)
@@ -3810,7 +3869,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           return {
             'item_code': item['item_code'] ?? '',
             'qty': item['quantity'],
-            'price_list_rate': item['price'],
+            'price_list_rate': item['price'] +
+                _calculateVariantCost(item['custom_variant_info']),
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
             if (item['custom_variant_info'] != null)
@@ -4480,7 +4540,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           return {
             'item_code': item['item_code'] ?? '',
             'qty': item['quantity'],
-            'price_list_rate': item['price'],
+            'price_list_rate': item['price'] +
+                _calculateVariantCost(item['custom_variant_info']),
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
             if (item['custom_variant_info'] != null)
@@ -4597,7 +4658,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               .map((item) => {
                     'item_code': item['item_code'],
                     'qty': item['split_quantity'],
-                    'price_list_rate': item['price'],
+                    'price_list_rate': item['price'] +
+                        _calculateVariantCost(item['custom_variant_info']),
                     "custom_item_remarks": item['custom_item_remarks'],
                     "custom_serve_later": item['custom_serve_later'],
                     if (item['custom_variant_info'] != null)

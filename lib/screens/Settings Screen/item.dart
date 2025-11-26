@@ -54,7 +54,13 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
   Future<void> _loadBaseUrl() async {
     baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
-    setState(() {}); // Refresh UI
+    setState(() {
+      items.clear();
+      itemGroups.clear();
+      variantGroups.clear();
+      _detailedItemsCache.clear();
+      isLoading = true;
+    }); // Refresh UI
   }
 
   Future<void> _loadData() async {
@@ -185,6 +191,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         detailedItems.add(
           basicItem.copyWith(isPosItem: 0),
         );
+
+        print('Test here ${basicItem.isPosItem}');
       }
     }
 
@@ -196,7 +204,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       // Fetch updated detailed information
       final response = await PosService().getItem(item.itemCode);
 
-      if (!mounted) return; // Check if widget is still mounted
+      if (!mounted) return;
 
       if (response['success'] == true) {
         final updatedItem =
@@ -211,10 +219,35 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
             items[index] = updatedItem;
           }
         });
+      } else {
+        // FIX: If item not found, mark as non-POS
+        print(
+            'Item ${item.itemCode} not found during refresh, marking as non-POS');
+        final nonPosItem = item.copyWith(isPosItem: 0);
+        _detailedItemsCache[item.itemCode] = nonPosItem;
+
+        if (!mounted) return;
+        setState(() {
+          final index = items.indexWhere((i) => i.itemCode == item.itemCode);
+          if (index != -1) {
+            items[index] = nonPosItem;
+          }
+        });
       }
     } catch (e) {
       if (!mounted) return;
       print('Error refreshing item details: $e');
+      // FIX: On error, also mark as non-POS
+      final nonPosItem = item.copyWith(isPosItem: 0);
+      _detailedItemsCache[item.itemCode] = nonPosItem;
+
+      if (!mounted) return;
+      setState(() {
+        final index = items.indexWhere((i) => i.itemCode == item.itemCode);
+        if (index != -1) {
+          items[index] = nonPosItem;
+        }
+      });
     }
   }
 
@@ -1668,7 +1701,7 @@ class _EditItemDialogState extends State<EditItemDialog> {
         .toList();
 
     // FIX: Use the actual custom_is_pos_item value from detailed API
-    _isPosItem = widget.item.isPosItemBool;
+    _isPosItem = widget.item.isPosItem == 1; // Convert int to bool
 
     print('EditItemDialog - Item: ${widget.item.itemCode}');
     print('EditItemDialog - isPosItem (int): ${widget.item.isPosItem}');
@@ -2129,7 +2162,7 @@ class Item {
           [],
       disabled: json['disabled'] as int? ?? 0,
       // For basic list, we might not have custom_is_pos_item, so default to 1
-      isPosItem: 1, // Default value until we fetch detailed info
+      isPosItem: 0, // Default value until we fetch detailed info
     );
   }
 
@@ -2149,7 +2182,7 @@ class Item {
           [],
       disabled: json['disabled'] as int? ?? 0,
       // FIX: Use the actual custom_is_pos_item from detailed API
-      isPosItem: json['custom_is_pos_item'] as int? ?? 1,
+      isPosItem: json['custom_is_pos_item'] as int? ?? 0,
     );
   }
 
