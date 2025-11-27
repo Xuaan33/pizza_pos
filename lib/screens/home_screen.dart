@@ -522,13 +522,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
+            final taxDetails = _getTaxDetailsForCustomerDisplay();
+
             CustomerDisplayController.updateOrderDisplay(
               items: currentOrderItems.map((item) {
                 return {
                   'name': item['name'] ?? 'Unknown',
-                  'price': (item['price'] is int)
-                      ? (item['price'] as int).toDouble()
-                      : item['price'] as double,
+                  'price': (item['price'] +
+                              _calculateVariantCost(item['custom_variant_info'])
+                          is int)
+                      ? (item['price'] +
+                              _calculateVariantCost(
+                                  item['custom_variant_info']) as int)
+                          .toDouble()
+                      : item['price'] +
+                              _calculateVariantCost(item['custom_variant_info'])
+                          as double,
                   'quantity': (item['quantity'] is int)
                       ? item['quantity'] as int
                       : (item['quantity'] as double).toInt(),
@@ -545,6 +554,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               rounding: _getRoundingDifference(),
               total: _getRoundedTotal(),
               taxRate: _getGSTRate(),
+              taxDetails: taxDetails,
             );
           });
           return FutureBuilder(
@@ -3067,6 +3077,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         0.0;
   }
 
+  List<Map<String, dynamic>> _getTaxDetailsForCustomerDisplay() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            // Filter out taxes with 0% rate
+            final applicableTaxes = taxes.where((tax) {
+              final rate = (tax['rate'] ?? 0.0).toDouble();
+              return rate > 0;
+            }).toList();
+
+            if (applicableTaxes.isEmpty) {
+              return [];
+            }
+
+            // Calculate subtotal for tax calculation
+            double subtotal = _calculateSubtotal();
+            double discount = _getDiscountAmount();
+            double taxableAmount = subtotal - discount;
+
+            // Create tax details with name, rate, and amount
+            return applicableTaxes.map((tax) {
+              final taxName = tax['description'] ?? 'Tax';
+              final taxRate = (tax['rate'] ?? 0.0).toDouble();
+              final taxAmount = taxableAmount * (taxRate / 100);
+
+              return {
+                'name': taxName,
+                'rate': taxRate,
+                'amount': taxAmount,
+              };
+            }).toList();
+          },
+        ) ??
+        [];
+  }
+
   // Check if there's a discount applied
   bool _hasDiscount() {
     return widget.existingOrder != null &&
@@ -3161,6 +3225,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return (item['additional_cost'] as num).toDouble();
     }
     return 0.0;
+  }
+
+  double _calculateVariantCost(dynamic variantInfo) {
+    if (variantInfo == null) return 0.0;
+
+    double totalVariantCost = 0.0;
+
+    try {
+      // Handle case where variantInfo is a JSON string
+      dynamic parsedVariant = variantInfo;
+      if (variantInfo is String) {
+        try {
+          parsedVariant = jsonDecode(variantInfo);
+        } catch (e) {
+          debugPrint('Error parsing variant info: $e');
+          return 0.0;
+        }
+      }
+
+      // Handle case where variantInfo is a List (new format)
+      if (parsedVariant is List) {
+        for (var variant in parsedVariant) {
+          if (variant is Map && variant['options'] is List) {
+            for (var option in variant['options']) {
+              if (option is Map) {
+                final additionalCost =
+                    (option['additional_cost'] as num?)?.toDouble() ?? 0.0;
+                totalVariantCost += additionalCost;
+              }
+            }
+          }
+        }
+      }
+
+      // Handle case where variantInfo is a Map (old format)
+      if (parsedVariant is Map) {
+        // Old format might not have additional cost info
+        // You might need to adjust this based on your actual data structure
+        debugPrint('Old variant format detected: $parsedVariant');
+      }
+    } catch (e) {
+      debugPrint('Error calculating variant cost: $e');
+    }
+
+    return totalVariantCost;
   }
 
   double _getRoundedTotal() {

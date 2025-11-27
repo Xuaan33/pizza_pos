@@ -127,7 +127,7 @@ class _SplitOrderPaymentDialogState
       );
     }
 
-    final items = List<Map<String, dynamic>>.from(widget.order['items'] ?? []);
+    final items = List<Map<String, dynamic>>.from(_orderDetails['items'] ?? []);
 
     final isCashPayment = _selectedPaymentMethod == 'Cash';
     final changeAmount = isCashPayment
@@ -173,12 +173,26 @@ class _SplitOrderPaymentDialogState
                         itemCount: items.length,
                         itemBuilder: (context, index) {
                           final item = items[index];
-                          final price =
-                              (item['price'] ?? item['price_list_rate'] ?? 0)
-                                  .toDouble();
-                          final quantity =
-                              (item['quantity'] ?? item['qty'] ?? 1).toDouble();
-                          final totalPrice = price * quantity;
+                          final basePrice = (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0).toDouble();
+                          final quantity = (item['quantity'] ?? item['qty'] ?? 1).toDouble();
+                          final discountAmount = (item['discount_amount'] ?? 0).toDouble();
+                          final discountPercentage = (item['discount_percentage'] ?? 0).toDouble();
+                          
+                          // Calculate variant cost
+                          final variantCost = _calculateVariantCost(item['custom_variant_info']);
+                          final totalItemPrice = basePrice + variantCost;
+                          
+                          // Calculate actual discount applied
+                          double actualDiscount = 0;
+                          if (discountAmount > 0) {
+                            actualDiscount = discountAmount;
+                          } else if (discountPercentage > 0) {
+                            actualDiscount = (totalItemPrice * discountPercentage / 100) * quantity;
+                          }
+                          
+                          final finalPricePerItem = totalItemPrice - (actualDiscount / quantity);
+                          final totalFinalPrice = finalPricePerItem * quantity;
+                          final originalTotalPrice = totalItemPrice * quantity;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -223,16 +237,38 @@ class _SplitOrderPaymentDialogState
                                       ),
                                       if (item['custom_variant_info'] != null)
                                         ..._buildVariantText(item),
+                                      if (actualDiscount > 0)
+                                        Text(
+                                          'Discount: RM${actualDiscount.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
+                                    // Show original price if there's a discount
+                                    if (actualDiscount > 0) ...[
+                                      Text(
+                                        'RM${originalTotalPrice.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          decoration: TextDecoration.lineThrough,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
                                     Text(
-                                      'RM${price.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold),
+                                      'RM${finalPricePerItem.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: actualDiscount > 0 ? Color(0xFFE732A0) : Colors.black),
                                     ),
                                     Text(
                                       'x${quantity.toStringAsFixed(0)}',
@@ -240,7 +276,7 @@ class _SplitOrderPaymentDialogState
                                           color: Colors.grey.shade600),
                                     ),
                                     Text(
-                                      'RM${totalPrice.toStringAsFixed(2)}',
+                                      'RM${totalFinalPrice.toStringAsFixed(2)}',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Color(0xFFE732A0),
@@ -280,9 +316,7 @@ class _SplitOrderPaymentDialogState
                             if(_getGSTRate() != '0')
                             _buildSummaryRow(
                                 'GST (${_getGSTRate()}%)',
-                                ((_orderDetails['total_taxes_and_charges'] ??
-                                            0) -
-                                        (_orderDetails['discount_amount'] ?? 0))
+                                ((_orderDetails['total_taxes_and_charges'] ?? 0))
                                     .toDouble()),
                             const Divider(height: 24),
                             _buildSummaryRow(
@@ -332,8 +366,7 @@ class _SplitOrderPaymentDialogState
                                     if (selected) {
                                       if (method['name'] == 'Cash') {
                                         final totalAmount =
-                                            (_orderDetails['rounded_total'] ??
-                                                    0)
+                                            (_orderDetails['rounded_total'] ?? 0)
                                                 .toDouble();
                                         final confirmed =
                                             await _showCashPaymentDialog(
@@ -484,6 +517,51 @@ class _SplitOrderPaymentDialogState
         ],
       ),
     );
+  }
+
+  // Add variant cost calculation method
+  double _calculateVariantCost(dynamic variantInfo) {
+    if (variantInfo == null) return 0.0;
+
+    double totalVariantCost = 0.0;
+
+    try {
+      // Handle case where variantInfo is a JSON string
+      dynamic parsedVariant = variantInfo;
+      if (variantInfo is String) {
+        try {
+          parsedVariant = jsonDecode(variantInfo);
+        } catch (e) {
+          debugPrint('Error parsing variant info: $e');
+          return 0.0;
+        }
+      }
+
+      // Handle case where variantInfo is a List (new format)
+      if (parsedVariant is List) {
+        for (var variant in parsedVariant) {
+          if (variant is Map && variant['options'] is List) {
+            for (var option in variant['options']) {
+              if (option is Map) {
+                final additionalCost =
+                    (option['additional_cost'] as num?)?.toDouble() ?? 0.0;
+                totalVariantCost += additionalCost;
+              }
+            }
+          }
+        }
+      }
+
+      // Handle case where variantInfo is a Map (old format)
+      if (parsedVariant is Map) {
+        // Old format might not have additional cost info
+        debugPrint('Old variant format detected: $parsedVariant');
+      }
+    } catch (e) {
+      debugPrint('Error calculating variant cost: $e');
+    }
+
+    return totalVariantCost;
   }
 
   Future<bool> _showCashPaymentDialog(double totalAmount) async {

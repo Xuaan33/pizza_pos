@@ -21,6 +21,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   bool _isLoadingStations = true;
   bool _isLoadingOrders = false;
   DateTime _selectedDate = DateTime.now();
+  int _selectedTabIndex = 0; // 0: Pending, 1: Done
 
   @override
   void initState() {
@@ -266,6 +267,40 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     return SizedBox();
   }
 
+  // Build Serve Later tag
+  Widget _buildServeLaterTag() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple[50],
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: Colors.purple,
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.schedule,
+            size: 12,
+            color: Colors.purple[700],
+          ),
+          SizedBox(width: 4),
+          Text(
+            'Serve Later',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.purple[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getUrgencyColor(String? orderTime) {
     if (orderTime == null) return Colors.grey;
     try {
@@ -277,6 +312,20 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     } catch (e) {
       return Colors.grey;
     }
+  }
+
+  // Get pending orders (not fully fulfilled)
+  List<Map<String, dynamic>> get _pendingOrders {
+    return _kitchenOrders.where((order) {
+      return order['custom_fulfilled'] != 1;
+    }).toList();
+  }
+
+  // Get completed orders (fully fulfilled)
+  List<Map<String, dynamic>> get _completedOrders {
+    return _kitchenOrders.where((order) {
+      return order['custom_fulfilled'] == 1;
+    }).toList();
   }
 
   @override
@@ -407,62 +456,160 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                         ),
                       ),
 
-            SizedBox(height: 1),
+            SizedBox(height: 16),
 
-            // Orders Grid
+            // Pending/Done Tabs
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildTabButton(
+                      index: 0,
+                      label: 'Pending',
+                      count: _pendingOrders.length,
+                      isSelected: _selectedTabIndex == 0,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildTabButton(
+                      index: 1,
+                      label: 'Done',
+                      count: _completedOrders.length,
+                      isSelected: _selectedTabIndex == 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 16),
+
+            // Orders Grid based on selected tab
             Expanded(
               child: _isLoadingOrders
                   ? Center(child: CircularProgressIndicator())
-                  : _kitchenOrders.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.restaurant_menu,
-                                  size: 80, color: Colors.grey[400]),
-                              SizedBox(height: 20),
-                              Text(
-                                'No orders found for selected date',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount:
-                                3, // Changed from 3 to 2 for larger cards
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 0.75,
-                          ),
-                          itemCount: _kitchenOrders.length,
-                          itemBuilder: (context, index) {
-                            final order = _kitchenOrders[index];
-                            final items = (order['items'] as List?) ?? [];
-                            final isOrderFulfilled =
-                                order['custom_fulfilled'] == 1;
-                            final unfulfilledItems = items
-                                .where((item) => item['custom_fulfilled'] != 1)
-                                .length;
-
-                            return _buildOrderCard(
-                              order: order,
-                              items: items,
-                              isOrderFulfilled: isOrderFulfilled,
-                              unfulfilledItems: unfulfilledItems,
-                            );
-                          },
-                        ),
+                  : _buildOrdersGrid(),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTabButton({
+    required int index,
+    required String label,
+    required int count,
+    required bool isSelected,
+  }) {
+    return Material(
+      color: isSelected ? Color(0xFFE732A0) : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedTabIndex = index;
+          });
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : Colors.grey[700],
+                ),
+              ),
+              SizedBox(height: 4),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : Color(0xFFE732A0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Color(0xFFE732A0) : Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrdersGrid() {
+    final orders = _selectedTabIndex == 0 ? _pendingOrders : _completedOrders;
+
+    if (orders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _selectedTabIndex == 0
+                  ? Icons.restaurant_menu
+                  : Icons.check_circle,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: 20),
+            Text(
+              _selectedTabIndex == 0
+                  ? 'No pending orders for selected date'
+                  : 'No completed orders for selected date',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, // Changed to 2 for larger cards
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: orders.length,
+      itemBuilder: (context, index) {
+        final order = orders[index];
+        final items = (order['items'] as List?) ?? [];
+        final isOrderFulfilled = order['custom_fulfilled'] == 1;
+        final unfulfilledItems =
+            items.where((item) => item['custom_fulfilled'] != 1).length;
+
+        return _buildOrderCard(
+          order: order,
+          items: items,
+          isOrderFulfilled: isOrderFulfilled,
+          unfulfilledItems: unfulfilledItems,
+          showInDoneTab: _selectedTabIndex == 1,
+        );
+      },
     );
   }
 
@@ -471,6 +618,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     required List<dynamic> items,
     required bool isOrderFulfilled,
     required int unfulfilledItems,
+    bool showInDoneTab = false,
   }) {
     final urgencyColor = _getUrgencyColor(order['order_time']);
 
@@ -593,8 +741,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
               SizedBox(height: 10),
 
-              // Progress indicator
-              if (!isOrderFulfilled)
+              // Progress indicator (only show in pending tab)
+              if (!isOrderFulfilled && !showInDoneTab)
                 Column(
                   children: [
                     LinearProgressIndicator(
@@ -639,6 +787,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                       itemBuilder: (context, itemIndex) {
                         final item = items[itemIndex];
                         final isItemFulfilled = item['custom_fulfilled'] == 1;
+                        final isServeLater = item['custom_serve_later'] == 1;
 
                         return Container(
                           margin: EdgeInsets.only(bottom: 8),
@@ -657,7 +806,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                           ),
                           child: Row(
                             children: [
-                              // Checkbox for item fulfillment
+                              // Interactive checkbox for both tabs
                               InkWell(
                                 onTap: () {
                                   _showFulfillItemDialog(
@@ -731,6 +880,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        // Serve Later Tag
+                                        if (isServeLater) _buildServeLaterTag(),
                                       ],
                                     ),
                                     if (item['custom_item_remarks'] != null &&
@@ -819,9 +970,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                   ),
                 ),
 
-              // Status and Action
+              // Status and Action (show appropriate button based on tab)
               SizedBox(height: 12),
-              if (!isOrderFulfilled)
+              if (!showInDoneTab && !isOrderFulfilled)
+                // Pending tab - Mark as Complete button
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -845,7 +997,33 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                     ),
                   ),
                 )
-              else
+              else if (showInDoneTab && isOrderFulfilled)
+                // Done tab - Reopen Order button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () => _showFulfillOrderDialog(order, false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Text(
+                      'REOPEN ORDER',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                )
+              else if (!showInDoneTab && isOrderFulfilled)
+                // Pending tab - Completed indicator (shouldn't normally happen)
                 Container(
                   width: double.infinity,
                   padding: EdgeInsets.symmetric(vertical: 12),
@@ -921,17 +1099,18 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   }
 
   void _showFulfillOrderDialog(Map<String, dynamic> order, bool fulfilled) {
+    final action = fulfilled ? 'mark as fulfilled' : 'reopen';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          fulfilled ? 'Mark Order as Fulfilled?' : 'Unmark Order?',
+          fulfilled ? 'Mark Order as Fulfilled?' : 'Reopen Order?',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         content: Text(
           fulfilled
               ? 'Are you sure you want to mark order ${order['name']} as fulfilled?'
-              : 'Are you sure you want to unmark order ${order['name']}?',
+              : 'Are you sure you want to reopen order ${order['name']}? This will move it back to pending orders.',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -952,7 +1131,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
               backgroundColor: fulfilled ? Colors.green : Colors.orange,
             ),
             child: Text(
-              fulfilled ? 'Mark Fulfilled' : 'Unmark',
+              fulfilled ? 'Mark Fulfilled' : 'Reopen Order',
               style:
                   TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
             ),
@@ -1062,6 +1241,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                       itemBuilder: (context, index) {
                         final item = items[index];
                         final isItemFulfilled = item['custom_fulfilled'] == 1;
+                        final isServeLater = item['custom_serve_later'] == 1;
 
                         return Container(
                           margin: EdgeInsets.only(bottom: 8),
@@ -1081,17 +1261,25 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                 selectAll = selectedItems.every((item) => item);
                               });
                             },
-                            title: Text(
-                              item['item_name']?.toString() ?? 'Unknown Item',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                decoration: isItemFulfilled
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                color: isItemFulfilled
-                                    ? Colors.grey[600]
-                                    : Colors.black87,
-                              ),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item['item_name']?.toString() ??
+                                        'Unknown Item',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      decoration: isItemFulfilled
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                      color: isItemFulfilled
+                                          ? Colors.grey[600]
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                if (isServeLater) _buildServeLaterTag(),
+                              ],
                             ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

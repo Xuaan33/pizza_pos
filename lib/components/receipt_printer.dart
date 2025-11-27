@@ -17,9 +17,21 @@ class ReceiptPrinter {
   /// -------------------------------------------
   /// Internal: find & connect a USB printer
   /// -------------------------------------------
-  static Future<Printer?> _ensureUsbPrinter() async {
-    if (_currentPrinter != null && (_currentPrinter!.isConnected ?? false)) {
+  // In receipt_printer.dart, modify the _ensureUsbPrinter method
+  static Future<Printer?> _ensureUsbPrinter(
+      {bool forceReconnect = false}) async {
+    if (!forceReconnect &&
+        _currentPrinter != null &&
+        (_currentPrinter!.isConnected ?? false)) {
       return _currentPrinter;
+    }
+
+    // Clear current printer if force reconnecting
+    if (forceReconnect) {
+      if (_currentPrinter != null && (_currentPrinter!.isConnected ?? false)) {
+        await _plugin.disconnect(_currentPrinter!);
+      }
+      _currentPrinter = null;
     }
 
     final completer = Completer<List<Printer>>();
@@ -34,7 +46,15 @@ class ReceiptPrinter {
 
     await _plugin.getPrinters(connectionTypes: [ConnectionType.USB]);
 
-    final devices = await completer.future;
+    final devices = await completer.future.timeout(
+      Duration(seconds: 10),
+      onTimeout: () {
+        if (!completer.isCompleted) {
+          completer.complete([]);
+        }
+        return [];
+      },
+    );
 
     if (devices.isEmpty) {
       debugPrint("❌ No USB printers found");
@@ -43,12 +63,20 @@ class ReceiptPrinter {
 
     // Filter by VID & PID
     final printer = devices.firstWhere(
-      (p) => p.vendorId == 24597 && p.productId == 10927,
+      (p) => p.vendorId == 0 && p.productId == 0,
       orElse: () => devices.first,
     );
 
     if (!(printer.isConnected ?? false)) {
-      await _plugin.connect(printer);
+      final connected = await _plugin.connect(printer).timeout(
+            Duration(seconds: 5),
+            onTimeout: () => false,
+          );
+
+      if (!connected) {
+        debugPrint("❌ Failed to connect to printer");
+        return null;
+      }
     }
 
     _currentPrinter = printer;

@@ -2394,6 +2394,7 @@ Future<void> _discoverUsbDevices() async {
                       itemCount: _employees.length,
                       itemBuilder: (context, index) {
                         final employee = _employees[index];
+                        debugPrint("EMPLOYEE TEST: $employee");
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 8),
                           child: ListTile(
@@ -2403,7 +2404,6 @@ Future<void> _discoverUsbDevices() async {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (employee['status'] == 'Active')
                                   IconButton(
                                     icon: const Icon(Icons.login,
                                         color: Colors.green),
@@ -2430,7 +2430,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                         ) {
                                           _employeeCheckIn(
-                                              employee['name'], branch);
+                                              employee['employee_name'], branch);
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -2438,7 +2438,6 @@ Future<void> _discoverUsbDevices() async {
                                     },
                                     tooltip: 'Check In',
                                   ),
-                                if (employee['status'] == 'Checked In')
                                   IconButton(
                                     icon: const Icon(Icons.logout,
                                         color: Colors.red),
@@ -2465,7 +2464,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                         ) {
                                           _employeeCheckOut(
-                                              employee['name'], branch);
+                                              employee['employee_name'], branch);
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -2473,15 +2472,15 @@ Future<void> _discoverUsbDevices() async {
                                     },
                                     tooltip: 'Check Out',
                                   ),
-                                Text(
-                                  employee['status'] ?? 'Unknown',
-                                  style: TextStyle(
-                                    color: employee['status'] == 'Checked In'
-                                        ? Colors.green
-                                        : Colors.grey,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                // Text(
+                                //   employee['status'] ?? 'Unknown',
+                                //   style: TextStyle(
+                                //     color: employee['status'] == 'Checked In'
+                                //         ? Colors.green
+                                //         : Colors.grey,
+                                //     fontWeight: FontWeight.bold,
+                                //   ),
+                                // ),
                               ],
                             ),
                           ),

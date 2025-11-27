@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="@drawable/item_card_background"
+    android:elevation="1dp">
+
+    <!-- Main Item Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Item Name (Left) -->
+        <TextView
+            android:id="@+id/itemName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="3"
+            android:text="Item Name"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <!-- Quantity (Middle) -->
+        <TextView
+            android:id="@+id/itemQuantity"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="1"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- Price (Right) -->
+        <TextView
+            android:id="@+id/itemPrice"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:gravity="end"
+            android:text="RM 0.00"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Variants Container -->
+    <LinearLayout
+        android:id="@+id/variantsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="4dp" />
+
+    <!-- Remarks -->
+    <TextView
+        android:id="@+id/itemRemarks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Remarks: No onions"
+        android:textSize="12sp"
+        android:textColor="#666666"
+        android:layout_marginTop="2dp"
+        android:visibility="gone" />
+
+    <!-- Serve Later Indicator -->
+    <TextView
+        android:id="@+id/serveLaterIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="[SERVE LATER]"
+        android:textSize="10sp"
+        android:textColor="#FF0000"
+        android:textStyle="bold"
+        android:background="#FFCDD2"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="2dp"
+        android:layout_marginTop="4dp"
+        android:visibility="gone" />
+
+</LinearLayout>

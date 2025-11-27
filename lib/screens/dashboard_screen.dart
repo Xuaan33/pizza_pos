@@ -77,7 +77,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
       ) async {
         try {
-          print('Fetching pay later orders for posProfile: $posProfile');
 
           final response = await PosService().getOrders(
             posProfile: posProfile,
@@ -908,7 +907,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
-                  'Showing data for ${DateFormat('MMM yyyy').format(DateTime.now())}',
+                  'Showing data for ${DateFormat('dd MMM yyyy').format(DateTime.now())}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],

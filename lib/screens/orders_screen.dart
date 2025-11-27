@@ -430,7 +430,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     Expanded(
                       child: _buildFilterDropdown(
                         value: widget.currentFilterStatus,
-                        items: ['All', 'Pay Later', 'Paid', 'Cancelled'],
+                        items: ['All', 'Pay Later', 'Paid', 'Refunded'],
                         onChanged: (value) =>
                             widget.onFilterStatusChanged(value!),
                         label: 'Status',
@@ -541,7 +541,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     ),
                     child: Text(
                       isCancelled
-                          ? 'CANCELLED'
+                          ? 'REFUNDED'
                           : (isDraft ? 'PAY LATER' : 'PAID'),
                       style: TextStyle(
                         color: isCancelled
@@ -685,7 +685,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           ),
                           child: Text(
                             isCancelled
-                                ? 'CANCELLED'
+                                ? 'REFUNDED'
                                 : (isDraft ? 'PAY LATER' : 'PAID'),
                             style: TextStyle(
                               color: isCancelled
@@ -927,7 +927,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     _buildSummaryRow('Subtotal', displaySubtotal),
                     if (totalDiscount > 0)
                       _buildSummaryRow(
-                          'Discount Amount (${order['user_voucher_code']})',
+                          _getDiscountLabel(
+                              order, totalDiscount, originalSubtotal),
                           -totalDiscount),
                     ..._buildTaxSummaryRows(order),
                     _buildSummaryRow('Rounding Adjustment', rounding),
@@ -1273,7 +1274,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       final String orderStatus;
       if (isCancelled) {
-        orderStatus = 'Cancelled';
+        orderStatus = 'Refunded';
       } else if (isDraft) {
         orderStatus = 'Pay Later';
       } else {
@@ -1897,6 +1898,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           },
         ) ??
         [SizedBox.shrink()];
+  }
+
+  String _getDiscountLabel(Map<String, dynamic> order, double totalDiscount,
+      double originalSubtotal) {
+    final voucherCode = order['user_voucher_code']?.toString();
+
+    // If there's a voucher code, display it
+    if (voucherCode != null && voucherCode.isNotEmpty) {
+      return 'Discount Amount ($voucherCode)';
+    }
+
+    // If no voucher code, calculate and display the percentage
+    if (originalSubtotal > 0) {
+      final discountPercentage =
+          (totalDiscount / originalSubtotal * 100).toDouble();
+      return 'Discount Amount (${discountPercentage.toStringAsFixed(2)}%)';
+    }
+
+    // Fallback if we can't calculate percentage
+    return 'Discount Amount';
   }
 
   DateTime _parseDateTime(dynamic dateTime) {

@@ -467,13 +467,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final currentItems = _isEditing ? _editableItems : orderItems;
+            final taxDetails = _getTaxDetailsForCustomerDisplay();
             CustomerDisplayController.updateOrderDisplay(
               items: currentItems.map((item) {
                 return {
                   'name': item['name'] ?? 'Unknown',
-                  'price': (item['price'] is int)
-                      ? (item['price'] as int).toDouble()
-                      : item['price'] as double,
+                  'price': (item['price'] +
+                              _calculateVariantCost(item['custom_variant_info'])
+                          is int)
+                      ? (item['price'] +
+                              _calculateVariantCost(
+                                  item['custom_variant_info']) as int)
+                          .toDouble()
+                      : item['price'] +
+                              _calculateVariantCost(item['custom_variant_info'])
+                          as double,
                   'quantity': (item['quantity'] is int)
                       ? item['quantity'] as int
                       : (item['quantity'] as double).toInt(),
@@ -490,6 +498,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               rounding: _calculateRounding(),
               total: _calculateTotal(),
               taxRate: _getGSTRate(),
+              taxDetails: taxDetails,
             );
           });
 
@@ -1535,15 +1544,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
           if (_discountAmount > 0) ...[
             _buildSummaryRow(
-              // Show voucher name if available, otherwise just "Discount"
-              voucherName != null && voucherName.isNotEmpty
-                  ? 'Discount ($voucherName)'
-                  : 'Discount',
+              _getDiscountDisplayText(voucherName),
               "-RM ${_discountAmount.toStringAsFixed(2)}",
             ),
             const SizedBox(height: 8),
           ],
-          
+
           ..._buildTaxSummaryRows(),
 
           _buildSummaryRow(
@@ -1580,6 +1586,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ],
       ),
     );
+  }
+
+  String _getDiscountDisplayText(String? voucherName) {
+    if (voucherName != null && voucherName.isNotEmpty) {
+      return 'Discount ($voucherName)';
+    }
+
+    // Calculate discount percentage when no voucher name is available
+    final subtotal = _calculateSubtotal();
+    if (subtotal > 0) {
+      final discountPercentage = (_discountAmount / subtotal * 100).toDouble();
+      return 'Discount (${discountPercentage.toStringAsFixed(1)}%)';
+    }
+
+    return 'Discount';
   }
 
   List<Widget> _buildTaxSummaryRows() {
@@ -1761,7 +1782,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             return {
               'item_code': item['item_code'] ?? '',
               'qty': item['quantity'],
-              'price_list_rate': item['price'],
+              'price_list_rate': item['price'] +
+                  _calculateVariantCost(item['custom_variant_info']),
               'custom_item_remarks': item['custom_item_remarks'] ?? '',
               'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
               if (item['custom_variant_info'] != null)
@@ -3597,7 +3619,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final item = itemsWithDiscounts[i];
       final discountAmount = item['discount_amount'] ?? 0;
       final discountPercentage = item['discount_percentage'] ?? 0;
-      final itemTotal = item['price'] * item['quantity'];
+      final itemTotal =
+          (item['price'] + _calculateVariantCost(item['custom_variant_info'])) *
+              item['quantity'];
 
       // Check if discount exceeds item total
       if (discountAmount > itemTotal) {
@@ -3623,7 +3647,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final itemData = {
           'item_code': item['item_code'] ?? '',
           'qty': item['quantity'],
-          'price_list_rate': item['price'],
+          'price_list_rate': item['price'] +
+              _calculateVariantCost(item['custom_variant_info']),
           'custom_item_remarks': item['custom_item_remarks'] ?? '',
           'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
           if (item['custom_variant_info'] != null)
@@ -3726,7 +3751,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final subtotal = _calculateSubtotal();
         if (subtotal > 0) {
           for (var item in orderItems) {
-            final itemTotal = item['price'] * item['quantity'];
+            final itemTotal = (item['price'] +
+                    _calculateVariantCost(item['custom_variant_info'])) *
+                item['quantity'];
             final itemDiscount = (itemTotal / subtotal) * amount;
             item['discount_amount'] = itemDiscount;
           }
@@ -3826,7 +3853,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
         // Remove discounts from all items
         for (var item in orderItems) {
-          item['discount_amount'] = 0;
+          // Restore the original price by removing the discount
+          if (item['discount_amount'] != null && item['discount_amount'] > 0) {
+            // If you stored original price somewhere, restore it
+            // Otherwise, you may need to recalculate from the base price
+            item['price'] = item['price'] + (item['discount_amount'] ?? 0);
+            item['discount_amount'] = 0;
+          }
+          item['discount_percentage'] = 0;
         }
 
         if (_isEditing) {
@@ -4013,7 +4047,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             return {
               'item_code': item['item_code'] ?? '',
               'qty': item['quantity'],
-              'price_list_rate': item['price'],
+              'price_list_rate': item['price'] +
+                  _calculateVariantCost(item['custom_variant_info']),
               'custom_item_remarks': item['custom_item_remarks'] ?? '',
               'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
               if (item['custom_variant_info'] != null)
@@ -4076,13 +4111,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final quantity = item['quantity'];
       final itemTotal = totalPrice * quantity;
 
-      debugPrint(
-          'Item "${item['name']}": base=RM$basePrice, variant=RM$variantCost, total=RM$totalPrice, qty=$quantity, itemTotal=RM$itemTotal');
-
+      
       return sum + itemTotal;
     });
 
-    debugPrint('Calculated local subtotal: RM$localSubtotal');
     return localSubtotal;
   }
 
@@ -4444,13 +4476,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void _updateCustomerDisplay() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final currentItems = _isEditing ? _editableItems : orderItems;
+      final taxDetails = _getTaxDetailsForCustomerDisplay();
       CustomerDisplayController.updateOrderDisplay(
         items: currentItems.map((item) {
           return {
             'name': item['name'] ?? 'Unknown',
-            'price': (item['price'] is int)
-                ? (item['price'] as int).toDouble()
-                : item['price'] as double,
+            'price': (item['price'] +
+                    _calculateVariantCost(item['custom_variant_info']) is int)
+                ? (item['price'] +
+                            _calculateVariantCost(item['custom_variant_info'])
+                        as int)
+                    .toDouble()
+                : item['price'] +
+                        _calculateVariantCost(item['custom_variant_info'])
+                    as double,
             'quantity': (item['quantity'] is int)
                 ? item['quantity'] as int
                 : (item['quantity'] as double).toInt(),
@@ -4467,6 +4506,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         rounding: _calculateRounding(),
         total: _calculateTotal(),
         taxRate: _getGSTRate(),
+        taxDetails: taxDetails,
       );
     });
   }
@@ -5139,5 +5179,59 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     return totalTax;
+  }
+
+  List<Map<String, dynamic>> _getTaxDetailsForCustomerDisplay() {
+    final authState = ref.read(authProvider);
+    return authState.whenOrNull(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+          ) {
+            // Filter out taxes with 0% rate
+            final applicableTaxes = taxes.where((tax) {
+              final rate = (tax['rate'] ?? 0.0).toDouble();
+              return rate > 0;
+            }).toList();
+
+            if (applicableTaxes.isEmpty) {
+              return [];
+            }
+
+            // Calculate subtotal for tax calculation
+            double subtotal = _calculateSubtotal();
+            double discount = _discountAmount;
+            double taxableAmount = subtotal - discount;
+
+            // Create tax details with name, rate, and amount
+            return applicableTaxes.map((tax) {
+              final taxName = tax['description'] ?? 'Tax';
+              final taxRate = (tax['rate'] ?? 0.0).toDouble();
+              final taxAmount = taxableAmount * (taxRate / 100);
+
+              return {
+                'name': taxName,
+                'rate': taxRate,
+                'amount': taxAmount,
+              };
+            }).toList();
+          },
+        ) ??
+        [];
   }
 }
