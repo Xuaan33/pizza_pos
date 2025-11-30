@@ -342,7 +342,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Kitchen Orders",
+                  "Fulfilment Queue",
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w800,

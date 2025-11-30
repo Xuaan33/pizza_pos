@@ -3,7 +3,46 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  // Remove hardcoded baseUrl since it will come from response
+  Future<Map<String, dynamic>> autoLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = prefs.getString('username');
+      final password =
+          prefs.getString('password'); // You'll need to store this securely
+      final merchantId = prefs.getString('merchant_id');
+
+      if (username == null || password == null || merchantId == null) {
+        return {
+          'success': false,
+          'message': 'No saved credentials found',
+        };
+      }
+
+      // Perform login with stored credentials
+      return await login(username, password, merchantId);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Auto-login failed: $e',
+      };
+    }
+  }
+
+  // Store password securely (consider using flutter_secure_storage)
+  static Future<void> storeCredentials(String username, String password, String merchantId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('username', username);
+    // For production, use flutter_secure_storage instead
+    await prefs.setString('password', password);
+    await prefs.setString('merchant_id', merchantId);
+  }
+
+  static Future<void> clearStoredCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('username');
+    await prefs.remove('password');
+  }
+
   Future<Map<String, dynamic>> login(
       String username, String password, String merchantId) async {
     try {

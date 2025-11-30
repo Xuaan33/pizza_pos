@@ -11,7 +11,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     loadSession();
   }
 
-  Future<void> loadSession() async {
+  Future<void> loadFromSharedPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final lastLogin = prefs.getString('last_login');
     final sid = prefs.getString('sid');
@@ -29,8 +29,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final printKitchenOrder = prefs.getInt('print_kitchen_order');
     final openingDateString = prefs.getString('opening_date');
     final itemsGroupsJson = prefs.getString('item_groups');
-    final baseUrl =
-        prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+    final baseUrl = prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
     final merchantId = prefs.getString('merchant_id');
 
     // Parse opening date if it exists
@@ -96,6 +95,76 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> loadSession({bool forceRefresh = false}) async {
+    try {
+      debugPrint('🔐 loadSession called - forceRefresh: $forceRefresh');
+
+      final prefs = await SharedPreferences.getInstance();
+      final lastLogin = prefs.getString('last_login');
+      final sid = prefs.getString('sid');
+      final username = prefs.getString('username');
+      final password = prefs.getString('password');
+      final merchantId = prefs.getString('merchant_id');
+
+      debugPrint(
+          '📱 Stored credentials - username: $username, password: ${password != null ? "***" : "null"}, merchantId: $merchantId');
+      debugPrint('📱 Session info - sid: $sid, lastLogin: $lastLogin');
+
+      // Check if we should perform auto-login
+      final bool shouldAutoLogin = forceRefresh ||
+          sid == null ||
+          sid.isEmpty ||
+          username == null ||
+          _isSessionStale(lastLogin);
+
+      if (shouldAutoLogin &&
+          username != null &&
+          password != null &&
+          merchantId != null) {
+        await _performAutoLogin(username, password, merchantId);
+      } else {
+        await loadFromSharedPreferences();
+      }
+    } catch (e) {
+      print('Error in loadSession: $e');
+      await loadFromSharedPreferences(); // Fallback to existing session
+    }
+  }
+
+  bool _isSessionStale(String? lastLogin) {
+    if (lastLogin == null) {
+      debugPrint('⏰ Session stale: no last login date');
+      return true;
+    }
+    try {
+      final lastLoginDate = DateTime.parse(lastLogin);
+      return DateTime.now().difference(lastLoginDate) > Duration(hours: 4);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  Future<void> _performAutoLogin(
+      String username, String password, String merchantId) async {
+    try {
+      final response =
+          await AuthService().login(username, password, merchantId);
+
+      if (response['success'] == true) {
+        await _saveLoginData(response);
+        await loadFromSharedPreferences();
+      } else {
+        // Auto-login failed, try to load existing session
+        print('Auto-login failed: ${response['message']}');
+        await loadFromSharedPreferences();
+      }
+    } catch (e) {
+      print('Auto-login error: $e');
+      // Fall back to existing session
+      await loadFromSharedPreferences();
+    }
+  }
+
   Future<void> login(
       String username, String password, String merchantId) async {
     try {
@@ -104,6 +173,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       if (response['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
+        await AuthService.storeCredentials(username, password, merchantId);
 
         await prefs.setString('sid', response['sid']);
         await prefs.setString('api_key', response['api_key']);
@@ -117,14 +187,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
             'payment_methods', jsonEncode(response['mode_of_payment']));
         await prefs.setString('taxes', jsonEncode(response['taxes']));
         await prefs.setBool('has_opening', response['has_opening']);
-        await prefs.setInt('print_kitchen_order', response['print_kitchen_order']);
-        await prefs.setString('tier',
-            response['tier'] ?? 'tier 1');
+        await prefs.setInt(
+            'print_kitchen_order', response['print_kitchen_order']);
+        await prefs.setString('tier', response['tier'] ?? 'tier 1');
         await prefs.setString('last_login', DateTime.now().toIso8601String());
         await prefs.setString(
             'item_groups', jsonEncode(response['item_groups'] ?? []));
-        await prefs.setString('base_url',
-            response['base_url'] ?? 'https://asdf.byondwave.com');
+        await prefs.setString(
+            'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
         await prefs.setString(
             'merchant_id', response['merchant_id'] ?? merchantId);
 
@@ -171,12 +241,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
               List<Map<String, dynamic>>.from(response['mode_of_payment']),
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
-          tier: response['tier'] ?? 'tier 1', // Default to tier2 if not provided
+          tier:
+              response['tier'] ?? 'tier 1', // Default to tier2 if not provided
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
           openingDate: openingDate,
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
           baseUrl: response['base_url'] ?? 'https://asdf.byondwave.com',
-          merchantId: response['merchant_id'] ?? merchantId,      
+          merchantId: response['merchant_id'] ?? merchantId,
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -186,6 +257,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = const AuthState.unauthenticated();
       rethrow;
     }
+  }
+
+  Future<void> _saveLoginData(Map<String, dynamic> response) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString('sid', response['sid']);
+    await prefs.setString('api_key', response['api_key']);
+    await prefs.setString('api_secret', response['api_secret']);
+    await prefs.setString('username', response['username']);
+    await prefs.setString('email', response['email']);
+    await prefs.setString('full_name', response['full_name']);
+    await prefs.setString('pos_profile', response['pos_profile']);
+    await prefs.setString('branch', response['branch']);
+    await prefs.setString(
+        'payment_methods', jsonEncode(response['mode_of_payment']));
+    await prefs.setString('taxes', jsonEncode(response['taxes']));
+    await prefs.setBool('has_opening', response['has_opening']);
+    await prefs.setInt('print_kitchen_order', response['print_kitchen_order']);
+    await prefs.setString('tier', response['tier'] ?? 'tier 1');
+    await prefs.setString('last_login', DateTime.now().toIso8601String());
+    await prefs.setString(
+        'item_groups', jsonEncode(response['item_groups'] ?? []));
+    await prefs.setString(
+        'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
+    await prefs.setString('merchant_id', response['merchant_id']);
+  }
+
+  // Add method to force refresh session data
+  Future<void> refreshSession() async {
+    await loadSession(forceRefresh: true);
   }
 
   Future<void> updateOpeningStatus(bool hasOpening,
@@ -266,6 +367,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     state = const AuthState.unauthenticated();
+    await AuthService.clearStoredCredentials();
     await AuthService.logout();
   }
 }

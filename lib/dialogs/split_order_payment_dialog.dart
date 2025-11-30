@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
@@ -43,6 +44,12 @@ class _SplitOrderPaymentDialogState
   bool _isDeletingOrder = false;
   bool _isLoading = true;
   Map<String, dynamic> _orderDetails = {};
+  String _voucherCode = '';
+  double _discountAmount = 0.0;
+  bool _isValidatingVoucher = false;
+  bool _isRemovingDiscount = false;
+  TextInputFormatter get _uppercaseFormatter =>
+      FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]'));
 
   @override
   void initState() {
@@ -93,6 +100,11 @@ class _SplitOrderPaymentDialogState
           setState(() {
             _orderDetails = invoices.first;
             _isLoading = false;
+
+            // Initialize discount values from order details
+            _discountAmount =
+                (_orderDetails['discount_amount'] ?? 0).toDouble();
+            _voucherCode = _orderDetails['user_voucher_code'] ?? '';
           });
         }
       }
@@ -146,15 +158,38 @@ class _SplitOrderPaymentDialogState
             children: [
               // Header
               Row(
-                children: const [
-                  Icon(Icons.receipt, size: 30, color: Color(0xFFE732A0)),
-                  SizedBox(width: 10),
-                  Text(
-                    'Split Order Payment',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFE732A0),
+                children: [
+                  const Icon(Icons.receipt, size: 30, color: Color(0xFFE732A0)),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Split Order Payment',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE732A0),
+                      ),
+                    ),
+                  ),
+                  // Apply Discount Button
+                  GestureDetector(
+                    onTap: _isProcessingPayment ? null : _showVoucherDialog,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _discountAmount > 0 ? Colors.red : Colors.blue,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _discountAmount > 0
+                            ? 'Remove Discount'
+                            : 'Apply Discount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -173,24 +208,35 @@ class _SplitOrderPaymentDialogState
                         itemCount: items.length,
                         itemBuilder: (context, index) {
                           final item = items[index];
-                          final basePrice = (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0).toDouble();
-                          final quantity = (item['quantity'] ?? item['qty'] ?? 1).toDouble();
-                          final discountAmount = (item['discount_amount'] ?? 0).toDouble();
-                          final discountPercentage = (item['discount_percentage'] ?? 0).toDouble();
-                          
+                          final basePrice = (item['rate'] ??
+                                  item['price'] ??
+                                  item['price_list_rate'] ??
+                                  0)
+                              .toDouble();
+                          final quantity =
+                              (item['quantity'] ?? item['qty'] ?? 1).toDouble();
+                          final discountAmount =
+                              (item['discount_amount'] ?? 0).toDouble();
+                          final discountPercentage =
+                              (item['discount_percentage'] ?? 0).toDouble();
+
                           // Calculate variant cost
-                          final variantCost = _calculateVariantCost(item['custom_variant_info']);
+                          final variantCost = _calculateVariantCost(
+                              item['custom_variant_info']);
                           final totalItemPrice = basePrice + variantCost;
-                          
+
                           // Calculate actual discount applied
                           double actualDiscount = 0;
                           if (discountAmount > 0) {
                             actualDiscount = discountAmount;
                           } else if (discountPercentage > 0) {
-                            actualDiscount = (totalItemPrice * discountPercentage / 100) * quantity;
+                            actualDiscount =
+                                (totalItemPrice * discountPercentage / 100) *
+                                    quantity;
                           }
-                          
-                          final finalPricePerItem = totalItemPrice - (actualDiscount / quantity);
+
+                          final finalPricePerItem =
+                              totalItemPrice - (actualDiscount / quantity);
                           final totalFinalPrice = finalPricePerItem * quantity;
                           final originalTotalPrice = totalItemPrice * quantity;
 
@@ -258,7 +304,8 @@ class _SplitOrderPaymentDialogState
                                         'RM${originalTotalPrice.toStringAsFixed(2)}',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          decoration: TextDecoration.lineThrough,
+                                          decoration:
+                                              TextDecoration.lineThrough,
                                           color: Colors.grey,
                                         ),
                                       ),
@@ -268,7 +315,9 @@ class _SplitOrderPaymentDialogState
                                       'RM${finalPricePerItem.toStringAsFixed(2)}',
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: actualDiscount > 0 ? Color(0xFFE732A0) : Colors.black),
+                                          color: actualDiscount > 0
+                                              ? Color(0xFFE732A0)
+                                              : Colors.black),
                                     ),
                                     Text(
                                       'x${quantity.toStringAsFixed(0)}',
@@ -303,21 +352,21 @@ class _SplitOrderPaymentDialogState
                           children: [
                             _buildSummaryRow('Net Total',
                                 (_orderDetails['total'] ?? 0).toDouble()),
-                            if ((_orderDetails['discount_amount'] ?? 0) > 0)
+                            if (_discountAmount > 0)
                               _buildSummaryRow(
-                                'Discount',
-                                -(_orderDetails['discount_amount'] ?? 0)
-                                    .toDouble(),
+                                _getDiscountDisplayText(),
+                                -_discountAmount,
                               ),
                             _buildSummaryRow(
                                 'Rounding',
                                 (_orderDetails['base_rounding_adjustment'] ?? 0)
                                     .toDouble()),
-                            if(_getGSTRate() != '0')
-                            _buildSummaryRow(
-                                'GST (${_getGSTRate()}%)',
-                                ((_orderDetails['total_taxes_and_charges'] ?? 0))
-                                    .toDouble()),
+                            if (_getGSTRate() != '0')
+                              _buildSummaryRow(
+                                  'GST (${_getGSTRate()}%)',
+                                  ((_orderDetails['total_taxes_and_charges'] ??
+                                          0))
+                                      .toDouble()),
                             const Divider(height: 24),
                             _buildSummaryRow(
                                 'Grand Total',
@@ -366,7 +415,8 @@ class _SplitOrderPaymentDialogState
                                     if (selected) {
                                       if (method['name'] == 'Cash') {
                                         final totalAmount =
-                                            (_orderDetails['rounded_total'] ?? 0)
+                                            (_orderDetails['rounded_total'] ??
+                                                    0)
                                                 .toDouble();
                                         final confirmed =
                                             await _showCashPaymentDialog(
@@ -1257,5 +1307,641 @@ class _SplitOrderPaymentDialogState
           },
         ) ??
         '0';
+  }
+
+  // Discount-related methods
+  Future<void> _showVoucherDialog() async {
+    final hasDiscount = _discountAmount > 0 ||
+        _orderDetails['coupon_code'] != null ||
+        _orderDetails['custom_user_voucher'] != null;
+
+    if (_discountAmount > 0) {
+      final shouldRemove = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Remove Discount',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            'Are you sure you want to remove the current discount?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            TextButton(
+              child: const Text(
+                'CANCEL',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'REMOVE',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldRemove == true) {
+        _isRemovingDiscount = true;
+        await _removeDiscount();
+        _isRemovingDiscount = false;
+      }
+      return;
+    }
+
+    final voucherController = TextEditingController();
+    final discountPercentageController = TextEditingController();
+    final discountAmountController = TextEditingController();
+    int selectedDiscountType = 0; // 0 = voucher, 1 = percentage, 2 = amount
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Apply Discount',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Discount type selector
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: Text(
+                            'Voucher',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          selected: selectedDiscountType == 0,
+                          onSelected: (selected) {
+                            setState(() {
+                              selectedDiscountType =
+                                  selected ? 0 : selectedDiscountType;
+                            });
+                          },
+                        ),
+                        ChoiceChip(
+                          label: Text(
+                            'Percentage',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          selected: selectedDiscountType == 1,
+                          onSelected: (selected) {
+                            setState(() {
+                              selectedDiscountType =
+                                  selected ? 1 : selectedDiscountType;
+                              if (selected) {
+                                voucherController.clear();
+                                discountAmountController.clear();
+                              }
+                            });
+                          },
+                        ),
+                        ChoiceChip(
+                          label: Text(
+                            'Amount',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          selected: selectedDiscountType == 2,
+                          onSelected: (selected) {
+                            setState(() {
+                              selectedDiscountType =
+                                  selected ? 2 : selectedDiscountType;
+                              if (selected) {
+                                voucherController.clear();
+                                discountPercentageController.clear();
+                              }
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Voucher code field (only visible when voucher is selected)
+                    if (selectedDiscountType == 0)
+                      TextField(
+                        controller: voucherController,
+                        decoration: const InputDecoration(
+                          labelText: 'Voucher Code',
+                          border: OutlineInputBorder(),
+                        ),
+                        inputFormatters: [_uppercaseFormatter],
+                        textCapitalization: TextCapitalization.characters,
+                        onChanged: (value) {
+                          // Convert to uppercase and update cursor position
+                          if (value != value.toUpperCase()) {
+                            final cursorPosition =
+                                voucherController.selection.base.offset;
+                            voucherController.value =
+                                voucherController.value.copyWith(
+                              text: value.toUpperCase(),
+                              selection: TextSelection.collapsed(
+                                  offset: cursorPosition),
+                            );
+                          }
+                        },
+                      ),
+
+                    // Percentage field (only visible when percentage is selected)
+                    if (selectedDiscountType == 1)
+                      TextField(
+                        controller: discountPercentageController,
+                        decoration: const InputDecoration(
+                          labelText: 'Discount Percentage (%)',
+                          border: OutlineInputBorder(),
+                          suffixText: '%',
+                        ),
+                        keyboardType:
+                            TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            final percentage = double.tryParse(value) ?? 0;
+                            final amount =
+                                _calculateSubtotal() * percentage / 100;
+                            discountAmountController.text =
+                                amount.toStringAsFixed(2);
+                          } else {
+                            discountAmountController.clear();
+                          }
+                        },
+                      ),
+
+                    // Amount field (only visible when amount is selected)
+                    if (selectedDiscountType == 2)
+                      TextField(
+                        controller: discountAmountController,
+                        decoration: const InputDecoration(
+                          labelText: 'Discount Amount (RM)',
+                          border: OutlineInputBorder(),
+                          prefixText: 'RM ',
+                        ),
+                        keyboardType:
+                            TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            final amount = double.tryParse(value) ?? 0;
+                            final percentage =
+                                (amount / _calculateSubtotal()) * 100;
+                            discountPercentageController.text =
+                                percentage.toStringAsFixed(2);
+                          } else {
+                            discountPercentageController.clear();
+                          }
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Apply',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    if (selectedDiscountType == 0 &&
+                        voucherController.text.isEmpty) {
+                      Fluttertoast.showToast(
+                        msg: "Please enter a voucher code",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    } else if (selectedDiscountType == 1 &&
+                        discountPercentageController.text.isEmpty) {
+                      Fluttertoast.showToast(
+                        msg: "Please enter a discount percentage",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    } else if (selectedDiscountType == 2 &&
+                        discountAmountController.text.isEmpty) {
+                      Fluttertoast.showToast(
+                        msg: "Please enter a discount amount",
+                        gravity: ToastGravity.BOTTOM,
+                        backgroundColor: Colors.red,
+                        textColor: Colors.white,
+                      );
+                      return;
+                    }
+                    Navigator.of(context).pop(true);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      if (selectedDiscountType == 0) {
+        // Voucher code
+        _validateVoucher(voucherController.text);
+      } else if (selectedDiscountType == 1) {
+        // Percentage discount
+        final percentage =
+            double.tryParse(discountPercentageController.text) ?? 0;
+        final amount = _calculateSubtotal() * percentage / 100;
+        await _applyManualDiscount(amount);
+      } else if (selectedDiscountType == 2) {
+        // Fixed amount discount
+        final amount = double.tryParse(discountAmountController.text) ?? 0;
+        await _applyManualDiscount(amount);
+      }
+    }
+  }
+
+  Future<void> _validateVoucher(String voucherCode) async {
+    _showLoadingOverlay(true);
+
+    try {
+      // Convert user input to uppercase
+      final uppercaseVoucherCode = voucherCode.toUpperCase();
+
+      final response = await PosService().validateVoucher(uppercaseVoucherCode);
+
+      if (response['success'] == true) {
+        final voucherData = response['message'];
+        final couponCode = voucherData['coupon_code'];
+
+        setState(() {
+          _voucherCode = uppercaseVoucherCode; // Use the uppercase user input
+        });
+
+        // Update the order with the voucher using the user's input (uppercase)
+        await _updateOrderWithVoucher(uppercaseVoucherCode, couponCode);
+
+        Fluttertoast.showToast(
+          msg: "Voucher applied successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        Fluttertoast.showToast(
+          msg: "Voucher code is invalid or redeemed",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error validating voucher: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
+    }
+  }
+
+  Future<void> _updateOrderWithVoucher(
+      String voucherName, String couponCode) async {
+    try {
+      final orderName = widget.order['name'];
+      if (orderName == null) return;
+
+      // Update local state immediately
+      setState(() {
+        _voucherCode = voucherName;
+      });
+
+      final response = await PosService().submitOrder(
+          name: orderName,
+          posProfile: ref.read(authProvider).maybeWhen(
+                    authenticated: (
+                      sid,
+                      apiKey,
+                      apiSecret,
+                      username,
+                      email,
+                      fullName,
+                      posProfile,
+                      branch,
+                      paymentMethods,
+                      taxes,
+                      hasOpening,
+                      tier,
+                      printKitchenOrder,
+                      openingDate,
+                      itemsGroups,
+                      baseUrl,
+                      merchantId,
+                    ) {
+                      return posProfile;
+                    },
+                    orElse: () => null,
+                  ) ??
+              '',
+          customer: 'Guest',
+          table: _orderDetails['table'],
+          orderChannel: 'Dine In',
+          items: List<Map<String, dynamic>>.from(_orderDetails['items'] ?? [])
+              .map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': item['quantity'] ?? item['qty'] ?? 1,
+              'price_list_rate': (item['rate'] ??
+                          item['price'] ??
+                          item['price_list_rate'] ??
+                          0)
+                      .toDouble() +
+                  _calculateVariantCost(item['custom_variant_info']),
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+              if (item['custom_variant_info'] != null)
+                'custom_variant_info': item['custom_variant_info'],
+            };
+          }).toList(),
+          couponCode: couponCode,
+          custom_user_voucher: voucherName,
+          remarks: _orderDetails['remarks'] ?? "N/A");
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts from server
+        await _fetchOrderDetails();
+      }
+    } catch (e) {
+      debugPrint('Error updating order with voucher: $e');
+      // Revert local changes on error
+      setState(() {
+        _voucherCode = '';
+      });
+    }
+  }
+
+  Future<void> _applyManualDiscount(double amount) async {
+    _showLoadingOverlay(true);
+
+    try {
+      final orderName = widget.order['name'];
+      if (orderName == null) return;
+
+      // Update local state immediately
+      setState(() {
+        _discountAmount = amount;
+      });
+
+      final response = await PosService().submitOrder(
+        name: orderName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                    baseUrl,
+                    merchantId,
+                  ) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        table: _orderDetails['table'],
+        orderChannel: 'Dine In',
+        items: List<Map<String, dynamic>>.from(_orderDetails['items'] ?? [])
+            .map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'] ?? item['qty'] ?? 1,
+            'price_list_rate':
+                (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0)
+                        .toDouble() +
+                    _calculateVariantCost(item['custom_variant_info']),
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        remarks: _orderDetails['remarks'] ?? "N/A",
+        discountAmount: amount, // Pass the discount amount directly
+      );
+
+      if (response['success'] == true) {
+        // Update the order details with new amounts from server
+        await _fetchOrderDetails();
+        Fluttertoast.showToast(
+          msg: "Discount applied successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error applying discount: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      // Revert local changes on error
+      setState(() {
+        _discountAmount = 0;
+      });
+    } finally {
+      _showLoadingOverlay(false);
+    }
+  }
+
+  Future<void> _removeDiscount() async {
+    _showLoadingOverlay(true);
+
+    try {
+      final orderName = widget.order['name'];
+      if (orderName == null) return;
+
+      // Update local state immediately
+      setState(() {
+        _discountAmount = 0;
+        _voucherCode = '';
+      });
+
+      final response = await PosService().submitOrder(
+        name: orderName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                    baseUrl,
+                    merchantId,
+                  ) =>
+                      posProfile,
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        table: _orderDetails['table'],
+        orderChannel: 'Dine In',
+        items: List<Map<String, dynamic>>.from(_orderDetails['items'] ?? [])
+            .map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'] ?? item['qty'] ?? 1,
+            'price_list_rate':
+                (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0)
+                        .toDouble() +
+                    _calculateVariantCost(item['custom_variant_info']),
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        couponCode: null, // Set to null to remove
+        custom_user_voucher: null, // Set to null to remove
+        discountAmount: 0, // Set to 0 to remove
+        remarks: _orderDetails['remarks'] ?? "N/A",
+      );
+
+      if (response['success'] == true) {
+        // Force a complete refresh of order details
+        await _fetchOrderDetails();
+
+        // Double-check and force clear any discount values that might have persisted
+        setState(() {
+          if (_discountAmount > 0) _discountAmount = 0;
+          if (_voucherCode?.isNotEmpty == true) _voucherCode = '';
+        });
+
+        Fluttertoast.showToast(
+          msg: "Discount removed successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error removing discount: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
+    }
+  }
+
+  void _showLoadingOverlay(bool show) {
+    if (show) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return WillPopScope(
+            onWillPop: () async => false,
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
+      );
+    } else {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  double _calculateSubtotal() {
+    // Use server value if available, otherwise calculate from items
+    final serverSubtotal = (_orderDetails['total'] as num?)?.toDouble();
+
+    if (serverSubtotal != null) {
+      debugPrint('Using server subtotal: RM$serverSubtotal');
+      return serverSubtotal;
+    }
+
+    // Calculate local subtotal including variant costs
+    final items = List<Map<String, dynamic>>.from(_orderDetails['items'] ?? []);
+    double localSubtotal = items.fold(0.0, (sum, item) {
+      final basePrice =
+          (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0)
+              .toDouble();
+      final variantCost = _calculateVariantCost(item['custom_variant_info']);
+      final totalPrice = basePrice + variantCost;
+      final quantity = (item['quantity'] ?? item['qty'] ?? 1).toDouble();
+      final itemTotal = totalPrice * quantity;
+
+      return sum + itemTotal;
+    });
+
+    return localSubtotal;
+  }
+
+  String _getDiscountDisplayText() {
+    if (_voucherCode.isNotEmpty) {
+      return 'Discount ($_voucherCode)';
+    }
+
+    // Calculate discount percentage when no voucher name is available
+    final subtotal = _calculateSubtotal();
+    if (subtotal > 0) {
+      final discountPercentage = (_discountAmount / subtotal * 100).toDouble();
+      return 'Discount (${discountPercentage.toStringAsFixed(1)}%)';
+    }
+
+    return 'Discount';
   }
 }

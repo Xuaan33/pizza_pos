@@ -74,6 +74,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   TextInputFormatter get _uppercaseFormatter =>
       FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]'));
   String baseImageUrl = '';
+  String _selectedOrderChannel = 'Dine In';
 
   @override
   void dispose() {
@@ -92,6 +93,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _fetchOrderDetails();
     _checkStockForItems();
     // Initialize remarks
+    _selectedOrderChannel = widget.order['orderType'] ?? 'Dine In';
     _currentRemarks = widget.order['remarks'] ?? '';
     _remarksController.text = _currentRemarks;
   }
@@ -470,6 +472,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             final taxDetails = _getTaxDetailsForCustomerDisplay();
             CustomerDisplayController.updateOrderDisplay(
               items: currentItems.map((item) {
+                bool serveLater = false;
+                dynamic serveLaterValue = item['custom_serve_later'];
+                if (serveLaterValue is bool) {
+                  serveLater = serveLaterValue;
+                } else if (serveLaterValue is num) {
+                  serveLater = serveLaterValue == 1;
+                } else if (serveLaterValue is String) {
+                  serveLater = serveLaterValue == '1' ||
+                      serveLaterValue.toLowerCase() == 'true';
+                }
                 return {
                   'name': item['name'] ?? 'Unknown',
                   'price': (item['price'] +
@@ -486,7 +498,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ? item['quantity'] as int
                       : (item['quantity'] as double).toInt(),
                   'discount_amount': item['discount_amount'] ?? 0.0,
-                  'custom_serve_later': item['custom_serve_later'] ?? false,
+                  'custom_serve_later': serveLater,
                   'custom_item_remarks': item['custom_item_remarks'] ?? '',
                   'custom_variant_info':
                       item['custom_variant_info']?.toString() ?? '',
@@ -720,23 +732,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            widget.order['tableNumber'] == 0
-                ? 'Instant Order'
-                : '${widget.order['tableFullName'] ?? "Take Away"}',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+        // Table and Order Channel in one row
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  widget.order['tableNumber'] == 0
+                      ? 'Instant Order'
+                      : '${widget.order['tableFullName'] ?? "Take Away"}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildOrderChannelDropdown(),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
+        // Entry Time remains below
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -762,6 +787,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildOrderChannelDropdown() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButton<String>(
+        value: _selectedOrderChannel,
+        isExpanded: true,
+        underline: const SizedBox(),
+        dropdownColor: Colors.white,
+        icon: const Icon(Icons.arrow_drop_down, size: 20),
+        style: const TextStyle(
+          fontSize: 16,
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+        items: ['Dine In', 'Take Away', 'Delivery'].map((String channel) {
+          return DropdownMenuItem<String>(
+            value: channel,
+            child: Text(
+              channel,
+              style: const TextStyle(fontSize: 16),
+            ),
+          );
+        }).toList(),
+        onChanged: _isProcessingPayment
+            ? null
+            : (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedOrderChannel = newValue;
+                  });
+                  // Update the order channel immediately when changed
+                  _updateOrderChannel(newValue);
+                }
+              },
+      ),
     );
   }
 
@@ -1777,7 +1845,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               '',
           customer: 'Guest',
           table: widget.order['tableFullName'],
-          orderChannel: 'Dine In',
+          orderChannel: _selectedOrderChannel,
           items: orderItems.map((item) {
             return {
               'item_code': item['item_code'] ?? '',
@@ -3695,7 +3763,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               '',
           customer: 'Guest',
           table: widget.order['tableFullName'],
-          orderChannel: 'Dine In',
+          orderChannel: _selectedOrderChannel,
           items: itemsToSubmit,
           couponCode: widget.order['coupon_code'],
           custom_user_voucher: widget.order['user_voucher_code'],
@@ -3789,7 +3857,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             '',
         customer: 'Guest',
         table: widget.order['tableFullName'],
-        orderChannel: 'Dine In',
+        orderChannel: _selectedOrderChannel,
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -3898,7 +3966,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             '',
         customer: 'Guest',
         table: widget.order['tableFullName'],
-        orderChannel: 'Dine In',
+        orderChannel: _selectedOrderChannel,
         items: orderItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -4042,7 +4110,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               '',
           customer: 'Guest',
           table: widget.order['tableFullName'],
-          orderChannel: 'Dine In',
+          orderChannel: _selectedOrderChannel,
           items: orderItems.map((item) {
             return {
               'item_code': item['item_code'] ?? '',
@@ -4111,7 +4179,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final quantity = item['quantity'];
       final itemTotal = totalPrice * quantity;
 
-      
       return sum + itemTotal;
     });
 
@@ -4479,6 +4546,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final taxDetails = _getTaxDetailsForCustomerDisplay();
       CustomerDisplayController.updateOrderDisplay(
         items: currentItems.map((item) {
+          bool serveLater = false;
+          dynamic serveLaterValue = item['custom_serve_later'];
+          if (serveLaterValue is bool) {
+            serveLater = serveLaterValue;
+          } else if (serveLaterValue is num) {
+            serveLater = serveLaterValue == 1;
+          } else if (serveLaterValue is String) {
+            serveLater = serveLaterValue == '1' ||
+                serveLaterValue.toLowerCase() == 'true';
+          }
           return {
             'name': item['name'] ?? 'Unknown',
             'price': (item['price'] +
@@ -4494,7 +4571,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ? item['quantity'] as int
                 : (item['quantity'] as double).toInt(),
             'discount_amount': item['discount_amount'] ?? 0.0,
-            'custom_serve_later': item['custom_serve_later'] ?? false,
+            'custom_serve_later': serveLater,
             'custom_item_remarks': item['custom_item_remarks'] ?? '',
             'custom_variant_info':
                 item['custom_variant_info']?.toString() ?? '',
@@ -4509,6 +4586,82 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         taxDetails: taxDetails,
       );
     });
+  }
+
+  Future<void> _updateOrderChannel(String orderChannel) async {
+    if (_isProcessingPayment) return;
+
+    try {
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName == null) return;
+
+      final response = await PosService().submitOrder(
+        name: invoiceName,
+        posProfile: ref.read(authProvider).maybeWhen(
+                  authenticated: (
+                    sid,
+                    apiKey,
+                    apiSecret,
+                    username,
+                    email,
+                    fullName,
+                    posProfile,
+                    branch,
+                    paymentMethods,
+                    taxes,
+                    hasOpening,
+                    tier,
+                    printKitchenOrder,
+                    openingDate,
+                    itemsGroups,
+                    baseUrl,
+                    merchantId,
+                  ) {
+                    return posProfile;
+                  },
+                  orElse: () => null,
+                ) ??
+            '',
+        customer: 'Guest',
+        table: widget.order['tableFullName'],
+        orderChannel: orderChannel, // Updated order channel
+        items: orderItems.map((item) {
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': item['price'] +
+                _calculateVariantCost(item['custom_variant_info']),
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            if (item['custom_variant_info'] != null)
+              'custom_variant_info': item['custom_variant_info'],
+          };
+        }).toList(),
+        couponCode: widget.order['coupon_code'],
+        custom_user_voucher: _voucherCode,
+        remarks: _remarksController.text,
+        discountAmount: widget.order['discount_amount'],
+      );
+
+      if (response['success'] == true) {
+        // Update local state
+        setState(() {
+          widget.order['orderType'] = orderChannel;
+        });
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to update order type: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+
+      // Revert on error
+      setState(() {
+        _selectedOrderChannel = widget.order['orderType'] ?? 'Dine In';
+      });
+    }
   }
 
   Future<void> _updateOrder() async {
@@ -4575,7 +4728,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             '',
         customer: 'Guest',
         table: widget.order['tableFullName'],
-        orderChannel: "Dine In",
+        orderChannel: _selectedOrderChannel,
         items: _editableItems.map((item) {
           return {
             'item_code': item['item_code'] ?? '',
@@ -4699,6 +4852,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     'item_code': item['item_code'],
                     'qty': item['split_quantity'],
                     'price_list_rate': item['price'] +
+                        item['discount_amount'] +
                         _calculateVariantCost(item['custom_variant_info']),
                     "custom_item_remarks": item['custom_item_remarks'],
                     "custom_serve_later": item['custom_serve_later'],
@@ -4708,7 +4862,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               .toList(),
           remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
-          orderChannel: "Dine In");
+          orderChannel: _selectedOrderChannel);
 
       if (response['success'] == true) {
         final splitOrder = response['message'];
@@ -5040,7 +5194,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           items: itemsToSubmit,
           remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
-          orderChannel: 'Dine In');
+          orderChannel: _selectedOrderChannel);
 
       if (response['success'] == true) {
         // Update local state with the preserved items

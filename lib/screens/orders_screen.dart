@@ -440,7 +440,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     Expanded(
                       child: _buildFilterDropdown(
                         value: widget.currentFilterOrderType,
-                        items: ['All', 'Dine in', 'Takeaway', 'Delivery'],
+                        items: ['All', 'Dine in', 'Take Away', 'Delivery'],
                         onChanged: (value) =>
                             widget.onFilterOrderTypeChanged(value!),
                         label: 'Order Type',
@@ -1256,7 +1256,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   List<Map<String, dynamic>> _filterOrders(List<Map<String, dynamic>> orders) {
-    return orders.where((order) {
+    final filteredOrders = orders.where((order) {
       // Search filter
       final searchMatch = _searchQuery.isEmpty ||
           (order['orderId']?.toString().toLowerCase() ?? '')
@@ -1290,6 +1290,15 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       return searchMatch && statusMatch && typeMatch;
     }).toList();
+
+    // Sort orders by entryTime in descending order (most recent first)
+    filteredOrders.sort((a, b) {
+      final DateTime timeA = _parseDateTime(a['entryTime']);
+      final DateTime timeB = _parseDateTime(b['entryTime']);
+      return timeB.compareTo(timeA); // Descending order
+    });
+
+    return filteredOrders;
   }
 
   Future<void> _selectDateRange() async {

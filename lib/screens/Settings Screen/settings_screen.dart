@@ -2430,7 +2430,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                         ) {
                                           _employeeCheckIn(
-                                              employee['employee_name'], branch);
+                                              employee['name'], branch);
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -2464,7 +2464,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                         ) {
                                           _employeeCheckOut(
-                                              employee['employee_name'], branch);
+                                              employee['name'], branch);
                                         },
                                         initial: () {},
                                         unauthenticated: () {},

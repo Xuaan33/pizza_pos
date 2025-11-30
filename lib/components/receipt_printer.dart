@@ -17,7 +17,6 @@ class ReceiptPrinter {
   /// -------------------------------------------
   /// Internal: find & connect a USB printer
   /// -------------------------------------------
-  // In receipt_printer.dart, modify the _ensureUsbPrinter method
   static Future<Printer?> _ensureUsbPrinter(
       {bool forceReconnect = false}) async {
     if (!forceReconnect &&
@@ -61,17 +60,46 @@ class ReceiptPrinter {
       return null;
     }
 
-    // Filter by VID & PID
+    // Debug: Print all found devices
+    for (final device in devices) {
+      debugPrint(
+          "🔍 Found printer: VID:${device.vendorId} PID:${device.productId} Name:${device.name} Connected:${device.isConnected}");
+    }
+
+    // Find your specific printer or use first available
+    // Replace the printer selection logic with this:
     final printer = devices.firstWhere(
-      (p) => p.vendorId == 0 && p.productId == 0,
-      orElse: () => devices.first,
+      (p) => p.vendorId == 8137 && p.productId == 8214, // Your actual printer
+      orElse: () => devices.firstWhere(
+        (p) => p.name?.contains('Printer') ?? false, // Fallback to any printer
+        orElse: () => devices.first, // Last resort
+      ),
     );
 
+    debugPrint(
+        "🎯 Selected printer: VID:${printer.vendorId} PID:${printer.productId}");
+
     if (!(printer.isConnected ?? false)) {
+      debugPrint("🔌 Attempting to connect to printer...");
+
+      // 🔥 ADD PERMISSION REQUEST BEFORE CONNECTION
+      debugPrint("🔑 Requesting USB permission...");
+      final permissionGranted = await requestUsbPermission(printer);
+
+      if (!permissionGranted) {
+        debugPrint("❌ USB permission denied by user");
+        return null;
+      }
+
+      debugPrint("✅ USB permission granted");
+
       final connected = await _plugin.connect(printer).timeout(
-            Duration(seconds: 5),
-            onTimeout: () => false,
-          );
+        Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint("⏰ Connection timeout");
+          return false;
+        },
+      );
 
       if (!connected) {
         debugPrint("❌ Failed to connect to printer");
@@ -80,9 +108,37 @@ class ReceiptPrinter {
     }
 
     _currentPrinter = printer;
-    debugPrint("✅ Connected to specific printer VID:24597 PID:10927");
+    debugPrint(
+        "✅ Connected to printer VID:${printer.vendorId} PID:${printer.productId}");
 
     return printer;
+  }
+
+  static Future<bool> requestUsbPermission(printer) async {
+    try {
+      final completer = Completer<List<Printer>>();
+      late StreamSubscription<List<Printer>> sub;
+
+      sub = _plugin.devicesStream.listen((devices) {
+        if (!completer.isCompleted) {
+          completer.complete(devices);
+          sub.cancel();
+        }
+      });
+
+      await _plugin.getPrinters(connectionTypes: [ConnectionType.USB]);
+      final devices = await completer.future.timeout(Duration(seconds: 10));
+
+      if (devices.isNotEmpty) {
+        final printer = devices.first;
+        final permissionGranted = await _plugin.connect(printer);
+        return permissionGranted;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("❌ USB permission request error: $e");
+      return false;
+    }
   }
 
   /// -------------------------------------------

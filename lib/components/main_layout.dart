@@ -45,7 +45,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool get isLoadingMore => _isLoadingMore;
   bool _customerDisplayInitialized = false;
 
-
   @override
   void initState() {
     super.initState();
@@ -53,7 +52,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     // Initialize customer display once
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeCustomerDisplay();
-      ref.read(authProvider.notifier).loadSession();
+      ref.read(authProvider.notifier).loadFromSharedPreferences();
     });
   }
 
@@ -369,8 +368,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                       actions: [
                         TextButton(
                           onPressed: () {
-                            Navigator.of(context).pop(); // Close the dialog
-                            // Navigate to LoginScreen and remove all previous routes
+                            Navigator.of(context).pop();
                             Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(
@@ -421,7 +419,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       },
     );
   }
-
 
   Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
     if (!mounted) return;
@@ -706,8 +703,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       _refreshOrders();
     });
   }
-
-
 
   List<Widget> _getScreensWithOrders() {
     final authState = ref.read(authProvider);
@@ -1009,7 +1004,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               _buildNavItem(tier.toLowerCase() != 'tier 3' ? 2 : 3,
                   'assets/img-sidebar-dashboard.png', 'Dashboard'),
               _buildNavItem(tier.toLowerCase() != 'tier 3' ? 3 : 4,
-                  'assets/img-sidebar-kitchen.png', 'Kitchen'),
+                  'assets/img-sidebar-kitchen.png', 'Fulfilment'),
               _buildNavItem(tier.toLowerCase() != 'tier 3' ? 4 : 5,
                   'assets/img-sidebar-settings.png', 'Settings'),
               const Spacer(),
@@ -1064,7 +1059,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   }
                 },
               );
-
 
               if (isOrdersScreen) {
                 setState(() {

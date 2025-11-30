@@ -40,6 +40,7 @@ class CustomerDisplay(
     private lateinit var orderSubtotal: TextView
     private lateinit var orderTax: TextView
     private lateinit var orderDiscount: TextView
+    private lateinit var orderDiscountLabel: TextView
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
     private lateinit var orderTaxLabel: TextView 
@@ -70,6 +71,7 @@ class CustomerDisplay(
         orderSubtotal = findViewById(R.id.orderSubtotal)
         orderTax = findViewById(R.id.orderTax)
         orderDiscount = findViewById(R.id.orderDiscount)
+        orderDiscountLabel = findViewById(R.id.orderDiscountLabel)
         orderRounding = findViewById(R.id.orderRounding)
         orderTotal = findViewById(R.id.orderTotal)
         slideshowView = findViewById(R.id.videoView)
@@ -85,7 +87,7 @@ class CustomerDisplay(
             Glide.with(context)
                 .load(url)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .override(800, 600)
+                .centerInside()
                 .thumbnail(0.1f)
                 .placeholder(android.R.color.transparent)
                 .error(android.R.drawable.ic_menu_report_image)
@@ -233,6 +235,16 @@ class CustomerDisplay(
             
             orderSubtotal.text = "RM ${"%.2f".format(subtotal)}"
             orderTax.text = "RM ${"%.2f".format(tax)}"
+            if(discount <= 0)
+            {
+                orderDiscountLabel.visibility = View.GONE
+                orderDiscount.visibility = View.GONE
+            }
+            else
+            {
+                orderDiscountLabel.visibility = View.VISIBLE
+                orderDiscount.visibility = View.VISIBLE
+            }
             orderDiscount.text = "RM ${"%.2f".format(discount)}"
             orderRounding.text = "RM ${"%.2f".format(rounding)}"
             orderTotal.text = "RM ${"%.2f".format(total)}"

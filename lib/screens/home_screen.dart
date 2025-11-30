@@ -499,7 +499,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final authState = ref.watch(authProvider);
 
     return authState.when(
-        initial: () => const Center(child: CircularProgressIndicator()),
+        initial: () => const Center(),
         unauthenticated: () => const Center(child: Text('Unauthorized')),
         authenticated: (
           sid,
