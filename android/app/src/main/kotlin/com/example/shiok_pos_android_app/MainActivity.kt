@@ -244,6 +244,14 @@ class CustomerDisplay(
             {
                 orderDiscountLabel.visibility = View.VISIBLE
                 orderDiscount.visibility = View.VISIBLE
+
+                val discountPercent = if (subtotal > 0) {
+                    (discount / subtotal * 100)
+                } else 0.0
+
+                val percentText = "%.0f".format(discountPercent)  // e.g. "10"
+
+                orderDiscountLabel.text = "Discount (${percentText}%):"
             }
             orderDiscount.text = "RM ${"%.2f".format(discount)}"
             orderRounding.text = "RM ${"%.2f".format(rounding)}"
@@ -475,7 +483,6 @@ class CustomerDisplay(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = 4.dpToPx()
             }
             orientation = LinearLayout.HORIZONTAL
             weightSum = 1f
@@ -483,7 +490,6 @@ class CustomerDisplay(
             // Tax label with rate
             TextView(context).apply {
                 text = "$label (${"%.1f".format(rate)}%):"
-                textSize = 14f
                 setTextColor(Color.parseColor("#666666"))
                 layoutParams = LinearLayout.LayoutParams(
                     0,
@@ -496,7 +502,6 @@ class CustomerDisplay(
             // Tax amount
             TextView(context).apply {
                 text = "RM ${"%.2f".format(amount)}"
-                textSize = 14f
                 setTextColor(Color.parseColor("#666666"))
                 layoutParams = LinearLayout.LayoutParams(
                     0,
