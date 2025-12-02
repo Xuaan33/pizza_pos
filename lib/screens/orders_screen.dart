@@ -124,6 +124,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
@@ -222,6 +224,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         return Scaffold(
           body: Row(
@@ -635,7 +639,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     }
 
     final isPaid = order['isPaid'] == true;
-    final taxBreakdown = order['taxBreakdown'] as Map<String, dynamic>?;
 
     return ScrollConfiguration(
       behavior: NoStretchScrollBehavior(),
@@ -1868,6 +1871,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             // Filter out taxes with 0% rate
             final applicableTaxes = taxes.where((tax) {

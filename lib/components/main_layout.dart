@@ -89,23 +89,27 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   int _getOrdersTabIndex() {
     final authState = ref.read(authProvider);
     return authState.whenOrNull(
-          authenticated: (sid,
-              apiKey,
-              apiSecret,
-              username,
-              email,
-              fullName,
-              posProfile,
-              branch,
-              paymentMethods,
-              taxes,
-              hasOpening,
-              tier,
-              printKitchenOrder,
-              openingDate,
-              itemsGroups,
-              baseUrl,
-              merchantId) {
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
+          ) {
             return tier.toLowerCase() != 'tier 3' ? 1 : 2;
           },
         ) ??
@@ -139,6 +143,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           try {
             String? fromDateStr;
@@ -402,6 +408,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         return Scaffold(
           body: Row(
@@ -459,6 +467,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           try {
             String? fromDateStr;
@@ -760,6 +770,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         if (tier.toLowerCase() != 'tier 3') {
           return [
@@ -973,6 +985,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         return Container(
           width: 100,
@@ -1051,6 +1065,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   itemsGroups,
                   baseUrl,
                   mechantId,
+                  printMerchantReceiptCopy,
+                  enableFiuu,
                 ) {
                   if (tier.toLowerCase() != 'tier 3') {
                     isOrdersScreen = index == 1; // Orders is index 1 for tier1

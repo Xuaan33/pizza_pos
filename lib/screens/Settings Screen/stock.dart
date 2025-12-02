@@ -22,7 +22,7 @@ class _StockManagementSectionState
   DateTime _selectedDate = DateTime.now();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _stockScrollController = ScrollController();
-  
+
   // NEW: Map to track individual item controllers
   final Map<String, GlobalKey<_StockItemWrapperState>> _itemKeys = {};
 
@@ -67,6 +67,8 @@ class _StockManagementSectionState
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
@@ -108,7 +110,8 @@ class _StockManagementSectionState
               // Create keys for each item
               _itemKeys.clear();
               for (final item in mappedItems) {
-                _itemKeys[item['item_code']] = GlobalKey<_StockItemWrapperState>();
+                _itemKeys[item['item_code']] =
+                    GlobalKey<_StockItemWrapperState>();
               }
 
               setState(() {
@@ -168,6 +171,8 @@ class _StockManagementSectionState
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           final response = await PosService().getStockQuantity(
             posProfile: posProfile,
@@ -217,10 +222,8 @@ class _StockManagementSectionState
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
-
         _buildControls(),
         const SizedBox(height: 20),
-
         Expanded(
           child: _isStockLoading
               ? const Center(child: CircularProgressIndicator())
@@ -308,7 +311,7 @@ class _StockManagementSectionState
       itemBuilder: (context, index) {
         final item = _filteredStockItems[index];
         final itemCode = item['item_code'];
-        
+
         // Ensure key exists
         if (!_itemKeys.containsKey(itemCode)) {
           _itemKeys[itemCode] = GlobalKey<_StockItemWrapperState>();
@@ -356,7 +359,8 @@ class _StockManagementSectionState
                 labelText: 'Quantity to Add/Remove',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
             ),
           ],
@@ -463,6 +467,8 @@ class _StockManagementSectionState
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           final itemsToStockIn = [
             {
@@ -529,6 +535,8 @@ class _StockManagementSectionState
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           final currentQty = (item['actual_qty'] ?? 0).toDouble();
           final newQty = currentQty - quantityToRemove;

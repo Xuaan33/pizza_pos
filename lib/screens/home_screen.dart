@@ -192,6 +192,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) {
           if (mounted) {
             setState(() {
@@ -259,6 +261,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) async {
           final posService = PosService();
           final response =
@@ -393,6 +397,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) async {
         try {
           final response = await PosService().getStockBalanceSummary(
@@ -519,6 +525,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
@@ -644,6 +652,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                         itemsGroups,
                                                         baseUrl,
                                                         merchantId,
+                                                        printMerchantReceiptCopy,
+                                                        enableFiuu,
                                                       ) {
                                                         return Container(
                                                           padding:
@@ -1787,6 +1797,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         return tier.toLowerCase() != 'tier 3';
       },
@@ -1949,6 +1961,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) async {
         setState(() => _isLoading = true);
 
@@ -2118,6 +2132,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) async {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
@@ -2746,6 +2762,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             // Filter out taxes with 0% rate and calculate each tax
             final applicableTaxes = taxes.where((tax) {
@@ -3058,6 +3076,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             // Calculate total of all applicable taxes
             double subtotal = _calculateSubtotal();
@@ -3098,6 +3118,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             // Filter out taxes with 0% rate
             final applicableTaxes = taxes.where((tax) {
@@ -3199,6 +3221,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             // Calculate combined tax rate for rounding calculations
             double combinedRate = 0.0;
@@ -3326,6 +3350,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             // For backward compatibility, return the first tax rate if only one exists
             if (taxes.isNotEmpty) {

@@ -85,6 +85,8 @@ class _SplitOrderPaymentDialogState
                     itemsGroups,
                     baseUrl,
                     merchantId,
+                    printMerchantReceiptCopy,
+                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -1298,6 +1300,8 @@ class _SplitOrderPaymentDialogState
             itemsGroups,
             baseUrl,
             merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
           ) {
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -1663,6 +1667,8 @@ class _SplitOrderPaymentDialogState
                       itemsGroups,
                       baseUrl,
                       merchantId,
+                      printMerchantReceiptCopy,
+                      enableFiuu,
                     ) {
                       return posProfile;
                     },
@@ -1739,6 +1745,8 @@ class _SplitOrderPaymentDialogState
                     itemsGroups,
                     baseUrl,
                     merchantId,
+                    printMerchantReceiptCopy,
+                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -1827,6 +1835,8 @@ class _SplitOrderPaymentDialogState
                     itemsGroups,
                     baseUrl,
                     merchantId,
+                    printMerchantReceiptCopy,
+                    enableFiuu,
                   ) =>
                       posProfile,
                   orElse: () => null,

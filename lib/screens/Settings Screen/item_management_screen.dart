@@ -69,6 +69,8 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) =>
             posProfile,
         orElse: () => null,
@@ -125,7 +127,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
         } else {
           _variantGroups = [];
         }
-        
+
         // Reset invalid selections
         if (_selectedItem != null &&
             !_items.any((item) => item['item_code'] == _selectedItem)) {

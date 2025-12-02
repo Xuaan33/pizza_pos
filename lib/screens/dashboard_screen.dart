@@ -75,9 +75,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) async {
         try {
-
           final response = await PosService().getOrders(
             posProfile: posProfile,
             status: 'Draft',
@@ -172,6 +173,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) async {
         _posProfile = posProfile;
         final dateFormat = DateFormat('yyyy-MM-dd');
@@ -443,6 +446,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         return FutureBuilder<Map<String, dynamic>>(
           future: _dashboardData,
@@ -594,8 +599,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildSummaryCards(double totalSales, int totalOrders,
-      Map<String, dynamic> todayInfo) {
+  Widget _buildSummaryCards(
+      double totalSales, int totalOrders, Map<String, dynamic> todayInfo) {
     // UPDATED: Added parameter
     final totalRevenue = _convertToDouble(todayInfo['total_revenue']);
     final totalCost = _convertToDouble(todayInfo['total_cost']);
@@ -1133,6 +1138,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           itemsGroups,
                           baseUrl,
                           merchantId,
+                          printMerchantReceiptCopy,
+                          enableFiuu,
                         ) {
                           return paymentMethods.firstWhere(
                             (pm) => pm['name'] == methodName,
@@ -1265,7 +1272,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   // =============================================================
 
-  //           NOT SHOWING VOUCHER LIST ANYMORE 
+  //           NOT SHOWING VOUCHER LIST ANYMORE
 
   // =============================================================
 

@@ -189,6 +189,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
@@ -209,7 +211,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
           context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              tableNumber: "int.parse(table['title'].split(' ').last)", // TO FIX
+              tableNumber:
+                  "int.parse(table['title'].split(' ').last)", // TO FIX
               existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
             ),
           ),
@@ -305,6 +308,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
           itemsGroups,
           baseUrl,
           merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
         ) {
           return Container(
             color: Colors.grey[100],
@@ -362,6 +367,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

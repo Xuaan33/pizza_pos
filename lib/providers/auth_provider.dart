@@ -31,6 +31,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final itemsGroupsJson = prefs.getString('item_groups');
     final baseUrl = prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
     final merchantId = prefs.getString('merchant_id');
+    final printMerchantReceiptCopy =
+        prefs.getInt('print_merchant_receipt_copy');
+    final enableFiuu = prefs.getInt('enable_fiuu');
 
     // Parse opening date if it exists
     DateTime? openingDate;
@@ -68,28 +71,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
         branch != null &&
         merchantId != null) {
       state = AuthState.authenticated(
-        sid: sid,
-        apiKey: apiKey,
-        apiSecret: apiSecret,
-        username: username,
-        email: email ?? '',
-        fullName: fullName ?? username,
-        posProfile: posProfile,
-        branch: branch,
-        paymentMethods: paymentMethodsJson != null
-            ? List<Map<String, dynamic>>.from(jsonDecode(paymentMethodsJson))
-            : [],
-        taxes: taxesJson != null
-            ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
-            : [],
-        hasOpening: hasOpening,
-        tier: tier ?? '',
-        printKitchenOrder: printKitchenOrder ?? 1,
-        openingDate: openingDate,
-        itemsGroups: itemsGroups,
-        baseUrl: baseUrl,
-        merchantId: merchantId,
-      );
+          sid: sid,
+          apiKey: apiKey,
+          apiSecret: apiSecret,
+          username: username,
+          email: email ?? '',
+          fullName: fullName ?? username,
+          posProfile: posProfile,
+          branch: branch,
+          paymentMethods: paymentMethodsJson != null
+              ? List<Map<String, dynamic>>.from(jsonDecode(paymentMethodsJson))
+              : [],
+          taxes: taxesJson != null
+              ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
+              : [],
+          hasOpening: hasOpening,
+          tier: tier ?? '',
+          printKitchenOrder: printKitchenOrder ?? 1,
+          openingDate: openingDate,
+          itemsGroups: itemsGroups,
+          baseUrl: baseUrl,
+          merchantId: merchantId,
+          printMerchantReceiptCopy: printMerchantReceiptCopy ?? 0,
+          enableFiuu: enableFiuu ?? 0);
     } else {
       state = const AuthState.unauthenticated();
     }
@@ -197,6 +201,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
             'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
         await prefs.setString(
             'merchant_id', response['merchant_id'] ?? merchantId);
+        await prefs.setInt('print_merchant_receipt_copy',
+            response['print_merchant_receipt_copy']);
+        await prefs.setInt('enable_fiuu', response['enable_fiuu']);
 
         DateTime? openingDate;
 
@@ -248,6 +255,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
           baseUrl: response['base_url'] ?? 'https://asdf.byondwave.com',
           merchantId: response['merchant_id'] ?? merchantId,
+          printMerchantReceiptCopy:
+              response['print_merchant_receipt_copy'] ?? 0,
+          enableFiuu: response['enable_fiuu'] ?? 0,
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -282,6 +292,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await prefs.setString(
         'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
     await prefs.setString('merchant_id', response['merchant_id']);
+    await prefs.setInt(
+        'print_merchant_receipt_copy', response['print_merchant_receipt_copy']);
+    await prefs.setInt('enable_fiuu', response['enable_fiuu']);
   }
 
   // Add method to force refresh session data
@@ -310,6 +323,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         itemsGroups,
         baseUrl,
         merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
       ) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
@@ -341,6 +356,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           itemsGroups: itemsGroups,
           baseUrl: baseUrl,
           merchantId: merchantId,
+          printMerchantReceiptCopy: printMerchantReceiptCopy,
+          enableFiuu: enableFiuu,
         );
       },
       orElse: () {},
