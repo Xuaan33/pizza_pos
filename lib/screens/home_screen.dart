@@ -1409,7 +1409,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             )),
                       SizedBox(height: 16),
                       ...variants.map((variant) {
-                        final variantGroup = variant['variant_group'];
+                        // Handle null variant_group gracefully
+                        final variantGroup =
+                            variant['variant_group']?.toString() ?? 'Options';
                         final isRequired = variant['required'] == 1;
                         final minSelection =
                             (variant['option_required_no'] ?? 1) as int;
@@ -1421,6 +1423,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         // Initialize selected options for this variant group
                         selectedOptions[variantGroup] ??= [];
                         currentSelections[variantGroup] ??= 0;
+
+                        // Ensure options is a List and handle null
+                        List<Map<String, dynamic>> options = [];
+                        if (variant['options'] is List) {
+                          options = List<Map<String, dynamic>>.from(
+                              variant['options']);
+                        }
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1451,9 +1460,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 ),
                               ),
                             SizedBox(height: 8),
-                            ...(variant['options'] as List).map((option) {
+                            ...options.map((option) {
+                              // Handle null option['option']
+                              final optionName = option['option']?.toString() ??
+                                  'Option not set';
                               final isSelected = selectedOptions[variantGroup]!
-                                  .contains(option['option']);
+                                  .contains(optionName);
 
                               return Container(
                                 margin: EdgeInsets.only(bottom: 4),
@@ -1467,14 +1479,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 ),
                                 child: CheckboxListTile(
                                   title: Text(
-                                    option['option'],
+                                    optionName,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  subtitle: option['additional_cost'] > 0
+                                  subtitle: (option['additional_cost'] ?? 0) > 0
                                       ? Text(
-                                          '+RM${option['additional_cost'].toStringAsFixed(2)}',
+                                          '+RM${(option['additional_cost'] ?? 0).toStringAsFixed(2)}',
                                           style: TextStyle(
                                             color: Color(0xFFE732A0),
                                             fontWeight: FontWeight.bold,
@@ -1491,7 +1503,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           if (currentSelections[variantGroup]! <
                                               maxSelection) {
                                             selectedOptions[variantGroup]!
-                                                .add(option['option']);
+                                                .add(optionName);
                                             currentSelections[variantGroup] =
                                                 currentSelections[
                                                         variantGroup]! +
@@ -1502,13 +1514,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           selectedOptions[variantGroup]!
                                               .clear();
                                           selectedOptions[variantGroup]!
-                                              .add(option['option']);
+                                              .add(optionName);
                                           currentSelections[variantGroup] = 1;
                                         }
                                       } else {
                                         // Remove selection
                                         selectedOptions[variantGroup]!
-                                            .remove(option['option']);
+                                            .remove(optionName);
                                         currentSelections[variantGroup] =
                                             (currentSelections[variantGroup]! -
                                                     1)
@@ -1548,7 +1560,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     String errorMessage = '';
 
                     for (var variant in variants) {
-                      final variantGroup = variant['variant_group'];
+                      final variantGroup =
+                          variant['variant_group']?.toString() ?? 'Options';
                       final isRequired = variant['required'] == 1;
                       final minSelection = variant['option_required_no'] ?? 1;
                       final selectedCount =
@@ -1558,7 +1571,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         if (selectedCount < minSelection) {
                           allRequirementsMet = false;
                           errorMessage =
-                              "Please select at least $minSelection options for ${variant['variant_group']}";
+                              "Please select at least $minSelection options for $variantGroup";
                           break;
                         }
                       }
@@ -1567,25 +1580,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       if (selectedCount > maxSelection) {
                         allRequirementsMet = false;
                         errorMessage =
-                            "Cannot select more than $maxSelection options for ${variant['variant_group']}";
+                            "Cannot select more than $maxSelection options for $variantGroup";
                         break;
                       }
                     }
 
                     if (allRequirementsMet) {
                       // Convert to the format expected by _addToOrderWithOptions
-                      Map<String, String?> singleSelectionOptions = {};
+                      Map<String, List<String?>> validSelectedOptions = {};
                       for (var variantGroup in selectedOptions.keys) {
                         final selections = selectedOptions[variantGroup]!;
                         if (selections.isNotEmpty) {
-                          // For single selection, take the first one
-                          // For multiple selection, we'll handle it differently
-                          singleSelectionOptions[variantGroup] =
-                              selections.first;
+                          validSelectedOptions[variantGroup] = selections;
                         }
                       }
 
-                      _addToOrderWithOptions(item, selectedOptions);
+                      _addToOrderWithOptions(item, validSelectedOptions);
                       Navigator.pop(context);
                     } else {
                       Fluttertoast.showToast(
