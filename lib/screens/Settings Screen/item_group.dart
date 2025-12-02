@@ -19,10 +19,19 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
   String _sortBy = 'name'; // Default sort by name
   bool _sortAscending = true;
 
+  final ScrollController _scrollController = ScrollController();
+  final Map<String, GlobalKey<_ItemGroupWrapperState>> _itemGroupKeys = {};
+
   @override
   void initState() {
     super.initState();
     _loadItemGroups();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadItemGroups() async {
@@ -32,19 +41,57 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
 
       if (response['success'] == true) {
         final List<dynamic> groupsData = response['message']['item_groups'];
+
+        final groups = groupsData
+            .map((group) => ItemGroup.fromJson(group))
+            .where((group) =>
+                group.name != 'All' && group.name != 'All Item Groups')
+            .toList();
+
+        // Create keys for each item group
+        _itemGroupKeys.clear();
+        for (final group in groups) {
+          _itemGroupKeys[group.name] = GlobalKey<_ItemGroupWrapperState>();
+        }
+
         setState(() {
-          itemGroups = groupsData
-              .map((group) => ItemGroup.fromJson(group))
-              .where((group) =>
-                  group.name != 'All' && group.name != 'All Item Groups')
-              .toList();
-          _applyFilters(); // Apply initial filters
+          itemGroups = groups;
+          _applyFilters();
           isLoading = false;
         });
       }
     } catch (e) {
       setState(() => isLoading = false);
       _showErrorToast('Failed to load item groups: $e');
+    }
+  }
+
+  Future<void> _refreshSingleItemGroup(String groupName) async {
+    try {
+      final response = await PosService().getItemGroup(groupName);
+
+      if (response['success'] == true) {
+        final updatedGroup = ItemGroup.fromJson(response['message']);
+
+        // Update the specific item group wrapper using its key
+        _itemGroupKeys[groupName]
+            ?.currentState
+            ?.updateStatus(updatedGroup.disabled);
+
+        // Also update the underlying data (but DON'T call setState here!)
+        final mainIndex = itemGroups.indexWhere((g) => g.name == groupName);
+        if (mainIndex != -1) {
+          itemGroups[mainIndex] = updatedGroup;
+        }
+
+        final filteredIndex =
+            filteredItemGroups.indexWhere((g) => g.name == groupName);
+        if (filteredIndex != -1) {
+          filteredItemGroups[filteredIndex] = updatedGroup;
+        }
+      }
+    } catch (e) {
+      print('Error refreshing single item group: $e');
     }
   }
 
@@ -110,7 +157,7 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
         itemGroups: itemGroups,
         posService: PosService(),
         onSave: () {
-          _loadItemGroups();
+          _refreshSingleItemGroup(group.name);
         },
       ),
     );
@@ -118,19 +165,19 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
 
   Future<void> _toggleItemGroupStatus(ItemGroup group, bool isActive) async {
     try {
-      setState(() => isLoading = true);
       await PosService().disableItemGroup(
         itemGroup: group.name,
         disabled: isActive ? 0 : 1,
       );
-      await _loadItemGroups(); // Refresh the list
+
+      // Refresh only this item group - no full reload!
+      await _refreshSingleItemGroup(group.name);
+
       _showSuccessToast(
           'Item group ${isActive ? 'activated' : 'deactivated'} successfully');
     } catch (e) {
       _showErrorToast('Failed to update status: $e');
       debugPrint("Update error: $e");
-    } finally {
-      setState(() => isLoading = false);
     }
   }
 
@@ -155,6 +202,7 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: _scrollController, // ADD scroll controller
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -220,7 +268,6 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
                   // Sort Row
                   Row(
                     children: [
-                      // Sort Button
                       ElevatedButton.icon(
                         onPressed: () => _showSortDialog(),
                         icon: Icon(
@@ -239,8 +286,6 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
                         ),
                       ),
                       const SizedBox(width: 8),
-
-                      // Reset Filters Button
                       if (_hasActiveFilters)
                         TextButton.icon(
                           onPressed: _resetFilters,
@@ -277,7 +322,15 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
               itemCount: filteredItemGroups.length,
               itemBuilder: (context, index) {
                 final group = filteredItemGroups[index];
-                return ItemGroupCard(
+
+                // Ensure key exists
+                if (!_itemGroupKeys.containsKey(group.name)) {
+                  _itemGroupKeys[group.name] =
+                      GlobalKey<_ItemGroupWrapperState>();
+                }
+
+                return ItemGroupWrapper(
+                  key: _itemGroupKeys[group.name],
                   itemGroup: group,
                   onEdit: () => _showEditItemGroupDialog(group),
                   onStatusToggle: (value) =>
@@ -444,14 +497,61 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
   }
 }
 
+class ItemGroupWrapper extends StatefulWidget {
+  final ItemGroup itemGroup;
+  final VoidCallback onEdit;
+  final Function(bool) onStatusToggle;
+
+  const ItemGroupWrapper({
+    Key? key,
+    required this.itemGroup,
+    required this.onEdit,
+    required this.onStatusToggle,
+  }) : super(key: key);
+
+  @override
+  State<ItemGroupWrapper> createState() => _ItemGroupWrapperState();
+}
+
+class _ItemGroupWrapperState extends State<ItemGroupWrapper> {
+  late int _disabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _disabled = widget.itemGroup.disabled;
+  }
+
+  // Method to update status without rebuilding parent
+  void updateStatus(int newDisabled) {
+    if (mounted) {
+      setState(() {
+        _disabled = newDisabled;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ItemGroupCard(
+      itemGroup: widget.itemGroup,
+      disabled: _disabled,
+      onEdit: widget.onEdit,
+      onStatusToggle: widget.onStatusToggle,
+    );
+  }
+}
+
 class ItemGroupCard extends StatefulWidget {
   final ItemGroup itemGroup;
+  final int disabled;
   final VoidCallback onEdit;
   final Function(bool) onStatusToggle;
 
   const ItemGroupCard({
     super.key,
     required this.itemGroup,
+    required this.disabled,
     required this.onEdit,
     required this.onStatusToggle,
   });
@@ -462,27 +562,16 @@ class ItemGroupCard extends StatefulWidget {
 
 class _ItemGroupCardState extends State<ItemGroupCard> {
   bool isExpanded = false;
-  bool isActive = true; // Track active status
   bool isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    isActive = widget.itemGroup.disabled == 0;
-  }
+  bool get isActive => widget.disabled == 0;
 
   Future<void> _toggleActiveStatus(bool value) async {
-    if (!mounted) return; // Prevent updates if widget is disposed
+    if (!mounted) return;
 
-    setState(() => isLoading = true); // Show loading state
+    setState(() => isLoading = true);
     try {
       await widget.onStatusToggle(value);
-
-      if (mounted) {
-        setState(() {
-          isActive = value;
-        });
-      }
 
       Fluttertoast.showToast(
         msg: '${widget.itemGroup.name} ${value ? 'activated' : 'deactivated'}',
@@ -917,7 +1006,7 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await widget.posService.updateItemGroup(
+      final response = await PosService().updateItemGroup(
         name: widget.itemGroup.name,
         itemGroupName: _nameController.text,
         parentItemGroup: _selectedParentGroup,
@@ -1121,7 +1210,6 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
   }
 }
 
-// Update your ItemGroup model
 class ItemGroup {
   final String name;
   final String value;

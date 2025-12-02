@@ -116,6 +116,7 @@ class _ItemGroupManagementScreenState
           parentItemGroup:
               _parentController.text.isEmpty ? null : _parentController.text,
           isGroup: _isGroup ? 1 : 0,
+          disabled: 0
         );
         _showSuccess('Item group updated successfully');
       }

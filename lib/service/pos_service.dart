@@ -738,8 +738,9 @@ class PosService {
   Future<Map<String, dynamic>> updateItemGroup({
     required String name,
     required String itemGroupName,
-    String? parentItemGroup,
+    required String? parentItemGroup,
     int? isGroup,
+    required int disabled,
   }) async {
     return makeRequest(
       endpoint: 'shiok_pos.api.update_item_group',
@@ -747,8 +748,9 @@ class PosService {
       body: {
         'name': name,
         'item_group_name': itemGroupName,
-        if (parentItemGroup != null) 'parent_item_group': parentItemGroup,
+        if (parentItemGroup != null) 'parent_item_group': parentItemGroup else 'parent_item_group': 'All Item Groups',
         if (isGroup != null) 'is_group': isGroup,
+        'disabled': disabled
       },
     );
   }

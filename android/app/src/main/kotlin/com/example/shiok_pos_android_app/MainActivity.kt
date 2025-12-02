@@ -87,7 +87,7 @@ class CustomerDisplay(
             Glide.with(context)
                 .load(url)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .centerInside()
+                .override(800,600)
                 .thumbnail(0.1f)
                 .placeholder(android.R.color.transparent)
                 .error(android.R.drawable.ic_menu_report_image)

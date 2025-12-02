@@ -38,6 +38,17 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
   bool? _tempSortAscending;
   String baseImageUrl = '';
 
+  // Progress tracking
+  bool _isLoadingDetails = false;
+  int _loadedItemsCount = 0;
+  int _totalItemsCount = 0;
+
+  // NEW: Scroll controller to preserve position
+  final ScrollController _scrollController = ScrollController();
+
+  // NEW: Track if we're doing a single item update
+  bool _isSingleItemUpdate = false;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +61,12 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
     _tempFilterVariantGroup = _filterVariantGroup;
     _tempSortBy = _sortBy;
     _tempSortAscending = _sortAscending;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadBaseUrl() async {
@@ -65,30 +82,28 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
   Future<void> _loadData() async {
     try {
-      if (!mounted) return; // Check if widget is still mounted
+      if (!mounted) return;
       setState(() => isLoading = true);
 
       final authState = ref.read(authProvider);
       final posProfile = authState.maybeWhen(
-        authenticated: (
-          sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,
-          itemsGroups,
-          baseUrl,
-          merchantId,
-        ) =>
+        authenticated: (sid,
+                apiKey,
+                apiSecret,
+                username,
+                email,
+                fullName,
+                posProfile,
+                branch,
+                paymentMethods,
+                taxes,
+                hasOpening,
+                tier,
+                printKitchenOrder,
+                openingDate,
+                itemsGroups,
+                baseUrl,
+                merchantId) =>
             posProfile,
         orElse: () => null,
       );
@@ -106,25 +121,9 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         PosService().getVariantGroups(),
       ]);
 
-      if (!mounted) return; // Check again after async operations
+      if (!mounted) return;
 
-      if (responses[0]['success'] == true) {
-        final List<dynamic> itemsData = responses[0]['message']['items'];
-
-        // First create basic items
-        final basicItems = itemsData
-            .map((item) => Item.fromJson(item, baseUrl: baseImageUrl))
-            .toList();
-
-        // Then fetch detailed information for each item
-        final detailedItems = await _fetchDetailedItems(basicItems);
-
-        if (!mounted) return; // Check before setting state
-        setState(() {
-          items = detailedItems;
-        });
-      }
-
+      // Load item groups and variant groups first
       if (responses[1]['success'] == true) {
         final List<dynamic> groupsData = responses[1]['message']['item_groups'];
         if (!mounted) return;
@@ -146,12 +145,84 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         });
       }
 
-      if (!mounted) return;
-      setState(() => isLoading = false);
+      // Show basic items immediately
+      if (responses[0]['success'] == true) {
+        final List<dynamic> itemsData = responses[0]['message']['items'];
+
+        final basicItems = itemsData
+            .map((item) => Item.fromJson(item, baseUrl: baseImageUrl))
+            .toList();
+
+        if (!mounted) return;
+        setState(() {
+          items = basicItems;
+          isLoading = false; // Show items immediately
+        });
+
+        // Load detailed information in background
+        _fetchDetailedItemsInBackground(basicItems);
+      } else {
+        if (!mounted) return;
+        setState(() => isLoading = false);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoading = false);
       _showErrorToast('Failed to load data: $e');
+    }
+  }
+
+// Background loading method
+  Future<void> _fetchDetailedItemsInBackground(List<Item> basicItems) async {
+    const int batchSize = 10;
+
+    for (int i = 0; i < basicItems.length; i += batchSize) {
+      if (!mounted) break;
+
+      final batch = basicItems.skip(i).take(batchSize).toList();
+
+      final batchResults = await Future.wait(
+        batch.map((basicItem) async {
+          try {
+            if (_detailedItemsCache.containsKey(basicItem.itemCode)) {
+              return _detailedItemsCache[basicItem.itemCode]!;
+            }
+
+            final response = await PosService().getItem(basicItem.itemCode);
+
+            if (response['success'] == true) {
+              final detailedItem = Item.fromDetailedJson(
+                response['message'],
+                baseUrl: baseImageUrl,
+              );
+              _detailedItemsCache[basicItem.itemCode] = detailedItem;
+              return detailedItem;
+            } else {
+              final nonPosItem = basicItem.copyWith(isPosItem: 0);
+              _detailedItemsCache[basicItem.itemCode] = nonPosItem;
+              return nonPosItem;
+            }
+          } catch (e) {
+            final nonPosItem = basicItem.copyWith(isPosItem: 0);
+            _detailedItemsCache[basicItem.itemCode] = nonPosItem;
+            return nonPosItem;
+          }
+        }),
+      );
+
+      // Update items progressively after each batch
+      if (mounted) {
+        setState(() {
+          for (final detailedItem in batchResults) {
+            final index = items.indexWhere(
+              (item) => item.itemCode == detailedItem.itemCode,
+            );
+            if (index != -1) {
+              items[index] = detailedItem;
+            }
+          }
+        });
+      }
     }
   }
 
@@ -342,9 +413,22 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       builder: (context) => CreateItemDialog(
         itemGroups: itemGroups,
         variantGroups: variantGroups,
-        onSave: _loadData,
+        onSave: _loadDataAfterCreate, // Use special method for new items
       ),
     );
+  }
+
+  // NEW: Reload data after creating new item (scroll to top makes sense here)
+  Future<void> _loadDataAfterCreate() async {
+    await _loadData();
+    // Scroll to top to show the new item (user expects this)
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   void _showEditItemDialog(Item item) {
@@ -362,16 +446,79 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
           item: updatedItem,
           itemGroups: itemGroups,
           variantGroups: variantGroups,
-          onSave: _loadData,
+          onSave: () => _refreshSingleItem(item.itemCode),
         ),
       );
     });
   }
 
+  Future<void> _refreshSingleItem(String itemCode) async {
+    try {
+      if (!mounted) return;
+
+      // Set flag to indicate single item update
+      setState(() {
+        _isSingleItemUpdate = true;
+      });
+
+      // Fetch updated item details
+      final response = await PosService().getItem(itemCode);
+
+      if (!mounted) return;
+
+      if (response['success'] == true) {
+        final updatedItem = Item.fromDetailedJson(
+          response['message'],
+          baseUrl: baseImageUrl,
+        );
+
+        // Update cache
+        _detailedItemsCache[itemCode] = updatedItem;
+
+        // Update only the specific item in the list
+        if (!mounted) return;
+        setState(() {
+          final index = items.indexWhere((i) => i.itemCode == itemCode);
+          if (index != -1) {
+            items[index] = updatedItem;
+          }
+          _isSingleItemUpdate = false;
+        });
+
+        _showSuccessToast('Item updated successfully');
+      } else {
+        // If item not found, mark as non-POS
+        final nonPosItem = items
+            .firstWhere((i) => i.itemCode == itemCode)
+            .copyWith(isPosItem: 0);
+        _detailedItemsCache[itemCode] = nonPosItem;
+
+        if (!mounted) return;
+        setState(() {
+          final index = items.indexWhere((i) => i.itemCode == itemCode);
+          if (index != -1) {
+            items[index] = nonPosItem;
+          }
+          _isSingleItemUpdate = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSingleItemUpdate = false;
+      });
+      //_showErrorToast('Failed to refresh item: $e');
+    }
+  }
+
   Future<void> _toggleItemStatus(Item item, bool isActive) async {
     try {
       if (!mounted) return;
-      setState(() => isLoading = true);
+
+      // Show loading indicator on the specific item (optional)
+      setState(() {
+        _isSingleItemUpdate = true;
+      });
 
       // Refresh the item details first to get the latest data
       await _refreshItemDetails(item);
@@ -391,9 +538,9 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       );
 
       // Instead of reloading all data, just update this specific item
-      await _refreshItemDetails(item); // Refresh the cached item
+      await _refreshItemDetails(item);
 
-      // Update the item in the local list
+      // Update the item in the local list WITHOUT scrolling
       if (!mounted) return;
       setState(() {
         final index = items.indexWhere((i) => i.itemCode == item.itemCode);
@@ -402,6 +549,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
               item.copyWith(disabled: isActive ? 0 : 1);
           items[index] = updatedItem;
         }
+        _isSingleItemUpdate = false;
       });
 
       if (!mounted) return;
@@ -409,10 +557,10 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
           'Item ${isActive ? 'activated' : 'deactivated'} successfully');
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _isSingleItemUpdate = false;
+      });
       _showErrorToast('Failed to update status: $e');
-    } finally {
-      if (!mounted) return;
-      setState(() => isLoading = false);
     }
   }
 
@@ -437,6 +585,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: _scrollController, // ADD THIS: Attach scroll controller
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -461,6 +610,64 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
               ),
             ],
           ),
+
+          // Progress indicator for background loading
+          if (_isLoadingDetails) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: Colors.blue.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.blue.shade700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Loading item details in background...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue.shade900,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: _totalItemsCount > 0
+                          ? _loadedItemsCount / _totalItemsCount
+                          : 0,
+                      backgroundColor: Colors.blue.shade100,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.blue.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$_loadedItemsCount / $_totalItemsCount items loaded',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 16),
 
           // Search and Filter Section
@@ -500,7 +707,6 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
                   // Filters and Sorting Row
                   Row(
                     children: [
-                      // Filter Button
                       ElevatedButton.icon(
                         onPressed: () => _showFilterDialog(),
                         icon: const Icon(Icons.filter_list, size: 16),
@@ -514,8 +720,6 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
                         ),
                       ),
                       const SizedBox(width: 8),
-
-                      // Sort Button
                       ElevatedButton.icon(
                         onPressed: () => _showSortDialog(),
                         icon: Icon(
@@ -534,8 +738,6 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
                         ),
                       ),
                       const SizedBox(width: 8),
-
-                      // Reset Filters Button
                       if (_hasActiveFilters)
                         TextButton.icon(
                           onPressed: _resetFilters,
