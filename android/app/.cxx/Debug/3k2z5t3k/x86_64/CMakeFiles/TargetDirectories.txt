@@ -1,0 +1,2 @@
+C:/project/shiok_pos_android_app/android/app/.cxx/Debug/3k2z5t3k/x86_64/CMakeFiles/edit_cache.dir
+C:/project/shiok_pos_android_app/android/app/.cxx/Debug/3k2z5t3k/x86_64/CMakeFiles/rebuild_cache.dir

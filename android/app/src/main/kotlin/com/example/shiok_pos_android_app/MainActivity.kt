@@ -104,7 +104,7 @@ class CustomerDisplay(context: Context, display: Display,  private val authToken
         taxRate: String
     ) {
         handler.post {
-            orderTaxLabel.text = "GST (${taxRate}%):"
+            orderTaxLabel.text = "Tax (${taxRate}%):"
            if (taxRate == "0" || taxRate.isEmpty()) {
         orderTaxLabel.visibility = View.GONE
         orderTax.visibility = View.GONE
@@ -248,14 +248,22 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun showCustomerScreen() {
+    try {
         val displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val displays = displayManager.displays
         if (displays.size > 1) {
             val secondaryDisplay = displays[1]
             customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken)
             customerDisplay?.show()
+        } else {
+            // Log or handle no secondary display
+            println("No secondary display found")
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        // Handle exception gracefully
     }
+}
 
     private fun hideCustomerScreen() {
         customerDisplay?.cleanup()   
