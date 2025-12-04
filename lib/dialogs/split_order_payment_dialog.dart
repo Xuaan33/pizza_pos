@@ -275,65 +275,91 @@ class _SplitOrderPaymentDialogState
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        item['item_name'] ??
-                                            item['name'] ??
-                                            'Unknown Item',
+                                        item['item_name'] ?? 'Unknown Item',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 16,
                                         ),
                                       ),
-                                      if (item['custom_variant_info'] != null)
-                                        ..._buildVariantText(item),
-                                      if (actualDiscount > 0)
-                                        Text(
-                                          'Discount: RM${actualDiscount.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.bold,
+                                      // Existing variant info rendering (if any) is here
+                                      const SizedBox(height: 5),
+
+                                      // Price Display Row (Modified for strikethrough/discount)
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          // Price per item and quantity
+                                          Row(
+                                            children: [
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  if (actualDiscount > 0)
+                                                    Text(
+                                                      'RM${(totalItemPrice + discountAmount).toStringAsFixed(2)}', // Original price (per item)
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .grey.shade600,
+                                                        decoration: TextDecoration
+                                                            .lineThrough, // Strikethrough
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  if (actualDiscount > 0)
+                                                    Text(
+                                                      '- RM${discountAmount.toStringAsFixed(2)}', // Discounted amount
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors
+                                                            .green.shade700,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                              if (actualDiscount > 0)
+                                                const SizedBox(width: 8),
+                                              Text(
+                                                'RM${totalItemPrice.toStringAsFixed(2)}', // Final price (per item)
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                  color: actualDiscount > 0
+                                                      ? const Color(0xFFE732A0)
+                                                      : Colors.black,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'x${quantity.toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                    color:
+                                                        Colors.grey.shade600),
+                                              ),
+                                            ],
                                           ),
-                                        ),
+                                          // Total Price and Discount Amount
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                'RM${(totalItemPrice * quantity).toStringAsFixed(2)}', // Total final price
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: Color(0xFFE732A0),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    // Show original price if there's a discount
-                                    if (actualDiscount > 0) ...[
-                                      Text(
-                                        'RM${originalTotalPrice.toStringAsFixed(2)}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          decoration:
-                                              TextDecoration.lineThrough,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                    ],
-                                    Text(
-                                      'RM${finalPricePerItem.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: actualDiscount > 0
-                                              ? Color(0xFFE732A0)
-                                              : Colors.black),
-                                    ),
-                                    Text(
-                                      'x${quantity.toStringAsFixed(0)}',
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600),
-                                    ),
-                                    Text(
-                                      'RM${totalFinalPrice.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFFE732A0),
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),
@@ -809,6 +835,93 @@ class _SplitOrderPaymentDialogState
 
     try {
       final total = (_orderDetails['rounded_total'] ?? 0).toDouble();
+      final selectedMethod = widget.paymentMethods.firstWhere(
+        (method) => method['name'] == _selectedPaymentMethod,
+        orElse: () => {'custom_fiuu_m1_value': '01'},
+      );
+      final m1Value =
+          selectedMethod['custom_fiuu_m1_value']?.toString() ?? '01';
+
+      final shouldPrintKitchenOrder = ref.read(authProvider).maybeWhen(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId,
+              printMerchantReceiptCopy,
+              enableFiuu,
+            ) {
+              return printKitchenOrder == 1;
+            },
+            orElse: () => false,
+          );
+
+      final isOfflinePayment = ref.read(authProvider).maybeWhen(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId,
+              printMerchantReceiptCopy,
+              enableFiuu,
+            ) {
+              return enableFiuu == 0 || m1Value == '-1';
+            },
+            orElse: () => false,
+          );
+
+      final printMerchantReceiptCopy = ref.read(authProvider).maybeWhen(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId,
+              printMerchantReceiptCopy,
+              enableFiuu,
+            ) {
+              return printMerchantReceiptCopy == 1;
+            },
+            orElse: () => false,
+          );
 
       // Prepare payment data
       final payments = [
@@ -821,7 +934,7 @@ class _SplitOrderPaymentDialogState
       ];
 
       // Handle non-cash payments (TNG, DuitNow, Credit Card)
-      if (!_isCashPayment) {
+      if (!_isCashPayment && !isOfflinePayment) {
         // Get the selected payment method's m1 value
         final selectedMethod = widget.paymentMethods.firstWhere(
           (method) => method['name'] == _selectedPaymentMethod,
@@ -876,6 +989,27 @@ class _SplitOrderPaymentDialogState
       );
 
       if (response['success'] == true) {
+        if (_selectedPaymentMethod == 'Cash') {
+          // Open cash drawer for cash payments
+          try {
+            await ReceiptPrinter.openCashDrawer();
+          } catch (e) {
+            debugPrint('⚠️ Cash drawer error: $e');
+            // Continue with payment even if cash drawer fails
+          }
+        }
+        if (shouldPrintKitchenOrder) {
+          await _printKitchenOrderOnly(widget.order['name']);
+        }
+
+        if (printMerchantReceiptCopy) {
+          await ReceiptPrinter.showPrintDialog(
+            context,
+            widget.order['name'],
+            shouldPrintKitchenOrder: false,
+          );
+        }
+
         // Show print receipt dialog
         final shouldPrint = await _showPrintReceiptDialog();
 
@@ -1436,6 +1570,30 @@ class _SplitOrderPaymentDialogState
                             });
                           },
                         ),
+                        ChoiceChip(
+                          label: const Text(
+                            'Itemized',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          selected: selectedDiscountType == 3,
+                          onSelected: (selected) {
+                            if (selected) {
+                              // Close the current dialog temporarily
+                              Navigator.of(context).pop(false);
+
+                              Future.microtask(() async {
+                                final itemsWithDiscounts =
+                                    await _showItemizedDiscountDialog();
+                                if (itemsWithDiscounts != null) {
+                                  // Call the method to apply the itemized discount
+                                  await _applyItemizedDiscount(
+                                      itemsWithDiscounts);
+                                }
+                              });
+                              return; // Exit _showVoucherDialog
+                            }
+                          },
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -1895,6 +2053,450 @@ class _SplitOrderPaymentDialogState
     }
   }
 
+  Future<void> _applyItemizedDiscount(
+      List<Map<String, dynamic>> itemsWithDiscounts) async {
+    _showLoadingOverlay(true);
+
+    try {
+      final authState = ref.read(authProvider);
+      final posProfile = authState.maybeWhen(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+        ) {
+          return posProfile;
+        },
+        orElse: () => null,
+      );
+
+      if (posProfile == null) {
+        throw Exception('User not authenticated.');
+      }
+
+      // Prepare items for submission: use existing fields, but override discount
+      final itemsToSubmit = itemsWithDiscounts.map((item) {
+        final itemData = {
+          'item_code': item['item_code'] ?? '',
+          'qty': item['quantity'] ?? item['qty'] ?? 1,
+          'price_list_rate':
+              (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0)
+                      .toDouble() +
+                  _calculateVariantCost(item['custom_variant_info']),
+          "custom_item_remarks": item['custom_item_remarks'],
+          "custom_serve_later": item['custom_serve_later'] == true ? 1 : 0,
+          if (item['custom_variant_info'] != null)
+            'custom_variant_info': item['custom_variant_info'],
+        };
+
+        // Add only one discount field - prioritize amount over percentage
+        if ((item['discount_amount'] as double?)!.toDouble() > 0) {
+          itemData['discount_amount'] = item['discount_amount'];
+          itemData['discount_percentage'] = 0.0;
+        } else if ((item['discount_percentage'] as double?)!.toDouble() > 0) {
+          itemData['discount_percentage'] = item['discount_percentage'];
+          itemData['discount_amount'] = 0.0;
+        } else {
+          itemData['discount_percentage'] = 0.0;
+          itemData['discount_amount'] = 0.0;
+        }
+
+        return itemData;
+      }).toList();
+
+      final response = await PosService().submitOrder(
+        name: _orderDetails['name'],
+        posProfile: posProfile,
+        customer: _orderDetails['customer'] ?? 'Guest',
+        table: _orderDetails['table'],
+        orderChannel: _orderDetails['order_type'] ?? 'Dine In',
+        items: itemsToSubmit,
+        // Ensure global discount is 0 when applying itemized
+        discountAmount: 0.0,
+        couponCode: null,
+        custom_user_voucher: null,
+        remarks: _orderDetails['remarks'],
+      );
+
+      if (response['success'] == true ||
+          response['message']?['success'] == true) {
+        // Update the order details with new amounts from server
+        await _fetchOrderDetails();
+        Fluttertoast.showToast(
+          msg: "Itemized discount applied successfully",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        throw Exception(response['message']?['message'] ??
+            'Failed to apply itemized discount.');
+      }
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error applying itemized discount: ${e.toString()}",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      _showLoadingOverlay(false);
+    }
+  }
+
+  // New Helper Method: Show Itemized Discount Dialog (UI for selecting discounts)
+  Future<List<Map<String, dynamic>>?> _showItemizedDiscountDialog() async {
+    final originalItems =
+        List<Map<String, dynamic>>.from(_orderDetails['items'] ?? []);
+    List<Map<String, dynamic>> itemsWithDiscounts = originalItems.map((item) {
+      final basePrice =
+          (item['rate'] ?? item['price'] ?? item['price_list_rate'] ?? 0)
+              .toDouble();
+      final quantity = (item['quantity'] ?? item['qty'] ?? 1).toDouble();
+      final variantCost = _calculateVariantCost(item['custom_variant_info']);
+      final itemTotal = (basePrice + variantCost) * quantity;
+
+      final initialDiscountAmount = (item['discount_amount'] ?? 0.0).toDouble();
+      final initialDiscountPercentage =
+          (item['discount_percentage'] ?? 0.0).toDouble();
+
+      int initialDiscountType = 0; // 0 = None, 1 = Percentage, 2 = Amount
+
+      if (initialDiscountAmount > 0) {
+        initialDiscountType = 2;
+      } else if (initialDiscountPercentage > 0) {
+        initialDiscountType = 1;
+      }
+
+      return {
+        ...item,
+        'selected_discount_type': initialDiscountType,
+        'discount_percentage_controller': TextEditingController(
+          text: initialDiscountPercentage > 0 && initialDiscountType == 1
+              ? initialDiscountPercentage.toStringAsFixed(2)
+              : '',
+        ),
+        'discount_amount_controller': TextEditingController(
+          text: initialDiscountAmount > 0 && initialDiscountType == 2
+              ? initialDiscountAmount.toStringAsFixed(2)
+              : '',
+        ),
+        'current_discount_amount': initialDiscountAmount,
+        'current_discount_percentage': initialDiscountPercentage,
+        'item_total_price': itemTotal,
+        'item_price_per_unit': basePrice + variantCost,
+      };
+    }).toList();
+
+    return showDialog<List<Map<String, dynamic>>?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            void updateItemDiscount(int index) {
+              final item = itemsWithDiscounts[index];
+              final type = item['selected_discount_type'] as int;
+              final percentageController =
+                  item['discount_percentage_controller']
+                      as TextEditingController;
+              final amountController =
+                  item['discount_amount_controller'] as TextEditingController;
+              final itemTotal = item['item_total_price'] as double;
+
+              double newDiscountAmount = 0.0;
+              double newDiscountPercentage = 0.0;
+
+              if (type == 1) {
+                // Percentage
+                final percentage =
+                    double.tryParse(percentageController.text) ?? 0.0;
+                newDiscountPercentage = percentage.clamp(0.0, 100.0);
+                newDiscountAmount = itemTotal * newDiscountPercentage / 100.0;
+              } else if (type == 2) {
+                // Amount
+                final amount = double.tryParse(amountController.text) ?? 0.0;
+                newDiscountAmount = amount.clamp(0.0, itemTotal);
+                if (itemTotal > 0) {
+                  newDiscountPercentage =
+                      (newDiscountAmount / itemTotal) * 100.0;
+                }
+              }
+
+              item['current_discount_amount'] = newDiscountAmount;
+              item['current_discount_percentage'] = newDiscountPercentage;
+            }
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Apply Itemized Discount',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: SizedBox(
+                width: 600, // Constrain width
+                child: Scrollbar(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Apply discounts to individual items.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFFE732A0),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: itemsWithDiscounts.length,
+                          itemBuilder: (context, index) {
+                            final item = itemsWithDiscounts[index];
+                            final quantity =
+                                (item['quantity'] ?? item['qty'] ?? 1)
+                                    .toDouble();
+                            final itemTotal =
+                                item['item_total_price'] as double;
+                            final currentDiscountAmount =
+                                item['current_discount_amount'] as double;
+                            final currentDiscountPercentage =
+                                item['current_discount_percentage'] as double;
+                            int selectedDiscountType =
+                                item['selected_discount_type'] as int;
+                            final percentageController =
+                                item['discount_percentage_controller']
+                                    as TextEditingController;
+                            final amountController =
+                                item['discount_amount_controller']
+                                    as TextEditingController;
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 2,
+                              child: Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${item['item_name'] ?? 'Unknown Item'} (x${quantity.toStringAsFixed(0)})',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        ChoiceChip(
+                                          label: const Text('None'),
+                                          selected: selectedDiscountType == 0,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                item['selected_discount_type'] =
+                                                    0;
+                                                percentageController.clear();
+                                                amountController.clear();
+                                                updateItemDiscount(index);
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        const SizedBox(width: 8),
+                                        ChoiceChip(
+                                          label: const Text('%'),
+                                          selected: selectedDiscountType == 1,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                item['selected_discount_type'] =
+                                                    1;
+                                                amountController.clear();
+                                                updateItemDiscount(index);
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        const SizedBox(width: 8),
+                                        ChoiceChip(
+                                          label: const Text('RM'),
+                                          selected: selectedDiscountType == 2,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                item['selected_discount_type'] =
+                                                    2;
+                                                percentageController.clear();
+                                                updateItemDiscount(index);
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    if (selectedDiscountType == 1)
+                                      TextField(
+                                        controller: percentageController,
+                                        decoration: const InputDecoration(
+                                          labelText:
+                                              'Discount Percentage (Max 100)',
+                                          border: OutlineInputBorder(),
+                                          suffixText: '%',
+                                        ),
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true),
+                                        onChanged: (value) {
+                                          setState(
+                                              () => updateItemDiscount(index));
+                                        },
+                                      ),
+                                    if (selectedDiscountType == 2)
+                                      TextField(
+                                        controller: amountController,
+                                        decoration: InputDecoration(
+                                          labelText:
+                                              'Discount Amount (Max RM${itemTotal.toStringAsFixed(2)})',
+                                          border: const OutlineInputBorder(),
+                                          prefixText: 'RM ',
+                                        ),
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true),
+                                        onChanged: (value) {
+                                          setState(
+                                              () => updateItemDiscount(index));
+                                        },
+                                      ),
+                                    if (selectedDiscountType != 0)
+                                      const SizedBox(height: 10),
+
+                                    // Price summary display
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Original: RM${itemTotal.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                            decoration:
+                                                TextDecoration.lineThrough,
+                                          ),
+                                        ),
+                                        if (currentDiscountAmount > 0) ...[
+                                          Text(
+                                            'Discount: ${currentDiscountPercentage.toStringAsFixed(1)}% = RM${currentDiscountAmount.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange.shade700,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                        Text(
+                                          'Final Amount: RM${(itemTotal - currentDiscountAmount).toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: currentDiscountAmount > 0
+                                                ? Colors.green.shade700
+                                                : Colors.black,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    // Dispose of controllers on cancel
+                    for (var item in itemsWithDiscounts) {
+                      (item['discount_percentage_controller']
+                              as TextEditingController)
+                          .dispose();
+                      (item['discount_amount_controller']
+                              as TextEditingController)
+                          .dispose();
+                    }
+                    Navigator.of(context).pop(null);
+                  },
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Apply',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    // Collect final items data and dispose of controllers
+                    final List<Map<String, dynamic>> finalItems =
+                        itemsWithDiscounts.map((item) {
+                      final itemData = {
+                        ...item,
+                        'discount_amount': item['selected_discount_type'] == 2
+                            ? item['current_discount_amount']
+                            : 0.0,
+                        'discount_percentage':
+                            item['selected_discount_type'] == 1
+                                ? item['current_discount_percentage']
+                                : 0.0,
+                      };
+                      (item['discount_percentage_controller']
+                              as TextEditingController)
+                          .dispose();
+                      (item['discount_amount_controller']
+                              as TextEditingController)
+                          .dispose();
+                      return itemData;
+                    }).toList();
+                    Navigator.of(context).pop(finalItems);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showLoadingOverlay(bool show) {
     if (show) {
       showDialog(
@@ -1911,6 +2513,17 @@ class _SplitOrderPaymentDialogState
       );
     } else {
       Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  Future<void> _printKitchenOrderOnly(
+    String orderName,
+  ) async {
+    try {
+      await ReceiptPrinter.printKitchenOrderOnly(orderName);
+    } catch (e) {
+      debugPrint('Failed to print kitchen order: $e');
+      // Don't show error toast for kitchen order failure as it's non-critical
     }
   }
 

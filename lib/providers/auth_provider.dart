@@ -202,8 +202,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setString(
             'merchant_id', response['merchant_id'] ?? merchantId);
         await prefs.setInt('print_merchant_receipt_copy',
-            response['print_merchant_receipt_copy']);
-        await prefs.setInt('enable_fiuu', response['enable_fiuu']);
+            response['print_merchant_receipt_copy'] ?? 0);
+        await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
 
         DateTime? openingDate;
 
@@ -293,8 +293,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
     await prefs.setString('merchant_id', response['merchant_id']);
     await prefs.setInt(
-        'print_merchant_receipt_copy', response['print_merchant_receipt_copy']);
-    await prefs.setInt('enable_fiuu', response['enable_fiuu']);
+        'print_merchant_receipt_copy', response['print_merchant_receipt_copy'] ?? 0);
+    await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
   }
 
   // Add method to force refresh session data

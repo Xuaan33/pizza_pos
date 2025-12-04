@@ -29,7 +29,8 @@ class AuthService {
   }
 
   // Store password securely (consider using flutter_secure_storage)
-  static Future<void> storeCredentials(String username, String password, String merchantId) async {
+  static Future<void> storeCredentials(
+      String username, String password, String merchantId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('username', username);
     // For production, use flutter_secure_storage instead
@@ -80,10 +81,8 @@ class AuthService {
           'tier': message['tier'],
           'print_kitchen_order': message['print_kitchen_order'] ?? 1,
           'item_groups': message['item_groups'] ?? [],
-          'base_url':
-              message['url'] ?? 'https://asdf.byondwave.com',
-          'merchant_id':
-              message['merchant_id'] ?? merchantId,
+          'base_url': message['url'] ?? 'https://asdf.byondwave.com',
+          'merchant_id': message['merchant_id'] ?? merchantId,
           'print_merchant_receipt_copy': message['print_merchant_receipt_copy'],
           'enable_fiuu': message['enable_fiuu'],
         };
@@ -142,6 +141,5 @@ class AuthService {
     await prefs.remove('item_groups');
     await prefs.remove('last_login');
     await prefs.remove('base_url');
-    
   }
 }
