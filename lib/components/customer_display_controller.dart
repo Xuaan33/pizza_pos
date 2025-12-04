@@ -30,7 +30,6 @@ class CustomerDisplayController {
     required String taxRate,
   }) async {
     try {
-      await _channel.invokeMethod('showCustomerScreen', {'authToken': await AuthService.getAuthToken()});
       await _channel.invokeMethod('updateOrderDisplay', {
         'items': items.map((item) {
           return {

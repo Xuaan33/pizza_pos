@@ -25,7 +25,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with AutomaticKeepAliveClientMixin {
   static const String baseUrl = 'https://mejaa.joydivisionpadel.com';
   int _selectedIndex = 0;
   bool _isPosConnected = false;
@@ -71,6 +72,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return sections;
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -464,6 +468,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final authState = ref.watch(authProvider);
 
     return authState.when(
@@ -1840,23 +1845,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         child: _isLoadingClosing
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                isDisabled && !_isLoadingClosing
+                    ? 'No Opening Entry'
+                    : 'Create Closing Entry',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            )
-          : Text(
-          isDisabled && !_isLoadingClosing
-              ? 'No Opening Entry'
-              : 'Create Closing Entry',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
     );
   }

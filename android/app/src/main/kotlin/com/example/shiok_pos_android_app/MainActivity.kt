@@ -223,6 +223,9 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "updateOrderDisplay" -> {
+                         if (customerDisplay == null || !isDisplayStillValid()) {
+                            showCustomerScreen()
+                        }
                         val items = call.argument<List<Map<String, Any>>>("items") ?: emptyList<Map<String, Any>>()
                         val subtotal = call.argument<Double>("subtotal") ?: 0.0
                         val tax = call.argument<Double>("tax") ?: 0.0
@@ -248,22 +251,26 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun showCustomerScreen() {
-    try {
-        val displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val displays = displayManager.displays
-        if (displays.size > 1) {
-            val secondaryDisplay = displays[1]
-            customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken)
-            customerDisplay?.show()
-        } else {
-            // Log or handle no secondary display
-            println("No secondary display found")
+        try {
+            val displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            val displays = displayManager.displays
+            if (displays.size > 1) {
+                val secondaryDisplay = displays[1]
+                customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken)
+                customerDisplay?.show()
+            } else {
+                // Log or handle no secondary display
+                println("No secondary display found")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Handle exception gracefully
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        // Handle exception gracefully
     }
-}
+    
+    private fun isDisplayStillValid(): Boolean {
+            return customerDisplay?.display?.isValid == true
+    }
 
     private fun hideCustomerScreen() {
         customerDisplay?.cleanup()   

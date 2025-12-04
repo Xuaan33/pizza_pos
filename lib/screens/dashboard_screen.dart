@@ -15,7 +15,8 @@ class DashboardScreen extends ConsumerStatefulWidget {
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
+    with AutomaticKeepAliveClientMixin {
   late Future<Map<String, dynamic>> _dashboardData;
   late String _posProfile;
   String baseImageUrl = 'https://mejaa.joydivisionpadel.com';
@@ -27,6 +28,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _customVouchersLimit = 10;
   int _customLimit = 10;
   late Future<double> _payLaterData;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -410,6 +414,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final authState = ref.watch(authProvider);
 
     return authState.when(

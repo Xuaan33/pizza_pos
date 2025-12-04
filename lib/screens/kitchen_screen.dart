@@ -14,7 +14,8 @@ class KitchenScreen extends ConsumerStatefulWidget {
   ConsumerState<KitchenScreen> createState() => _KitchenScreenState();
 }
 
-class _KitchenScreenState extends ConsumerState<KitchenScreen> {
+class _KitchenScreenState extends ConsumerState<KitchenScreen>
+    with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>> _kitchenStations = [];
   List<Map<String, dynamic>> _kitchenOrders = [];
   String? _selectedKitchenStation;
@@ -22,6 +23,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   bool _isLoadingOrders = false;
   DateTime _selectedDate = DateTime.now();
 
+  @override
+  bool get wantKeepAlive => true;
   @override
   void initState() {
     super.initState();
@@ -291,6 +294,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: Padding(
@@ -1107,7 +1111,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Qty: ${item['qty'].toStringAsFixed(0) ?? '1'}'),
+                                Text(
+                                    'Qty: ${item['qty'].toStringAsFixed(0) ?? '1'}'),
                                 if (item['custom_item_remarks'] != null &&
                                     item['custom_item_remarks']
                                         .toString()

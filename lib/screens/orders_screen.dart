@@ -63,7 +63,8 @@ class OrdersScreen extends ConsumerStatefulWidget {
   ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends ConsumerState<OrdersScreen> {
+class _OrdersScreenState extends ConsumerState<OrdersScreen>
+    with AutomaticKeepAliveClientMixin {
   String _searchQuery = '';
   Map<String, dynamic>? _selectedOrder;
   List<Map<String, dynamic>> _paymentMethods = [];
@@ -189,6 +190,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     final filteredOrders = _filterOrders(widget.orders);
     final authState = ref.watch(authProvider);
 
@@ -495,50 +498,52 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           ),
           SizedBox(height: 5),
           // Order list with infinite scrolling
-        Expanded(
-          child: widget.isLoading
-              ? Center(child: CircularProgressIndicator())
-              : orders.isEmpty
-                  ? Center(child: Text('No orders found'))
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: (scrollNotification) {
-                        // This will be handled by the scroll controller in main_layout
-                        return false;
-                      },
-                      child: ListView.builder(
-                        controller: MainLayout.of(context)?.ordersScrollController,
-                        itemCount: orders.length + 1, // +1 for loading indicator
-                        itemBuilder: (context, index) {
-                          if (index < orders.length) {
-                            return _buildOrderListItem(orders[index]);
-                          } else {
-                            // Show loading indicator at the bottom
-                            return _buildLoadingIndicator();
-                          }
+          Expanded(
+            child: widget.isLoading
+                ? Center(child: CircularProgressIndicator())
+                : orders.isEmpty
+                    ? Center(child: Text('No orders found'))
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (scrollNotification) {
+                          // This will be handled by the scroll controller in main_layout
+                          return false;
                         },
+                        child: ListView.builder(
+                          controller:
+                              MainLayout.of(context)?.ordersScrollController,
+                          itemCount:
+                              orders.length + 1, // +1 for loading indicator
+                          itemBuilder: (context, index) {
+                            if (index < orders.length) {
+                              return _buildOrderListItem(orders[index]);
+                            } else {
+                              // Show loading indicator at the bottom
+                              return _buildLoadingIndicator();
+                            }
+                          },
+                        ),
                       ),
-                    ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildLoadingIndicator() {
-  final mainLayout = MainLayout.of(context);
-  if (mainLayout == null || 
-      !mainLayout.hasMoreOrders || 
-      mainLayout.isLoadingMore == false) {
-    return SizedBox.shrink();
+          ),
+        ],
+      ),
+    );
   }
-  
-  return Padding(
-    padding: EdgeInsets.symmetric(vertical: 16),
-    child: Center(
-      child: CircularProgressIndicator(),
-    ),
-  );
-}
+
+  Widget _buildLoadingIndicator() {
+    final mainLayout = MainLayout.of(context);
+    if (mainLayout == null ||
+        !mainLayout.hasMoreOrders ||
+        mainLayout.isLoadingMore == false) {
+      return SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
 
   Widget _buildOrderListItem(Map<String, dynamic> order) {
     final isSelected = _selectedOrder != null &&

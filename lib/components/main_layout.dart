@@ -23,7 +23,8 @@ class MainLayout extends ConsumerStatefulWidget {
   ConsumerState<MainLayout> createState() => MainLayoutState();
 }
 
-class MainLayoutState extends ConsumerState<MainLayout> {
+class MainLayoutState extends ConsumerState<MainLayout>
+    with AutomaticKeepAliveClientMixin {
   int _selectedTabIndex = 0;
   List<Map<String, dynamic>> activeOrders = [];
   Set<int> tablesWithSubmittedOrders = {};
@@ -45,6 +46,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   ScrollController get ordersScrollController => _ordersScrollController;
   bool get hasMoreOrders => _hasMoreOrders;
   bool get isLoadingMore => _isLoadingMore;
+  bool _customerDisplayInitialized = false;
 
   final List<int> _limitOptions = [30, 50, 100];
 
@@ -52,13 +54,30 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       GlobalKey<RefreshIndicatorState>();
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _ordersScrollController.addListener(_onOrdersScroll);
+    //_ordersScrollController.addListener(_onOrdersScroll);
     // Check auth state when widget initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeCustomerDisplay();
       ref.read(authProvider.notifier).loadSession();
     });
+  }
+
+  Future<void> _initializeCustomerDisplay() async {
+    if (!_customerDisplayInitialized) {
+      try {
+        await CustomerDisplayController.showCustomerScreen();
+        setState(() {
+          _customerDisplayInitialized = true;
+        });
+      } catch (e) {
+        print('Error initializing customer display: $e');
+      }
+    }
   }
 
   @override
@@ -74,7 +93,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         !_isLoadingMore &&
         _hasMoreOrders &&
         _selectedTabIndex == (_getOrdersTabIndex())) {
-      _loadMoreOrders();
+      //_loadMoreOrders();
     }
   }
 
@@ -348,6 +367,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final authState = ref.watch(authProvider);
 
     return authState.when(

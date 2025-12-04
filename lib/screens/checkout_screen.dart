@@ -38,7 +38,8 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
-class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
+class _CheckoutScreenState extends ConsumerState<CheckoutScreen>
+    with AutomaticKeepAliveClientMixin {
   String _selectedPaymentMethod = '';
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isLoadingPaymentMethods = true;
@@ -70,6 +71,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   TextInputFormatter get _uppercaseFormatter =>
       FilteringTextInputFormatter.allow(RegExp(r'[A-Z0-9]'));
 
+  @override
+  bool get wantKeepAlive => true;
   @override
   void dispose() {
     _isDisposed = true; // Mark as disposed
@@ -402,6 +405,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final authState = ref.watch(authProvider);
     return authState.when(
         initial: () => const Center(child: CircularProgressIndicator()),

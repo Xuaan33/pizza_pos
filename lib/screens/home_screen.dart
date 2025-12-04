@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -12,6 +13,7 @@ import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
+import 'dart:async';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final String tableNumber;
@@ -29,7 +31,8 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with AutomaticKeepAliveClientMixin {
   int _selectedItemGroupIndex = 0;
   List<Map<String, dynamic>> itemGroups = [];
   List<Map<String, dynamic>> availableItems = [];
@@ -44,8 +47,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       {}; // key: item_code, value: available stock
   bool _isLoadingStock = false;
   final ScrollController _scrollController = ScrollController();
-  bool _canScrollLeft = false;
-  bool _canScrollRight = false;
+  final ValueNotifier<bool> _canScrollLeft = ValueNotifier(false);
+  final ValueNotifier<bool> _canScrollRight = ValueNotifier(false);
+  Timer? _searchDebounce;
+  bool _isProcessingCheckout = false;
+  bool _isProcessingSubmit = false;
+  List<Map<String, dynamic>>? _cachedFilteredItems;
+  String? _lastSearchQuery;
+  int? _lastSelectedIndex;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -127,19 +139,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
-    // Dispose all remark controllers
+    _searchDebounce?.cancel();
     _scrollController.dispose();
+    searchController.dispose();
+
+    // Dispose text controllers
+    for (var controller in _itemRemarkControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   void _updateScrollButtons() {
     if (!mounted) return;
-
     final scrollPosition = _scrollController.position;
-    setState(() {
-      _canScrollLeft = scrollPosition.pixels > 0;
-      _canScrollRight = scrollPosition.pixels < scrollPosition.maxScrollExtent;
-    });
+    _canScrollLeft.value = scrollPosition.pixels > 0;
+    _canScrollRight.value =
+        scrollPosition.pixels < scrollPosition.maxScrollExtent;
   }
 
   void _scrollLeft() {
@@ -482,6 +498,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     // Get the correct items list based on selection
     List<Map<String, dynamic>> displayedItems = _getFilteredItems();
     final authState = ref.watch(authProvider);
@@ -738,7 +756,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 // Left scroll arrow
                                                 if (itemGroups.length >
                                                         _getFirstRowCount() &&
-                                                    _canScrollLeft)
+                                                    _canScrollLeft.value)
                                                   Positioned(
                                                     left: 0,
                                                     top: 0,
@@ -789,7 +807,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 // Right scroll arrow
                                                 if (itemGroups.length >
                                                         _getFirstRowCount() &&
-                                                    _canScrollRight)
+                                                    _canScrollRight.value)
                                                   Positioned(
                                                     right: 0,
                                                     top: 0,
@@ -851,8 +869,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     child: TextField(
                                       controller: searchController,
                                       onChanged: (value) {
-                                        setState(() {
-                                          searchQuery = value;
+                                        // Cancel previous timer
+                                        _searchDebounce?.cancel();
+
+                                        // Create new timer - wait 300ms after user stops typing
+                                        _searchDebounce = Timer(
+                                            const Duration(milliseconds: 300),
+                                            () {
+                                          if (mounted) {
+                                            setState(() {
+                                              searchQuery = value;
+                                            });
+                                          }
                                         });
                                       },
                                       decoration: InputDecoration(
@@ -1182,6 +1210,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   List<Map<String, dynamic>> _getFilteredItems() {
+    // Return cached result if inputs haven't changed
+    if (_cachedFilteredItems != null &&
+        _lastSearchQuery == searchQuery &&
+        _lastSelectedIndex == _selectedItemGroupIndex) {
+      return _cachedFilteredItems!;
+    }
+
     String selectedGroup = itemGroups.isNotEmpty
         ? itemGroups[_selectedItemGroupIndex]['value']
         : 'All';
@@ -1198,6 +1233,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     filteredItems.sort((a, b) => (a['item_name'] ?? '')
         .toLowerCase()
         .compareTo((b['item_name'] ?? '').toLowerCase()));
+
+    // Cache the result
+    _cachedFilteredItems = filteredItems;
+    _lastSearchQuery = searchQuery;
+    _lastSelectedIndex = _selectedItemGroupIndex;
 
     return filteredItems;
   }
@@ -1605,13 +1645,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    // Check if we're adding a new item or increasing quantity of existing one
     int existingIndex = currentOrderItems.indexWhere((orderItem) =>
         orderItem['item_code'] == item['item_code'] &&
         _compareOptions(orderItem['options'], selectedOptions));
 
     if (existingIndex != -1) {
-      // For existing item with same options, check if we can increase quantity
       if (currentOrderItems[existingIndex]['quantity'] >= availableStock) {
         Fluttertoast.showToast(
           msg: "Cannot add more than available stock ($availableStock)",
@@ -1621,11 +1659,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
         return;
       }
+
+      // Single setState call
       setState(() {
         currentOrderItems[existingIndex]['quantity']++;
       });
     } else {
-      // For new item or new variant combination, check total stock across all variants
       int totalQuantityOfAllVariants = currentOrderItems
           .where((orderItem) => orderItem['item_code'] == itemCode)
           .fold(0,
@@ -1641,7 +1680,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
 
-      // Same as your existing code for adding new item...
+      // Prepare all data BEFORE setState
       List<Map<String, dynamic>> variantInfo = [];
       double totalAdditionalCost = 0.0;
 
@@ -1675,23 +1714,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       }
 
+      Map<String, dynamic> newOrderItem = {
+        'item_code': item['item_code'],
+        'name': item['item_name'],
+        'price': (item['price_list_rate'] ?? 0),
+        'image': item['image'] ?? 'assets/pizza.png',
+        'quantity': 1,
+        'options': selectedOptions,
+        'option_text': selectedOptions.entries
+            .map((e) => '${e.key}: ${e.value.join(", ")}')
+            .join(', '),
+        'custom_serve_later': false,
+        'custom_item_remarks': '',
+        'structured_variant_info': item['structured_variant_info'],
+        'custom_variant_info': variantInfo,
+        'additional_cost': totalAdditionalCost,
+      };
+
+      // Single setState call with all prepared data
       setState(() {
-        Map<String, dynamic> newOrderItem = {
-          'item_code': item['item_code'],
-          'name': item['item_name'],
-          'price': (item['price_list_rate'] ?? 0),
-          'image': item['image'] ?? 'assets/pizza.png',
-          'quantity': 1,
-          'options': selectedOptions,
-          'option_text': selectedOptions.entries
-              .map((e) => '${e.key}: ${e.value.join(", ")}')
-              .join(', '),
-          'custom_serve_later': false,
-          'custom_item_remarks': '',
-          'structured_variant_info': item['structured_variant_info'],
-          'custom_variant_info': variantInfo,
-          'additional_cost': totalAdditionalCost,
-        };
         currentOrderItems.add(newOrderItem);
       });
     }
@@ -2291,8 +2332,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         padding: const EdgeInsets.all(
                             12.0), // Adjust the value as needed
                         child: item['image'] != null
-                            ? Image.network(
-                                '$baseImageUrl${item['image']}',
+                            ? CachedNetworkImage(
+                                imageUrl: '$baseImageUrl${item['image']}',
                                 fit: BoxFit.cover,
                                 height: 70,
                                 width: double.infinity,
@@ -2300,7 +2341,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ? null
                                     : Colors.grey.withOpacity(0.5),
                                 colorBlendMode: BlendMode.saturation,
-                                errorBuilder: (context, error, stackTrace) =>
+                                errorWidget: (context, error, stackTrace) =>
                                     Image.asset(
                                   'assets/pizza.png',
                                   fit: BoxFit.cover,
