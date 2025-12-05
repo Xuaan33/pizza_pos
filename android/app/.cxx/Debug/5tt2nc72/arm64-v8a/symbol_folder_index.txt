@@ -1,0 +1,1 @@
+C:\project\Flutter\pizzapos\build\app\intermediates\cxx\Debug\5tt2nc72\obj\arm64-v8a
