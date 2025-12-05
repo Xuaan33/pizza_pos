@@ -1,3 +1,4 @@
-# shiok_pos_android_app
+# Android POS App
 
-Testing 123
+Personal project for Android point-of-sale system. 
+Currently maintained and updated for client projects.
