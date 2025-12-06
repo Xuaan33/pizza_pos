@@ -1,0 +1,2 @@
+C:/project/Flutter/pizzapos/android/app/.cxx/RelWithDebInfo/6adj8573/x86_64/CMakeFiles/edit_cache.dir
+C:/project/Flutter/pizzapos/android/app/.cxx/RelWithDebInfo/6adj8573/x86_64/CMakeFiles/rebuild_cache.dir
