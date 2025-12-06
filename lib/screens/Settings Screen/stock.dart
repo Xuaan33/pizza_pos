@@ -65,10 +65,6 @@ class _StockManagementSectionState
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
@@ -89,9 +85,9 @@ class _StockManagementSectionState
                 if (rawImage.startsWith('http')) {
                   imageUrl = rawImage;
                 } else if (rawImage.startsWith('/')) {
-                  imageUrl = '$baseUrl$rawImage';
+                  imageUrl = 'https://mejaa.joydivisionpadel.com/$rawImage';
                 } else {
-                  imageUrl = '$baseUrl/$rawImage';
+                  imageUrl = 'https://mejaa.joydivisionpadel.com//$rawImage';
                 }
               }
 
@@ -169,10 +165,6 @@ class _StockManagementSectionState
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           final response = await PosService().getStockQuantity(
             posProfile: posProfile,
@@ -465,10 +457,6 @@ class _StockManagementSectionState
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           final itemsToStockIn = [
             {
@@ -533,10 +521,6 @@ class _StockManagementSectionState
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           final currentQty = (item['actual_qty'] ?? 0).toDouble();
           final newQty = currentQty - quantityToRemove;

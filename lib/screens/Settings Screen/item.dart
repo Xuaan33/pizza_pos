@@ -103,10 +103,6 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) =>
             posProfile,
         orElse: () => null,

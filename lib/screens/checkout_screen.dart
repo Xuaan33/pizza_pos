@@ -122,10 +122,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
@@ -195,10 +191,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -343,10 +335,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) async {
         try {
           final newStockQuantities = <String, int>{};
@@ -470,10 +458,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final currentItems = _isEditing ? _editableItems : orderItems;
@@ -1698,10 +1682,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             // Filter out taxes with 0% rate and calculate each tax
             final applicableTaxes = taxes.where((tax) {
@@ -1845,10 +1825,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       printKitchenOrder,
                       openingDate,
                       itemsGroups,
-                      baseUrl,
-                      merchantId,
-                      printMerchantReceiptCopy,
-                      enableFiuu,
                     ) {
                       return posProfile;
                     },
@@ -2039,42 +2015,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
-            return enableFiuu == 0 || m1Value == '-1';
+            return m1Value == '-1';
           },
           orElse: () => false,
         );
 
-    final printMerchantReceiptCopy = ref.read(authProvider).maybeWhen(
-          authenticated: (
-            sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,
-            itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
-          ) {
-            return printMerchantReceiptCopy == 1;
-          },
-          orElse: () => false,
-        );
 
     // Show processing dialog for non-cash payments that require POS terminal
     Completer<void>? dialogCompleter;
@@ -2125,10 +2071,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               printKitchenOrder,
               openingDate,
               itemsGroups,
-              baseUrl,
-              merchantId,
-              printMerchantReceiptCopy,
-              enableFiuu,
             ) {
               return printKitchenOrder == 1;
             },
@@ -2316,13 +2258,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             await _printKitchenOrderOnly(invoiceName);
           }
 
-          if (printMerchantReceiptCopy) {
-            await ReceiptPrinter.showPrintDialog(
-              context,
-              invoiceName,
-              shouldPrintKitchenOrder: false,
-            );
-          }
 
           // Then show print receipt dialog
           final shouldPrintReceipt = await _showPrintReceiptDialog();
@@ -2744,10 +2679,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         return tier.toLowerCase() != 'tier 3';
       },
@@ -3829,10 +3760,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       printKitchenOrder,
                       openingDate,
                       itemsGroups,
-                      baseUrl,
-                      merchantId,
-                      printMerchantReceiptCopy,
-                      enableFiuu,
                     ) {
                       return posProfile;
                     },
@@ -3925,10 +3852,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -4037,10 +3960,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) =>
                       posProfile,
                   orElse: () => null,
@@ -4182,10 +4101,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       printKitchenOrder,
                       openingDate,
                       itemsGroups,
-                      baseUrl,
-                      merchantId,
-                      printMerchantReceiptCopy,
-                      enableFiuu,
                     ) {
                       return posProfile;
                     },
@@ -4352,10 +4267,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             // Find the GST tax rate from the taxes array
             final gstTax = taxes.firstWhere(
@@ -4700,10 +4611,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -4806,10 +4713,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     printKitchenOrde,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -4923,10 +4826,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) {
           return posProfile;
         },
@@ -5249,10 +5148,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) =>
             posProfile,
         orElse: () => null,
@@ -5364,10 +5259,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             if (taxes.isEmpty) {
               return {'name': '', 'rate': 0.0};
@@ -5410,10 +5301,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             return List<Map<String, dynamic>>.from(taxes);
           },
@@ -5452,10 +5339,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             // Filter out taxes with 0% rate
             final applicableTaxes = taxes.where((tax) {

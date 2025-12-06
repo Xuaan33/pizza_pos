@@ -29,11 +29,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final printKitchenOrder = prefs.getInt('print_kitchen_order');
     final openingDateString = prefs.getString('opening_date');
     final itemsGroupsJson = prefs.getString('item_groups');
-    final baseUrl = prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
-    final merchantId = prefs.getString('merchant_id');
-    final printMerchantReceiptCopy =
-        prefs.getInt('print_merchant_receipt_copy');
-    final enableFiuu = prefs.getInt('enable_fiuu');
+    // final baseUrl = prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+    // final merchantId = prefs.getString('merchant_id');
+    // final printMerchantReceiptCopy =
+    //     prefs.getInt('print_merchant_receipt_copy');
+    // final enableFiuu = prefs.getInt('enable_fiuu');
 
     // Parse opening date if it exists
     DateTime? openingDate;
@@ -68,8 +68,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         apiSecret != null &&
         username != null &&
         posProfile != null &&
-        branch != null &&
-        merchantId != null) {
+        branch != null) {
       state = AuthState.authenticated(
           sid: sid,
           apiKey: apiKey,
@@ -90,10 +89,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
           printKitchenOrder: printKitchenOrder ?? 1,
           openingDate: openingDate,
           itemsGroups: itemsGroups,
-          baseUrl: baseUrl,
-          merchantId: merchantId,
-          printMerchantReceiptCopy: printMerchantReceiptCopy ?? 0,
-          enableFiuu: enableFiuu ?? 0);
+          // baseUrl: baseUrl,
+          // merchantId: merchantId,
+          // printMerchantReceiptCopy: printMerchantReceiptCopy ?? 0,
+          // enableFiuu: enableFiuu ?? 0
+          );
     } else {
       state = const AuthState.unauthenticated();
     }
@@ -108,10 +108,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final sid = prefs.getString('sid');
       final username = prefs.getString('username');
       final password = prefs.getString('password');
-      final merchantId = prefs.getString('merchant_id');
+      // final merchantId = prefs.getString('merchant_id');
 
       debugPrint(
-          '📱 Stored credentials - username: $username, password: ${password != null ? "***" : "null"}, merchantId: $merchantId');
+          '📱 Stored credentials - username: $username, password: ${password != null ? "***" : "null"}');
       debugPrint('📱 Session info - sid: $sid, lastLogin: $lastLogin');
 
       // Check if we should perform auto-login
@@ -123,9 +123,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       if (shouldAutoLogin &&
           username != null &&
-          password != null &&
-          merchantId != null) {
-        await _performAutoLogin(username, password, merchantId);
+          password != null 
+          // &&
+          // merchantId != null
+          ) {
+        await _performAutoLogin(username, password);
       } else {
         await loadFromSharedPreferences();
       }
@@ -149,10 +151,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _performAutoLogin(
-      String username, String password, String merchantId) async {
+      String username, String password) async {
     try {
       final response =
-          await AuthService().login(username, password, merchantId);
+          await AuthService().login(username, password);
 
       if (response['success'] == true) {
         await _saveLoginData(response);
@@ -170,14 +172,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> login(
-      String username, String password, String merchantId) async {
+      String username, String password ) async {
     try {
       final response =
-          await AuthService().login(username, password, merchantId);
+          await AuthService().login(username, password);
 
       if (response['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
-        await AuthService.storeCredentials(username, password, merchantId);
+        await AuthService.storeCredentials(username, password);
 
         await prefs.setString('sid', response['sid']);
         await prefs.setString('api_key', response['api_key']);
@@ -197,13 +199,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setString('last_login', DateTime.now().toIso8601String());
         await prefs.setString(
             'item_groups', jsonEncode(response['item_groups'] ?? []));
-        await prefs.setString(
-            'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
-        await prefs.setString(
-            'merchant_id', response['merchant_id'] ?? merchantId);
-        await prefs.setInt('print_merchant_receipt_copy',
-            response['print_merchant_receipt_copy'] ?? 0);
-        await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
 
         DateTime? openingDate;
 
@@ -253,11 +248,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
           openingDate: openingDate,
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
-          baseUrl: response['base_url'] ?? 'https://asdf.byondwave.com',
-          merchantId: response['merchant_id'] ?? merchantId,
-          printMerchantReceiptCopy:
-              response['print_merchant_receipt_copy'] ?? 0,
-          enableFiuu: response['enable_fiuu'] ?? 0,
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -289,12 +279,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await prefs.setString('last_login', DateTime.now().toIso8601String());
     await prefs.setString(
         'item_groups', jsonEncode(response['item_groups'] ?? []));
-    await prefs.setString(
-        'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
-    await prefs.setString('merchant_id', response['merchant_id']);
-    await prefs.setInt(
-        'print_merchant_receipt_copy', response['print_merchant_receipt_copy'] ?? 0);
-    await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
   }
 
   // Add method to force refresh session data
@@ -321,10 +305,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         printKitchenOrder,
         oldOpeningDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
@@ -354,10 +334,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           printKitchenOrder: printKitchenOrder,
           openingDate: hasOpening ? newOpeningDate : null,
           itemsGroups: itemsGroups,
-          baseUrl: baseUrl,
-          merchantId: merchantId,
-          printMerchantReceiptCopy: printMerchantReceiptCopy,
-          enableFiuu: enableFiuu,
         );
       },
       orElse: () {},

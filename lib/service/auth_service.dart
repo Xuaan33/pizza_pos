@@ -9,9 +9,9 @@ class AuthService {
       final username = prefs.getString('username');
       final password =
           prefs.getString('password'); // You'll need to store this securely
-      final merchantId = prefs.getString('merchant_id');
+      // final merchantId = prefs.getString('merchant_id');
 
-      if (username == null || password == null || merchantId == null) {
+      if (username == null || password == null) {
         return {
           'success': false,
           'message': 'No saved credentials found',
@@ -19,7 +19,7 @@ class AuthService {
       }
 
       // Perform login with stored credentials
-      return await login(username, password, merchantId);
+      return await login(username, password);
     } catch (e) {
       return {
         'success': false,
@@ -30,12 +30,11 @@ class AuthService {
 
   // Store password securely (consider using flutter_secure_storage)
   static Future<void> storeCredentials(
-      String username, String password, String merchantId) async {
+      String username, String password) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('username', username);
     // For production, use flutter_secure_storage instead
     await prefs.setString('password', password);
-    await prefs.setString('merchant_id', merchantId);
   }
 
   static Future<void> clearStoredCredentials() async {
@@ -45,17 +44,17 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> login(
-      String username, String password, String merchantId) async {
+      String username, String password) async {
     try {
       // Use the original URL for login
       final response = await http.post(
         Uri.parse(
-            'https://shiokpos.byondwave.com/api/method/shiok_pos_admin.api.v1.login'),
+            'https://mejaa.joydivisionpadel.com/api/method/shiok_pos.api.login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': username,
           'password': password,
-          'merchant_id': merchantId,
+          // 'merchant_id': merchantId,
         }),
       );
 
@@ -81,10 +80,10 @@ class AuthService {
           'tier': message['tier'],
           'print_kitchen_order': message['print_kitchen_order'] ?? 1,
           'item_groups': message['item_groups'] ?? [],
-          'base_url': message['url'] ?? 'https://asdf.byondwave.com',
-          'merchant_id': message['merchant_id'] ?? merchantId,
-          'print_merchant_receipt_copy': message['print_merchant_receipt_copy'],
-          'enable_fiuu': message['enable_fiuu'],
+          // 'base_url': message['url'] ?? 'https://asdf.byondwave.com',
+          // 'merchant_id': message['merchant_id'] ?? merchantId,
+          // 'print_merchant_receipt_copy': message['print_merchant_receipt_copy'],
+          // 'enable_fiuu': message['enable_fiuu'],
         };
       } else {
         return {
@@ -113,15 +112,15 @@ class AuthService {
     return null;
   }
 
-  static Future<String?> getBaseUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
-  }
+  // static Future<String?> getBaseUrl() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   return prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+  // }
 
-  static Future<String?> getMerchantId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('merchant_id');
-  }
+  // static Future<String?> getMerchantId() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   return prefs.getString('merchant_id');
+  // }
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -140,6 +139,6 @@ class AuthService {
     await prefs.remove('print_kitchen_order');
     await prefs.remove('item_groups');
     await prefs.remove('last_login');
-    await prefs.remove('base_url');
+    // await prefs.remove('base_url');
   }
 }

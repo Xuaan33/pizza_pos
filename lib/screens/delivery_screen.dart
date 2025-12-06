@@ -33,10 +33,7 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
+        
       ) {
         return Container(
           color: Colors.grey[100],

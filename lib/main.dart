@@ -57,10 +57,6 @@ class MyApp extends ConsumerWidget {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         return MainLayout();
       },

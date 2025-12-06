@@ -83,10 +83,6 @@ class _SplitOrderPaymentDialogState
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -859,10 +855,6 @@ class _SplitOrderPaymentDialogState
               printKitchenOrder,
               openingDate,
               itemsGroups,
-              baseUrl,
-              merchantId,
-              printMerchantReceiptCopy,
-              enableFiuu,
             ) {
               return printKitchenOrder == 1;
             },
@@ -886,42 +878,12 @@ class _SplitOrderPaymentDialogState
               printKitchenOrder,
               openingDate,
               itemsGroups,
-              baseUrl,
-              merchantId,
-              printMerchantReceiptCopy,
-              enableFiuu,
             ) {
-              return enableFiuu == 0 || m1Value == '-1';
+              return m1Value == '-1';
             },
             orElse: () => false,
           );
 
-      final printMerchantReceiptCopy = ref.read(authProvider).maybeWhen(
-            authenticated: (
-              sid,
-              apiKey,
-              apiSecret,
-              username,
-              email,
-              fullName,
-              posProfile,
-              branch,
-              paymentMethods,
-              taxes,
-              hasOpening,
-              tier,
-              printKitchenOrder,
-              openingDate,
-              itemsGroups,
-              baseUrl,
-              merchantId,
-              printMerchantReceiptCopy,
-              enableFiuu,
-            ) {
-              return printMerchantReceiptCopy == 1;
-            },
-            orElse: () => false,
-          );
 
       // Prepare payment data
       final payments = [
@@ -1002,13 +964,7 @@ class _SplitOrderPaymentDialogState
           await _printKitchenOrderOnly(widget.order['name']);
         }
 
-        if (printMerchantReceiptCopy) {
-          await ReceiptPrinter.showPrintDialog(
-            context,
-            widget.order['name'],
-            shouldPrintKitchenOrder: false,
-          );
-        }
+        
 
         // Show print receipt dialog
         final shouldPrint = await _showPrintReceiptDialog();
@@ -1432,10 +1388,6 @@ class _SplitOrderPaymentDialogState
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -1823,10 +1775,6 @@ class _SplitOrderPaymentDialogState
                       printKitchenOrder,
                       openingDate,
                       itemsGroups,
-                      baseUrl,
-                      merchantId,
-                      printMerchantReceiptCopy,
-                      enableFiuu,
                     ) {
                       return posProfile;
                     },
@@ -1901,10 +1849,6 @@ class _SplitOrderPaymentDialogState
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) {
                     return posProfile;
                   },
@@ -1991,10 +1935,6 @@ class _SplitOrderPaymentDialogState
                     printKitchenOrder,
                     openingDate,
                     itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
                   ) =>
                       posProfile,
                   orElse: () => null,
@@ -2076,10 +2016,6 @@ class _SplitOrderPaymentDialogState
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) {
           return posProfile;
         },

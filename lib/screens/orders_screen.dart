@@ -122,10 +122,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
@@ -222,10 +218,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         return Scaffold(
           body: Row(
@@ -1869,10 +1861,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             // Filter out taxes with 0% rate
             final applicableTaxes = taxes.where((tax) {

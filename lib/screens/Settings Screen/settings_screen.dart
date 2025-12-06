@@ -624,10 +624,6 @@ Future<void> _discoverUsbDevices() async {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
@@ -748,10 +744,6 @@ Future<void> _discoverUsbDevices() async {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         final sections = _getSections(tier);
 
@@ -1085,10 +1077,6 @@ Future<void> _discoverUsbDevices() async {
                                         printKitchenOrder,
                                         openingDate,
                                         itemsGroups,
-                                        baseUrl,
-                                        merchantId,
-                                        printMerchantReceiptCopy,
-                                        enableFiuu,
                                       ) {
                                         _employeeCheckIn(
                                             employee['name'], branch);
@@ -1121,10 +1109,6 @@ Future<void> _discoverUsbDevices() async {
                                         printKitchenOrder,
                                         openingDate,
                                         itemsGroups,
-                                        baseUrl,
-                                        merchantId,
-                                        printMerchantReceiptCopy,
-                                        enableFiuu,
                                       ) {
                                         _employeeCheckOut(
                                             employee['name'], branch);
@@ -1248,10 +1232,6 @@ Future<void> _discoverUsbDevices() async {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,

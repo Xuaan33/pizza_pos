@@ -58,10 +58,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) async {
         try {
           final response = await PosService().getKitchenStations(
@@ -115,10 +111,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) async {
         try {
           final fromDate = DateFormat('yyyy-MM-dd').format(_selectedDate);

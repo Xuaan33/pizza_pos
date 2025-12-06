@@ -48,10 +48,6 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         // Initialize controllers if not done yet
         if (_amountControllers.isEmpty) {

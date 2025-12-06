@@ -31,7 +31,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool _isLoggingOut = false;
   Future<void>? _refreshFuture;
   DateTime _selectedDate = DateTime.now();
-  String _filterStatus = 'All'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
+  String _filterStatus = 'Pay Later'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -105,10 +105,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             printKitchenOrder,
             openingDate,
             itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
           ) {
             return tier.toLowerCase() != 'tier 3' ? 1 : 2;
           },
@@ -141,15 +137,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           try {
             String? fromDateStr;
             String? toDateStr;
-            if (_useDateRange && _fromDate != null && _toDate != null) {
+            if (_filterStatus == 'Pay Later') {
+              fromDateStr = null;
+              toDateStr = null;
+            } else if (_useDateRange && _fromDate != null && _toDate != null) {
               fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
               toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
             } else {
@@ -406,10 +401,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         return Scaffold(
           body: Row(
@@ -465,10 +456,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) async {
           try {
             String? fromDateStr;
@@ -768,10 +755,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         if (tier.toLowerCase() != 'tier 3') {
           return [
@@ -983,10 +966,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         return Container(
           width: 100,
@@ -1063,10 +1042,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   printKitchenOrder,
                   openingDate,
                   itemsGroups,
-                  baseUrl,
-                  mechantId,
-                  printMerchantReceiptCopy,
-                  enableFiuu,
                 ) {
                   if (tier.toLowerCase() != 'tier 3') {
                     isOrdersScreen = index == 1; // Orders is index 1 for tier1
@@ -1078,7 +1053,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
               if (isOrdersScreen) {
                 setState(() {
-                  _filterStatus = 'All';
+                  _filterStatus = 'Pay Later';
                 });
                 // Refresh orders with the new filters
                 WidgetsBinding.instance.addPostFrameCallback((_) {

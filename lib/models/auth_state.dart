@@ -21,10 +21,6 @@ class AuthState with _$AuthState {
     required int printKitchenOrder,
     required DateTime? openingDate,
     required List<dynamic> itemsGroups,
-    required String baseUrl, 
-    required String merchantId,
-    required int printMerchantReceiptCopy,
-    required int enableFiuu,
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }

@@ -7,7 +7,7 @@ import 'auth_service.dart';
 class PosService {
   // Remove hardcoded baseUrl and get it dynamically
   Future<String> _getBaseUrl() async {
-    return await AuthService.getBaseUrl() ?? 'https://asdf.byondwave.com';
+    return 'https://mejaa.joydivisionpadel.com';
   }
 
   // Helper method for common request handling
@@ -748,7 +748,10 @@ class PosService {
       body: {
         'name': name,
         'item_group_name': itemGroupName,
-        if (parentItemGroup != null) 'parent_item_group': parentItemGroup else 'parent_item_group': 'All Item Groups',
+        if (parentItemGroup != null)
+          'parent_item_group': parentItemGroup
+        else
+          'parent_item_group': 'All Item Groups',
         if (isGroup != null) 'is_group': isGroup,
         'disabled': disabled
       },

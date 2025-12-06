@@ -187,10 +187,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
@@ -306,10 +302,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
           printKitchenOrder,
           openingDate,
           itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
         ) {
           return Container(
             color: Colors.grey[100],
@@ -365,10 +357,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
         printKitchenOrder,
         openingDate,
         itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
       ) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

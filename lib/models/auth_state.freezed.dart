@@ -34,11 +34,7 @@ mixin _$AuthState {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)
+            List<dynamic> itemsGroups)
         authenticated,
     required TResult Function() unauthenticated,
   }) =>
@@ -61,11 +57,7 @@ mixin _$AuthState {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) =>
@@ -88,11 +80,7 @@ mixin _$AuthState {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -199,11 +187,7 @@ class _$InitialImpl implements _Initial {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)
+            List<dynamic> itemsGroups)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -229,11 +213,7 @@ class _$InitialImpl implements _Initial {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -259,11 +239,7 @@ class _$InitialImpl implements _Initial {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -334,11 +310,7 @@ abstract class _$$AuthenticatedImplCopyWith<$Res> {
       String tier,
       int printKitchenOrder,
       DateTime? openingDate,
-      List<dynamic> itemsGroups,
-      String baseUrl,
-      String merchantId,
-      int printMerchantReceiptCopy,
-      int enableFiuu});
+      List<dynamic> itemsGroups});
 }
 
 /// @nodoc
@@ -369,10 +341,6 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
     Object? printKitchenOrder = null,
     Object? openingDate = freezed,
     Object? itemsGroups = null,
-    Object? baseUrl = null,
-    Object? merchantId = null,
-    Object? printMerchantReceiptCopy = null,
-    Object? enableFiuu = null,
   }) {
     return _then(_$AuthenticatedImpl(
       sid: null == sid
@@ -435,22 +403,6 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
           ? _value._itemsGroups
           : itemsGroups // ignore: cast_nullable_to_non_nullable
               as List<dynamic>,
-      baseUrl: null == baseUrl
-          ? _value.baseUrl
-          : baseUrl // ignore: cast_nullable_to_non_nullable
-              as String,
-      merchantId: null == merchantId
-          ? _value.merchantId
-          : merchantId // ignore: cast_nullable_to_non_nullable
-              as String,
-      printMerchantReceiptCopy: null == printMerchantReceiptCopy
-          ? _value.printMerchantReceiptCopy
-          : printMerchantReceiptCopy // ignore: cast_nullable_to_non_nullable
-              as int,
-      enableFiuu: null == enableFiuu
-          ? _value.enableFiuu
-          : enableFiuu // ignore: cast_nullable_to_non_nullable
-              as int,
     ));
   }
 }
@@ -473,11 +425,7 @@ class _$AuthenticatedImpl implements _Authenticated {
       required this.tier,
       required this.printKitchenOrder,
       required this.openingDate,
-      required final List<dynamic> itemsGroups,
-      required this.baseUrl,
-      required this.merchantId,
-      required this.printMerchantReceiptCopy,
-      required this.enableFiuu})
+      required final List<dynamic> itemsGroups})
       : _paymentMethods = paymentMethods,
         _taxes = taxes,
         _itemsGroups = itemsGroups;
@@ -531,17 +479,8 @@ class _$AuthenticatedImpl implements _Authenticated {
   }
 
   @override
-  final String baseUrl;
-  @override
-  final String merchantId;
-  @override
-  final int printMerchantReceiptCopy;
-  @override
-  final int enableFiuu;
-
-  @override
   String toString() {
-    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening, tier: $tier, printKitchenOrder: $printKitchenOrder, openingDate: $openingDate, itemsGroups: $itemsGroups, baseUrl: $baseUrl, merchantId: $merchantId, printMerchantReceiptCopy: $printMerchantReceiptCopy, enableFiuu: $enableFiuu)';
+    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening, tier: $tier, printKitchenOrder: $printKitchenOrder, openingDate: $openingDate, itemsGroups: $itemsGroups)';
   }
 
   @override
@@ -572,40 +511,27 @@ class _$AuthenticatedImpl implements _Authenticated {
             (identical(other.openingDate, openingDate) ||
                 other.openingDate == openingDate) &&
             const DeepCollectionEquality()
-                .equals(other._itemsGroups, _itemsGroups) &&
-            (identical(other.baseUrl, baseUrl) || other.baseUrl == baseUrl) &&
-            (identical(other.merchantId, merchantId) ||
-                other.merchantId == merchantId) &&
-            (identical(
-                    other.printMerchantReceiptCopy, printMerchantReceiptCopy) ||
-                other.printMerchantReceiptCopy == printMerchantReceiptCopy) &&
-            (identical(other.enableFiuu, enableFiuu) ||
-                other.enableFiuu == enableFiuu));
+                .equals(other._itemsGroups, _itemsGroups));
   }
 
   @override
-  int get hashCode => Object.hashAll([
-        runtimeType,
-        sid,
-        apiKey,
-        apiSecret,
-        username,
-        email,
-        fullName,
-        posProfile,
-        branch,
-        const DeepCollectionEquality().hash(_paymentMethods),
-        const DeepCollectionEquality().hash(_taxes),
-        hasOpening,
-        tier,
-        printKitchenOrder,
-        openingDate,
-        const DeepCollectionEquality().hash(_itemsGroups),
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu
-      ]);
+  int get hashCode => Object.hash(
+      runtimeType,
+      sid,
+      apiKey,
+      apiSecret,
+      username,
+      email,
+      fullName,
+      posProfile,
+      branch,
+      const DeepCollectionEquality().hash(_paymentMethods),
+      const DeepCollectionEquality().hash(_taxes),
+      hasOpening,
+      tier,
+      printKitchenOrder,
+      openingDate,
+      const DeepCollectionEquality().hash(_itemsGroups));
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -634,11 +560,7 @@ class _$AuthenticatedImpl implements _Authenticated {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)
+            List<dynamic> itemsGroups)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -657,11 +579,7 @@ class _$AuthenticatedImpl implements _Authenticated {
         tier,
         printKitchenOrder,
         openingDate,
-        itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu);
+        itemsGroups);
   }
 
   @override
@@ -683,11 +601,7 @@ class _$AuthenticatedImpl implements _Authenticated {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -706,11 +620,7 @@ class _$AuthenticatedImpl implements _Authenticated {
         tier,
         printKitchenOrder,
         openingDate,
-        itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu);
+        itemsGroups);
   }
 
   @override
@@ -732,11 +642,7 @@ class _$AuthenticatedImpl implements _Authenticated {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -757,11 +663,7 @@ class _$AuthenticatedImpl implements _Authenticated {
           tier,
           printKitchenOrder,
           openingDate,
-          itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu);
+          itemsGroups);
     }
     return orElse();
   }
@@ -817,11 +719,7 @@ abstract class _Authenticated implements AuthState {
       required final String tier,
       required final int printKitchenOrder,
       required final DateTime? openingDate,
-      required final List<dynamic> itemsGroups,
-      required final String baseUrl,
-      required final String merchantId,
-      required final int printMerchantReceiptCopy,
-      required final int enableFiuu}) = _$AuthenticatedImpl;
+      required final List<dynamic> itemsGroups}) = _$AuthenticatedImpl;
 
   String get sid;
   String get apiKey;
@@ -838,10 +736,6 @@ abstract class _Authenticated implements AuthState {
   int get printKitchenOrder;
   DateTime? get openingDate;
   List<dynamic> get itemsGroups;
-  String get baseUrl;
-  String get merchantId;
-  int get printMerchantReceiptCopy;
-  int get enableFiuu;
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -907,11 +801,7 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)
+            List<dynamic> itemsGroups)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -937,11 +827,7 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -967,11 +853,7 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String tier,
             int printKitchenOrder,
             DateTime? openingDate,
-            List<dynamic> itemsGroups,
-            String baseUrl,
-            String merchantId,
-            int printMerchantReceiptCopy,
-            int enableFiuu)?
+            List<dynamic> itemsGroups)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
