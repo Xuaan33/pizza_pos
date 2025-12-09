@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class VariantManagementScreen extends ConsumerStatefulWidget {
@@ -19,8 +20,10 @@ class _VariantManagementScreenState
   bool _isSaving = false;
   String? _selectedVariantGroup;
   final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _optionRequiredController = TextEditingController();
-  final TextEditingController _maximumSelectionController = TextEditingController();
+  final TextEditingController _optionRequiredController =
+      TextEditingController();
+  final TextEditingController _maximumSelectionController =
+      TextEditingController();
   final List<Map<String, dynamic>> _variantInfoTable = [];
   bool _isRequired = true;
   int _optionRequiredNo = 1;
@@ -45,7 +48,8 @@ class _VariantManagementScreenState
   }
 
   // Helper method to parse integer input with better error handling
-  int _parseInt(String value, {int defaultValue = 1, int minValue = 0, int maxValue = 999}) {
+  int _parseInt(String value,
+      {int defaultValue = 1, int minValue = 0, int maxValue = 999}) {
     if (value.isEmpty) return defaultValue;
     final parsed = int.tryParse(value);
     if (parsed == null || parsed < minValue) return defaultValue;
@@ -118,7 +122,7 @@ class _VariantManagementScreenState
         _optionRequiredNo = data['option_required_no'] ?? 1;
         _maximumSelection = data['maximum_selection'] ?? 1;
         _allowMultipleSelection = data['allow_multiple_selection'] ?? false;
-        
+
         // Update controllers
         _optionRequiredController.text = _optionRequiredNo.toString();
         _maximumSelectionController.text = _maximumSelection.toString();
@@ -251,28 +255,31 @@ class _VariantManagementScreenState
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_variantGroups.isNotEmpty ||
-                        _selectedVariantGroup == null)
-                      _buildVariantGroupDropdown()
-                    else
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('Loading variant groups...'),
+          : ScrollConfiguration(
+              behavior: NoStretchScrollBehavior(),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_variantGroups.isNotEmpty ||
+                          _selectedVariantGroup == null)
+                        _buildVariantGroupDropdown()
+                      else
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('Loading variant groups...'),
+                          ),
                         ),
-                      ),
-                    const SizedBox(height: 20),
-                    _buildVariantGroupForm(),
-                    const SizedBox(height: 20),
-                    _buildActionButtons(),
-                  ],
+                      const SizedBox(height: 20),
+                      _buildVariantGroupForm(),
+                      const SizedBox(height: 20),
+                      _buildActionButtons(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -355,21 +362,22 @@ class _VariantManagementScreenState
               value?.isEmpty ?? true ? 'Required field' : null,
         ),
         const SizedBox(height: 16),
-        
+
         // Required Switch
         SwitchListTile(
           title: const Text('Required'),
           value: _isRequired,
           onChanged: (value) => setState(() => _isRequired = value),
         ),
-        
+
         // Option Required Number
         TextFormField(
           controller: _optionRequiredController,
           decoration: const InputDecoration(
             labelText: 'Minimum Options Required',
             border: OutlineInputBorder(),
-            helperText: 'Number of options customer must select (0 if optional)',
+            helperText:
+                'Number of options customer must select (0 if optional)',
           ),
           keyboardType: TextInputType.number,
           onChanged: (value) {
@@ -379,14 +387,14 @@ class _VariantManagementScreenState
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Allow Multiple Selection Switch
         SwitchListTile(
           title: const Text('Allow Multiple Selection'),
           value: _allowMultipleSelection,
           onChanged: (value) => setState(() => _allowMultipleSelection = value),
         ),
-        
+
         // Maximum Selection (only show if multiple selection is allowed)
         if (_allowMultipleSelection) ...[
           const SizedBox(height: 16),
@@ -405,7 +413,7 @@ class _VariantManagementScreenState
             },
           ),
         ],
-        
+
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

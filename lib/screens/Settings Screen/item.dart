@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/item_group.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/variant_group.dart';
@@ -588,204 +589,207 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: _scrollController, // ADD THIS: Attach scroll controller
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with Add Record button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Items',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              ElevatedButton(
-                onPressed: _showCreateItemDialog,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        controller: _scrollController, // ADD THIS: Attach scroll controller
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with Add Record button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Items',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-                child: const Text(
-                  'Add Item',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                ElevatedButton(
+                  onPressed: _showCreateItemDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Add Item',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+
+            // Progress indicator for background loading
+            if (_isLoadingDetails) ...[
+              const SizedBox(height: 12),
+              Card(
+                color: Colors.blue.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Loading item details in background...',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.blue.shade900,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: _totalItemsCount > 0
+                            ? _loadedItemsCount / _totalItemsCount
+                            : 0,
+                        backgroundColor: Colors.blue.shade100,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.blue.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$_loadedItemsCount / $_totalItemsCount items loaded',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
-          ),
 
-          // Progress indicator for background loading
-          if (_isLoadingDetails) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
+            // Search and Filter Section
             Card(
-              color: Colors.blue.shade50,
               child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Search Bar
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search by name or code...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                },
+                              )
+                            : null,
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Filters and Sorting Row
                     Row(
                       children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.blue.shade700,
-                            ),
+                        ElevatedButton.icon(
+                          onPressed: () => _showFilterDialog(),
+                          icon: const Icon(Icons.filter_list, size: 16),
+                          label: const Text(
+                            'Filters',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey[200],
+                            foregroundColor: Colors.black,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Loading item details in background...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.blue.shade900,
-                            fontWeight: FontWeight.w500,
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () => _showSortDialog(),
+                          icon: Icon(
+                            _sortAscending
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Sort',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey[200],
+                            foregroundColor: Colors.black,
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        if (_hasActiveFilters)
+                          TextButton.icon(
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.clear, size: 16),
+                            label: const Text('Clear Filters'),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: _totalItemsCount > 0
-                          ? _loadedItemsCount / _totalItemsCount
-                          : 0,
-                      backgroundColor: Colors.blue.shade100,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.blue.shade700,
+
+                    // Active Filters Indicator
+                    if (_hasActiveFilters) ...[
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _activeFilterChips,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$_loadedItemsCount / $_totalItemsCount items loaded',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
             ),
-          ],
+            const SizedBox(height: 16),
 
-          const SizedBox(height: 16),
-
-          // Search and Filter Section
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Search Bar
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search by name or code...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                setState(() {
-                                  _searchQuery = '';
-                                });
-                              },
-                            )
-                          : null,
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Filters and Sorting Row
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => _showFilterDialog(),
-                        icon: const Icon(Icons.filter_list, size: 16),
-                        label: const Text(
-                          'Filters',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          foregroundColor: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: () => _showSortDialog(),
-                        icon: Icon(
-                          _sortAscending
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                          size: 16,
-                        ),
-                        label: const Text(
-                          'Sort',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          foregroundColor: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (_hasActiveFilters)
-                        TextButton.icon(
-                          onPressed: _resetFilters,
-                          icon: const Icon(Icons.clear, size: 16),
-                          label: const Text('Clear Filters'),
-                        ),
-                    ],
-                  ),
-
-                  // Active Filters Indicator
-                  if (_hasActiveFilters) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: _activeFilterChips,
-                    ),
-                  ],
-                ],
+            // Items List
+            if (isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_filteredItems.isEmpty)
+              const Center(child: Text('No items found'))
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _filteredItems.length,
+                itemBuilder: (context, index) {
+                  final item = _filteredItems[index];
+                  return ItemCard(
+                    item: item,
+                    onEdit: () => _showEditItemDialog(item),
+                    onStatusToggle: (value) => _toggleItemStatus(item, value),
+                  );
+                },
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Items List
-          if (isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (_filteredItems.isEmpty)
-            const Center(child: Text('No items found'))
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _filteredItems.length,
-              itemBuilder: (context, index) {
-                final item = _filteredItems[index];
-                return ItemCard(
-                  item: item,
-                  onEdit: () => _showEditItemDialog(item),
-                  onStatusToggle: (value) => _toggleItemStatus(item, value),
-                );
-              },
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

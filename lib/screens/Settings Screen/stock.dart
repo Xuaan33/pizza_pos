@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/stock_item_card.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -305,24 +306,27 @@ class _StockManagementSectionState
   }
 
   Widget _buildStockList() {
-    return ListView.builder(
-      controller: _stockScrollController,
-      itemCount: _filteredStockItems.length,
-      itemBuilder: (context, index) {
-        final item = _filteredStockItems[index];
-        final itemCode = item['item_code'];
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: ListView.builder(
+        controller: _stockScrollController,
+        itemCount: _filteredStockItems.length,
+        itemBuilder: (context, index) {
+          final item = _filteredStockItems[index];
+          final itemCode = item['item_code'];
 
-        // Ensure key exists
-        if (!_itemKeys.containsKey(itemCode)) {
-          _itemKeys[itemCode] = GlobalKey<_StockItemWrapperState>();
-        }
+          // Ensure key exists
+          if (!_itemKeys.containsKey(itemCode)) {
+            _itemKeys[itemCode] = GlobalKey<_StockItemWrapperState>();
+          }
 
-        return StockItemWrapper(
-          key: _itemKeys[itemCode],
-          item: item,
-          onManageStock: () => _showManageStockDialog(item),
-        );
-      },
+          return StockItemWrapper(
+            key: _itemKeys[itemCode],
+            item: item,
+            onManageStock: () => _showManageStockDialog(item),
+          );
+        },
+      ),
     );
   }
 

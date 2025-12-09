@@ -966,37 +966,49 @@ Future<void> _discoverUsbDevices() async {
   }
 
   Widget _buildItemGroupSection() {
-    return SingleChildScrollView(
-      child: Container(
-        height: MediaQuery.of(context).size.height,
-        child: ItemGroupManagement(),
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        child: Container(
+          height: MediaQuery.of(context).size.height,
+          child: ItemGroupManagement(),
+        ),
       ),
     );
   }
 
   Widget _buildItemSection() {
-    return SingleChildScrollView(
-      child: Container(
-        height: MediaQuery.of(context).size.height,
-        child: ItemManagement(),
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        child: Container(
+          height: MediaQuery.of(context).size.height,
+          child: ItemManagement(),
+        ),
       ),
     );
   }
 
   Widget _buildStockManagementSection() {
-    return SingleChildScrollView(
-      child: Container(
-        height: MediaQuery.of(context).size.height,
-        child: StockManagementSection(),
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        child: Container(
+          height: MediaQuery.of(context).size.height,
+          child: StockManagementSection(),
+        ),
       ),
     );
   }
 
   Widget _buildVariantSection() {
-    return SingleChildScrollView(
-      child: Container(
-        height: MediaQuery.of(context).size.height,
-        child: VariantSection(),
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        child: Container(
+          height: MediaQuery.of(context).size.height,
+          child: VariantSection(),
+        ),
       ),
     );
   }
@@ -1049,106 +1061,110 @@ Future<void> _discoverUsbDevices() async {
               ? const Center(child: CircularProgressIndicator())
               : _employees.isEmpty
                   ? const Center(child: Text('No employees found'))
-                  : ListView.builder(
-                      itemCount: _employees.length,
-                      itemBuilder: (context, index) {
-                        final employee = _employees[index];
-                        debugPrint("EMPLOYEE TEST: $employee");
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          child: ListTile(
-                            leading: const Icon(Icons.person),
-                            title: Text(employee['employee_name'] ?? 'Unknown'),
-                            subtitle: Text(employee['designation'] ?? ''),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.login,
-                                      color: Colors.green),
-                                  onPressed: () {
-                                    final authState = ref.read(authProvider);
-                                    authState.when(
-                                      authenticated: (
-                                        sid,
-                                        apiKey,
-                                        apiSecret,
-                                        username,
-                                        email,
-                                        fullName,
-                                        posProfile,
-                                        branch,
-                                        paymentMethods,
-                                        taxes,
-                                        hasOpening,
-                                        tier,
-                                        printKitchenOrder,
-                                        openingDate,
-                                        itemsGroups,
-                                        baseUrl,
-                                        merchantId,
-                                        printMerchantReceiptCopy,
-                                        enableFiuu,
-                                      ) {
-                                        _employeeCheckIn(
-                                            employee['name'], branch);
-                                      },
-                                      initial: () {},
-                                      unauthenticated: () {},
-                                    );
-                                  },
-                                  tooltip: 'Check In',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.logout,
-                                      color: Colors.red),
-                                  onPressed: () {
-                                    final authState = ref.read(authProvider);
-                                    authState.when(
-                                      authenticated: (
-                                        sid,
-                                        apiKey,
-                                        apiSecret,
-                                        username,
-                                        email,
-                                        fullName,
-                                        posProfile,
-                                        branch,
-                                        paymentMethods,
-                                        taxes,
-                                        hasOpening,
-                                        tier,
-                                        printKitchenOrder,
-                                        openingDate,
-                                        itemsGroups,
-                                        baseUrl,
-                                        merchantId,
-                                        printMerchantReceiptCopy,
-                                        enableFiuu,
-                                      ) {
-                                        _employeeCheckOut(
-                                            employee['name'], branch);
-                                      },
-                                      initial: () {},
-                                      unauthenticated: () {},
-                                    );
-                                  },
-                                  tooltip: 'Check Out',
-                                ),
-                                // Text(
-                                //   employee['status'] ?? 'Unknown',
-                                //   style: TextStyle(
-                                //     color: employee['status'] == 'Checked In'
-                                //         ? Colors.green
-                                //         : Colors.grey,
-                                //     fontWeight: FontWeight.bold,
-                                //   ),
-                                // ),
-                              ],
+                  : ScrollConfiguration(
+                      behavior: NoStretchScrollBehavior(),
+                      child: ListView.builder(
+                        itemCount: _employees.length,
+                        itemBuilder: (context, index) {
+                          final employee = _employees[index];
+                          debugPrint("EMPLOYEE TEST: $employee");
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: ListTile(
+                              leading: const Icon(Icons.person),
+                              title:
+                                  Text(employee['employee_name'] ?? 'Unknown'),
+                              subtitle: Text(employee['designation'] ?? ''),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.login,
+                                        color: Colors.green),
+                                    onPressed: () {
+                                      final authState = ref.read(authProvider);
+                                      authState.when(
+                                        authenticated: (
+                                          sid,
+                                          apiKey,
+                                          apiSecret,
+                                          username,
+                                          email,
+                                          fullName,
+                                          posProfile,
+                                          branch,
+                                          paymentMethods,
+                                          taxes,
+                                          hasOpening,
+                                          tier,
+                                          printKitchenOrder,
+                                          openingDate,
+                                          itemsGroups,
+                                          baseUrl,
+                                          merchantId,
+                                          printMerchantReceiptCopy,
+                                          enableFiuu,
+                                        ) {
+                                          _employeeCheckIn(
+                                              employee['name'], branch);
+                                        },
+                                        initial: () {},
+                                        unauthenticated: () {},
+                                      );
+                                    },
+                                    tooltip: 'Check In',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.logout,
+                                        color: Colors.red),
+                                    onPressed: () {
+                                      final authState = ref.read(authProvider);
+                                      authState.when(
+                                        authenticated: (
+                                          sid,
+                                          apiKey,
+                                          apiSecret,
+                                          username,
+                                          email,
+                                          fullName,
+                                          posProfile,
+                                          branch,
+                                          paymentMethods,
+                                          taxes,
+                                          hasOpening,
+                                          tier,
+                                          printKitchenOrder,
+                                          openingDate,
+                                          itemsGroups,
+                                          baseUrl,
+                                          merchantId,
+                                          printMerchantReceiptCopy,
+                                          enableFiuu,
+                                        ) {
+                                          _employeeCheckOut(
+                                              employee['name'], branch);
+                                        },
+                                        initial: () {},
+                                        unauthenticated: () {},
+                                      );
+                                    },
+                                    tooltip: 'Check Out',
+                                  ),
+                                  // Text(
+                                  //   employee['status'] ?? 'Unknown',
+                                  //   style: TextStyle(
+                                  //     color: employee['status'] == 'Checked In'
+                                  //         ? Colors.green
+                                  //         : Colors.grey,
+                                  //     fontWeight: FontWeight.bold,
+                                  //   ),
+                                  // ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
         ),
       ],

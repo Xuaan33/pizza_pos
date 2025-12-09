@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class ItemGroupManagement extends StatefulWidget {
@@ -201,144 +202,147 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: _scrollController, // ADD scroll controller
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with Add Record button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Item Groups',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-              ),
-              ElevatedButton(
-                onPressed: _showCreateItemGroupDialog,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+    return ScrollConfiguration(
+      behavior: NoStretchScrollBehavior(),
+      child: SingleChildScrollView(
+        controller: _scrollController, // ADD scroll controller
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with Add Record button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Item Groups',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                 ),
-                child: const Text(
-                  'Add Item Group',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                ElevatedButton(
+                  onPressed: _showCreateItemGroupDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text(
+                    'Add Item Group',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 16),
 
-          // Search and Sort Section
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Search Bar
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search by name or value...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
+            // Search and Sort Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Search Bar
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search by name or value...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+                                  _applyFilters();
+                                },
+                              )
+                            : null,
                       ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                setState(() {
-                                  _searchQuery = '';
-                                });
-                                _applyFilters();
-                              },
-                            )
-                          : null,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                        _applyFilters();
+                      },
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                      _applyFilters();
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Sort Row
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => _showSortDialog(),
-                        icon: Icon(
-                          _sortAscending
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                          size: 16,
-                        ),
-                        label: const Text(
-                          'Sort',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey[200],
-                          foregroundColor: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (_hasActiveFilters)
-                        TextButton.icon(
-                          onPressed: _resetFilters,
-                          icon: const Icon(Icons.clear, size: 16),
-                          label: const Text('Clear Filters'),
-                        ),
-                    ],
-                  ),
-
-                  // Active Filters Indicator
-                  if (_hasActiveFilters) ...[
                     const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: _activeFilterChips,
+
+                    // Sort Row
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => _showSortDialog(),
+                          icon: Icon(
+                            _sortAscending
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Sort',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey[200],
+                            foregroundColor: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (_hasActiveFilters)
+                          TextButton.icon(
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.clear, size: 16),
+                            label: const Text('Clear Filters'),
+                          ),
+                      ],
                     ),
+
+                    // Active Filters Indicator
+                    if (_hasActiveFilters) ...[
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: _activeFilterChips,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Item Groups List
-          if (isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (filteredItemGroups.isEmpty)
-            const Center(child: Text('No item groups found'))
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredItemGroups.length,
-              itemBuilder: (context, index) {
-                final group = filteredItemGroups[index];
+            // Item Groups List
+            if (isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (filteredItemGroups.isEmpty)
+              const Center(child: Text('No item groups found'))
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filteredItemGroups.length,
+                itemBuilder: (context, index) {
+                  final group = filteredItemGroups[index];
 
-                // Ensure key exists
-                if (!_itemGroupKeys.containsKey(group.name)) {
-                  _itemGroupKeys[group.name] =
-                      GlobalKey<_ItemGroupWrapperState>();
-                }
+                  // Ensure key exists
+                  if (!_itemGroupKeys.containsKey(group.name)) {
+                    _itemGroupKeys[group.name] =
+                        GlobalKey<_ItemGroupWrapperState>();
+                  }
 
-                return ItemGroupWrapper(
-                  key: _itemGroupKeys[group.name],
-                  itemGroup: group,
-                  onEdit: () => _showEditItemGroupDialog(group),
-                  onStatusToggle: (value) =>
-                      _toggleItemGroupStatus(group, value),
-                );
-              },
-            ),
-        ],
+                  return ItemGroupWrapper(
+                    key: _itemGroupKeys[group.name],
+                    itemGroup: group,
+                    onEdit: () => _showEditItemGroupDialog(group),
+                    onStatusToggle: (value) =>
+                        _toggleItemGroupStatus(group, value),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }
