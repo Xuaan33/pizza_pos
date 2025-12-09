@@ -191,6 +191,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
@@ -310,6 +311,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) {
           return Container(
             color: Colors.grey[100],
@@ -369,6 +371,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

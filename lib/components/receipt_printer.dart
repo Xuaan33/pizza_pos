@@ -183,14 +183,12 @@ class ReceiptPrinter {
       }
     } catch (e) {
       debugPrint('❌ Open cash drawer error: $e');
-      if (showFeedback) {
-        Fluttertoast.showToast(
-          msg: "Failed to open cash drawer: $e",
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-        );
-      }
+      Fluttertoast.showToast(
+        msg: "Failed to open cash drawer: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
     }
   }
 

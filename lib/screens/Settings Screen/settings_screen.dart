@@ -634,6 +634,7 @@ Future<void> _discoverUsbDevices() async {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final response = await PosService().getEmployees();
           if (response['success'] == true) {
@@ -758,6 +759,7 @@ Future<void> _discoverUsbDevices() async {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         final sections = _getSections(tier);
 
@@ -1117,6 +1119,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                           printMerchantReceiptCopy,
                                           enableFiuu,
+                                          cashDrawerPin,
                                         ) {
                                           _employeeCheckIn(
                                               employee['name'], branch);
@@ -1153,6 +1156,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                           printMerchantReceiptCopy,
                                           enableFiuu,
+                                          cashDrawerPin,
                                         ) {
                                           _employeeCheckOut(
                                               employee['name'], branch);
@@ -1281,6 +1285,7 @@ Future<void> _discoverUsbDevices() async {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final response = await PosService().requestClosingVoucher(
             posProfile: posProfile,
@@ -1311,10 +1316,40 @@ Future<void> _discoverUsbDevices() async {
   }
 
   Widget _buildCashDrawerButton() {
+    final isOpeningCashDrawer = ref.read(authProvider).maybeWhen(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
+            cashDrawerPin,
+          ) {
+            debugPrint("Test: $cashDrawerPin");
+            return cashDrawerPin == 1;
+          },
+          orElse: () => false,
+        );
     return SizedBox(
       width: 435,
       child: ElevatedButton(
-        onPressed: ReceiptPrinter.openCashDrawer,
+        onPressed: isOpeningCashDrawer == true
+            ? _showCashDrawerPinDialog
+            : ReceiptPrinter.openCashDrawer,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFE732A0),
           foregroundColor: Colors.white,
@@ -1331,6 +1366,120 @@ Future<void> _discoverUsbDevices() async {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _showCashDrawerPinDialog() async {
+    final TextEditingController pinController = TextEditingController();
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text(
+                'Enter Cash Drawer PIN',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Please enter 4-digit PIN to open cash drawer',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      letterSpacing: 8,
+                    ),
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: OutlineInputBorder(),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
+                    onChanged: (value) {
+                      if (value.length == 4) {
+                        FocusScope.of(context).unfocus();
+                      }
+                    },
+                  ),
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                        },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          final enteredPin = pinController.text.trim();
+
+                          if (enteredPin.length != 4) {
+                            Fluttertoast.showToast(
+                              msg: 'Please enter 4-digit PIN',
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.red,
+                              textColor: Colors.white,
+                            );
+                            return;
+                          }
+
+                          setState(() => isLoading = true);
+
+                          // TODO: Replace with actual API call when available
+                          // For now, mock with 0000
+                          await Future.delayed(
+                              const Duration(milliseconds: 500));
+
+                          if (enteredPin == '0000') {
+                            Navigator.pop(context);
+                            await ReceiptPrinter.openCashDrawer();
+                          } else {
+                            setState(() => isLoading = false);
+                            Fluttertoast.showToast(
+                              msg: 'Invalid PIN. Please try again.',
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.red,
+                              textColor: Colors.white,
+                            );
+                          }
+                        },
+                  child: const Text(
+                    'Confirm',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

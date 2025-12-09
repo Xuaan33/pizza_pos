@@ -70,6 +70,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final response = await PosService().getStockBalanceSummary(
             posProfile: posProfile,
@@ -174,6 +175,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final response = await PosService().getStockQuantity(
             posProfile: posProfile,
@@ -473,6 +475,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final itemsToStockIn = [
             {
@@ -541,6 +544,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final currentQty = (item['actual_qty'] ?? 0).toDouble();
           final newQty = currentQty - quantityToRemove;

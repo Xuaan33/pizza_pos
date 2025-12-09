@@ -71,6 +71,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) =>
             posProfile,
         orElse: () => null,

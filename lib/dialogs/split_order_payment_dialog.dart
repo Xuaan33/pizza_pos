@@ -87,6 +87,7 @@ class _SplitOrderPaymentDialogState
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) {
                     return posProfile;
                   },
@@ -863,6 +864,7 @@ class _SplitOrderPaymentDialogState
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPin,
             ) {
               return printKitchenOrder == 1;
             },
@@ -890,6 +892,7 @@ class _SplitOrderPaymentDialogState
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPin,
             ) {
               return enableFiuu == 0 || m1Value == '-1';
             },
@@ -917,6 +920,7 @@ class _SplitOrderPaymentDialogState
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPin,
             ) {
               return printMerchantReceiptCopy == 1;
             },
@@ -1436,6 +1440,7 @@ class _SplitOrderPaymentDialogState
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             final gstTax = taxes.firstWhere(
               (tax) => tax['description']?.contains('GST') ?? false,
@@ -1827,6 +1832,7 @@ class _SplitOrderPaymentDialogState
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPin,
                     ) {
                       return posProfile;
                     },
@@ -1905,6 +1911,7 @@ class _SplitOrderPaymentDialogState
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) {
                     return posProfile;
                   },
@@ -1995,6 +2002,7 @@ class _SplitOrderPaymentDialogState
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) =>
                       posProfile,
                   orElse: () => null,
@@ -2080,6 +2088,7 @@ class _SplitOrderPaymentDialogState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) {
           return posProfile;
         },

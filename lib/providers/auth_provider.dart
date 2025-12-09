@@ -34,6 +34,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final printMerchantReceiptCopy =
         prefs.getInt('print_merchant_receipt_copy');
     final enableFiuu = prefs.getInt('enable_fiuu');
+    final cashDrawerPin = prefs.getInt('cash_drawer_pin');
 
     // Parse opening date if it exists
     DateTime? openingDate;
@@ -93,7 +94,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           baseUrl: baseUrl,
           merchantId: merchantId,
           printMerchantReceiptCopy: printMerchantReceiptCopy ?? 0,
-          enableFiuu: enableFiuu ?? 0);
+          enableFiuu: enableFiuu ?? 0,
+          cashDrawerPin: cashDrawerPin ?? 0);
     } else {
       state = const AuthState.unauthenticated();
     }
@@ -204,6 +206,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setInt('print_merchant_receipt_copy',
             response['print_merchant_receipt_copy'] ?? 0);
         await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
+        await prefs.setInt('cash_drawer_pin', response['cash_drawer_pin'] ?? 0);
 
         DateTime? openingDate;
 
@@ -258,6 +261,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           printMerchantReceiptCopy:
               response['print_merchant_receipt_copy'] ?? 0,
           enableFiuu: response['enable_fiuu'] ?? 0,
+          cashDrawerPin: response['cash_drawer_pin'] ?? 0,
         );
       } else {
         state = const AuthState.unauthenticated();
@@ -292,9 +296,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await prefs.setString(
         'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
     await prefs.setString('merchant_id', response['merchant_id']);
-    await prefs.setInt(
-        'print_merchant_receipt_copy', response['print_merchant_receipt_copy'] ?? 0);
+    await prefs.setInt('print_merchant_receipt_copy',
+        response['print_merchant_receipt_copy'] ?? 0);
     await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
+    await prefs.setInt('cash_drawer_pin', response['cash_drawer_pin'] ?? 0);
   }
 
   // Add method to force refresh session data
@@ -325,6 +330,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('has_opening', hasOpening);
@@ -358,6 +364,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           merchantId: merchantId,
           printMerchantReceiptCopy: printMerchantReceiptCopy,
           enableFiuu: enableFiuu,
+          cashDrawerPin: cashDrawerPin,
         );
       },
       orElse: () {},

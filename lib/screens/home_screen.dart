@@ -194,6 +194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) {
           if (mounted) {
             setState(() {
@@ -263,6 +264,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           final posService = PosService();
           final response =
@@ -399,6 +401,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         try {
           final response = await PosService().getStockBalanceSummary(
@@ -527,6 +530,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             CustomerDisplayController.showCustomerScreen();
@@ -654,6 +658,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                         merchantId,
                                                         printMerchantReceiptCopy,
                                                         enableFiuu,
+                                                        cashDrawerPin,
                                                       ) {
                                                         return Container(
                                                           padding:
@@ -1809,6 +1814,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return tier.toLowerCase() != 'tier 3';
       },
@@ -1973,6 +1979,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         setState(() => _isLoading = true);
 
@@ -2144,6 +2151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         if (!hasOpening) {
           // Show dialog if no opening entry exists
@@ -2774,6 +2782,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate and calculate each tax
             final applicableTaxes = taxes.where((tax) {
@@ -3092,6 +3101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Calculate total of all applicable taxes
             double subtotal = _calculateSubtotal();
@@ -3134,6 +3144,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate
             final applicableTaxes = taxes.where((tax) {
@@ -3237,6 +3248,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Calculate combined tax rate for rounding calculations
             double combinedRate = 0.0;
@@ -3366,6 +3378,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // For backward compatibility, return the first tax rate if only one exists
             if (taxes.isNotEmpty) {

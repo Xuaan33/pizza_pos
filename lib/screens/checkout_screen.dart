@@ -126,6 +126,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         setState(() {
           _paymentMethods = paymentMethods.map((method) {
@@ -199,6 +200,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) {
                     return posProfile;
                   },
@@ -347,6 +349,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         try {
           final newStockQuantities = <String, int>{};
@@ -474,6 +477,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final currentItems = _isEditing ? _editableItems : orderItems;
@@ -1702,6 +1706,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate and calculate each tax
             final applicableTaxes = taxes.where((tax) {
@@ -1849,6 +1854,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPin,
                     ) {
                       return posProfile;
                     },
@@ -2043,6 +2049,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             return enableFiuu == 0 || m1Value == '-1';
           },
@@ -2070,6 +2077,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             return printMerchantReceiptCopy == 1;
           },
@@ -2129,6 +2137,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPin,
             ) {
               return printKitchenOrder == 1;
             },
@@ -2748,6 +2757,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return tier.toLowerCase() != 'tier 3';
       },
@@ -3833,6 +3843,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPin,
                     ) {
                       return posProfile;
                     },
@@ -3929,6 +3940,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) {
                     return posProfile;
                   },
@@ -4041,6 +4053,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) =>
                       posProfile,
                   orElse: () => null,
@@ -4186,6 +4199,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPin,
                     ) {
                       return posProfile;
                     },
@@ -4356,6 +4370,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Find the GST tax rate from the taxes array
             final gstTax = taxes.firstWhere(
@@ -4704,6 +4719,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) {
                     return posProfile;
                   },
@@ -4810,6 +4826,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPin,
                   ) {
                     return posProfile;
                   },
@@ -4927,6 +4944,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) {
           return posProfile;
         },
@@ -5253,6 +5271,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) =>
             posProfile,
         orElse: () => null,
@@ -5368,6 +5387,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             if (taxes.isEmpty) {
               return {'name': '', 'rate': 0.0};
@@ -5414,6 +5434,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             return List<Map<String, dynamic>>.from(taxes);
           },
@@ -5456,6 +5477,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate
             final applicableTaxes = taxes.where((tax) {

@@ -61,6 +61,7 @@ class MyApp extends ConsumerWidget {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return MainLayout();
       },

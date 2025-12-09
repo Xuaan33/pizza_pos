@@ -112,6 +112,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPin,
           ) {
             return tier.toLowerCase() != 'tier 3' ? 1 : 2;
           },
@@ -148,6 +149,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           try {
             String? fromDateStr;
@@ -413,6 +415,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return Scaffold(
           body: Row(
@@ -472,6 +475,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPin,
         ) async {
           try {
             String? fromDateStr;
@@ -775,6 +779,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         if (tier.toLowerCase() != 'tier 3') {
           return [
@@ -990,6 +995,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return Container(
           width: 100,
@@ -1070,6 +1076,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   mechantId,
                   printMerchantReceiptCopy,
                   enableFiuu,
+                  cashDrawerPin,
                 ) {
                   if (tier.toLowerCase() != 'tier 3') {
                     isOrdersScreen = index == 1; // Orders is index 1 for tier1

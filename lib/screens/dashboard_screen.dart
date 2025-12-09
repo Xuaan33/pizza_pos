@@ -77,6 +77,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         try {
           final response = await PosService().getOrders(
@@ -175,6 +176,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) async {
         _posProfile = posProfile;
         final dateFormat = DateFormat('yyyy-MM-dd');
@@ -448,6 +450,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPin,
       ) {
         return FutureBuilder<Map<String, dynamic>>(
           future: _dashboardData,
@@ -1140,6 +1143,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           merchantId,
                           printMerchantReceiptCopy,
                           enableFiuu,
+                          cashDrawerPin,
                         ) {
                           return paymentMethods.firstWhere(
                             (pm) => pm['name'] == methodName,
