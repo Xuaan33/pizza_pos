@@ -49,7 +49,7 @@ class AuthService {
       // Use the original URL for login
       final response = await http.post(
         Uri.parse(
-            'https://mejaa.joydivisionpadel.com/api/method/shiok_pos.api.login'),
+            'https://harper.briosocialclub.com/api/method/shiok_pos.api.login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': username,

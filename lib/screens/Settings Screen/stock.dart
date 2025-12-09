@@ -85,9 +85,9 @@ class _StockManagementSectionState
                 if (rawImage.startsWith('http')) {
                   imageUrl = rawImage;
                 } else if (rawImage.startsWith('/')) {
-                  imageUrl = 'https://mejaa.joydivisionpadel.com/$rawImage';
+                  imageUrl = 'https://harper.briosocialclub.com/$rawImage';
                 } else {
-                  imageUrl = 'https://mejaa.joydivisionpadel.com//$rawImage';
+                  imageUrl = 'https://harper.briosocialclub.com/$rawImage';
                 }
               }
 
