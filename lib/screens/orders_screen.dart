@@ -12,6 +12,7 @@ import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
+import 'package:shiok_pos_android_app/dialogs/refund_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -79,6 +80,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     });
     _refreshOrders();
     _loadPaymentMethods();
+  }
+
+  void _safePopDialog() {
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _loadBaseUrl() async {
@@ -510,7 +517,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final isSelected = _selectedOrder != null &&
         _selectedOrder!['orderId'] == order['orderId'];
     final isCancelled =
-        order['status']?.toString().toLowerCase() == 'cancelled';
+        order['status']?.toString().toLowerCase() == 'cancelled' || order['custom_is_refund'] == 1;
     final isDraft =
         !isCancelled && (order['status']?.toString().toLowerCase() == 'draft');
     final total = _calculateOrderTotal(order);
@@ -602,7 +609,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Widget _buildOrderDetailsPanel(Map<String, dynamic> order) {
     final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
     final isCancelled =
-        (order['status']?.toString() ?? 'Cancelled') == 'Cancelled';
+        (order['status']?.toString() ?? 'Cancelled') == 'Cancelled' || order['custom_is_refund'] == 1;
 
     // Calculate discount amounts
     final orderLevelDiscount =
@@ -1011,9 +1018,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ),
             ),
 
-            if (!isDraft &&
-                !isCancelled &&
-                _isToday(_parseDateTime(order['entryTime']))) ...[
+            if (!isDraft && !isCancelled && _shouldShowRefundButton(order)) ...[
               SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => _processRefund(order),
@@ -1023,7 +1028,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   foregroundColor: Colors.white,
                 ),
                 child: Text(
-                  'Refund',
+                  'Refund & Exchange',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -1273,7 +1278,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       // Determine the actual status of the order
       final isCancelled =
-          order['status']?.toString().toLowerCase() == 'cancelled';
+          order['status']?.toString().toLowerCase() == 'cancelled' || order['custom_is_refund'] == 1;
       final isDraft = !isCancelled &&
           (order['status']?.toString().toLowerCase() == 'draft');
 
@@ -1396,17 +1401,53 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Future<void> _processRefund(Map<String, dynamic> order) async {
+    // First, show the refund type selection dialog
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (context) => RefundDialog(
+        order: order,
+        paymentMethods: _paymentMethods,
+        onRefund: (orderId, items) {
+          Navigator.pop(context, {
+            'orderId': orderId,
+            'items': items,
+          });
+        },
+      ),
+    );
+
+    // If user cancelled the dialog, return
+    if (result == null) return;
+
+    final orderId = result['orderId'];
+    final items = result['items'] as List<Map<String, dynamic>>?;
+
+    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
           context: context,
+          barrierDismissible: false,
           builder: (context) => AlertDialog(
             backgroundColor: Colors.white,
             title: Text(
               'Confirm Refund',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            content: Text(
-              'Are you sure you want to refund this order?',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Are you sure you want to process this refund?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                if (items != null && items.isNotEmpty)
+                  Text(
+                    '${items.length} item(s) selected for refund',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+              ],
             ),
             actions: [
               TextButton(
@@ -1423,7 +1464,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 ),
                 onPressed: () => Navigator.pop(context, true),
                 child: Text(
-                  'Refund',
+                  'Confirm Refund',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -1433,6 +1474,36 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         false;
 
     if (!confirmed) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        content: Center(
+          child: Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Processing refund...',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
     try {
       // Get the payment method from the order
@@ -1448,13 +1519,46 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           paymentMethodData['custom_fiuu_m1_value']?.toString() ?? '-1';
 
       // Determine if it's cash payment
+      final isOfflinePayment = ref.read(authProvider).maybeWhen(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId,
+              printMerchantReceiptCopy,
+              enableFiuu,
+              cashDrawerPin,
+            ) {
+              return enableFiuu == 0 || m1Value == '-1';
+            },
+            orElse: () => false,
+          );
+
       final isCashPayment =
-          m1Value == '-1' || paymentMethod.toLowerCase() == 'cash';
+          isOfflinePayment || paymentMethod.toLowerCase() == 'cash';
 
       if (isCashPayment) {
-        // For cash payments, just cancel the order directly
-        final refundResponse =
-            await PosService().cancelOrder(order['orderId']?.toString() ?? '');
+        // For cash payments, use the new refund API
+        final refundResponse = await PosService().refundOrder(
+          name: orderId,
+          items: items,
+        );
+
+        // Close loading dialog
+        if (mounted) Navigator.of(context).pop();
 
         if (refundResponse['success'] == true) {
           if (mounted) {
@@ -1466,21 +1570,20 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             );
             _refreshOrders();
           }
+        } else {
+          throw Exception(refundResponse['message'] ?? 'Refund failed');
         }
         return;
       }
 
+      // For non-cash payments (card/QR), we need to handle POS terminal communication
       final posInvoiceNumber = order['pos_invoice_number']?.toString();
-      print('POS Invoice Number: $posInvoiceNumber');
-      print('Payment Method: $paymentMethod');
-      print('M1 Value: $m1Value');
 
       if (posInvoiceNumber == null || posInvoiceNumber.isEmpty) {
         throw Exception('POS invoice number not available for refund');
       }
 
       // Generate transaction ID from order ID
-      final orderId = order['orderId']?.toString() ?? '';
       final transactionId = 'INV${orderId.replaceAll(RegExp(r'[^0-9]'), '')}'
           .padRight(20, '0')
           .substring(0, 20);
@@ -1494,14 +1597,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           transactionId: transactionId,
           invoiceNumber: posInvoiceNumber,
         );
-        print('Processing Credit Card refund (m1value: 01)');
       } else {
         // Other payment methods (QR, DuitNow, etc.) - do QR void
         hexMessage = PosHexGenerator.generateVoidWalletQrHexMessage(
           transactionId,
           extendedInvoiceNumber: posInvoiceNumber,
         );
-        print('Processing QR/Wallet refund (m1value: $m1Value)');
       }
 
       // Connect to POS terminal
@@ -1520,9 +1621,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               response['response_text'] ?? 'POS transaction declined');
         }
 
-        // If successful, call the refund API
-        final refundResponse =
-            await PosService().cancelOrder(order['orderId']?.toString() ?? '');
+        // If POS transaction successful, call the refund API
+        final refundResponse = await PosService().refundOrder(
+          name: orderId,
+          items: items,
+        );
+
+        // Close loading dialog
+        if (mounted) Navigator.of(context).pop();
 
         if (refundResponse['success'] == true) {
           if (mounted) {
@@ -1539,6 +1645,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         socket.destroy();
       }
     } catch (e) {
+      // Close loading dialog if still mounted
+      _safePopDialog();
+
       if (mounted) {
         Fluttertoast.showToast(
           msg: "Refund Error: ${e.toString()}",
@@ -1547,6 +1656,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           textColor: Colors.white,
         );
       }
+
+      // Re-throw for debugging
+      debugPrint('Refund error details: $e');
+      rethrow;
     }
   }
 
@@ -1795,7 +1908,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     if (order['total'] != null) {
       double total = (order['total'] as num).toDouble();
       // Ensure total is not negative
-      return total < 0 ? 0.00 : total;
+      return total;
     }
 
     // Calculate from components
@@ -2078,5 +2191,19 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         );
       }
     }
+  }
+
+  bool _shouldShowRefundButton(Map<String, dynamic> order) {
+    final isCancelled =
+        (order['status']?.toString() ?? 'Cancelled') == 'Cancelled';
+    final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
+
+    if (isCancelled || isDraft) return false;
+
+    // Check if order is within 3 months
+    final orderDate = _parseDateTime(order['entryTime']);
+    final threeMonthsAgo = DateTime.now().subtract(Duration(days: 90));
+
+    return orderDate.isAfter(threeMonthsAgo);
   }
 }

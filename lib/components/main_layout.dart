@@ -307,6 +307,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                           'discount_amount':
                               (invoice['discount_amount'] as num?)?.toDouble(),
                           'user_voucher_code': (invoice['user_voucher_code']),
+                          'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
                         };
                       } catch (e) {
                         print(
@@ -630,6 +631,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                         'discount_amount':
                             (invoice['discount_amount'] as num?)?.toDouble(),
                         'user_voucher_code': (invoice['user_voucher_code']),
+                        'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
                       };
                     } catch (e) {
                       print('Error processing invoice ${invoice['name']}: $e');

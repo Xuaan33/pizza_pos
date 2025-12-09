@@ -350,6 +350,20 @@ class PosService {
     }
   }
 
+  Future<Map<String, dynamic>> refundOrder({
+    required String name,
+    List<Map<String, dynamic>>? items,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.refund',
+      method: 'POST',
+      body: {
+        'name': name,
+        if (items != null) 'items': items,
+      },
+    );
+  }
+
   Future<Uint8List> printReceipt(String orderName) async {
     try {
       final token = await AuthService.getAuthToken();
@@ -748,7 +762,10 @@ class PosService {
       body: {
         'name': name,
         'item_group_name': itemGroupName,
-        if (parentItemGroup != null) 'parent_item_group': parentItemGroup else 'parent_item_group': 'All Item Groups',
+        if (parentItemGroup != null)
+          'parent_item_group': parentItemGroup
+        else
+          'parent_item_group': 'All Item Groups',
         if (isGroup != null) 'is_group': isGroup,
         'disabled': disabled
       },
