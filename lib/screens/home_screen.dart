@@ -2936,7 +2936,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // Use the original context (not dialogContext) to find MainLayout
               final mainLayout = MainLayout.of(context);
               if (mainLayout != null) {
-                mainLayout.setSelectedTabIndex(3);
+                mainLayout.setSelectedTabIndex(4);
+                if (mainLayout.settingsScreenKey.currentState != null &&
+                    mainLayout.settingsScreenKey.currentState!.mounted) {
+                  mainLayout.settingsScreenKey.currentState!.showSection(0);
+                }
               } else {
                 print('MainLayout.of(context) returned null');
               }

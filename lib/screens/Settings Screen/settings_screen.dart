@@ -10,16 +10,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_terminal_manager.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/dialogs/closing_entry_dialog.dart';
 import 'package:shiok_pos_android_app/dialogs/opening_entry_dialog.dart';
-import 'package:shiok_pos_android_app/dialogs/option_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/item.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/item_group.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/stock.dart';
-import 'package:shiok_pos_android_app/screens/Settings%20Screen/stock_item_card.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/variant.dart';
-import 'package:shiok_pos_android_app/screens/Settings%20Screen/variant_group.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:usb_serial/usb_serial.dart';
 
@@ -27,10 +25,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _selectedIndex = 0;
   bool _isPosConnected = false;
   bool _isTesting = false;
@@ -93,6 +91,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _portController.dispose();
     _employeeSearchController.dispose();
     super.dispose();
+  }
+
+  void showSection(int index) {
+    if (mounted) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   Future<void> _loadSavedConfig() async {
@@ -825,7 +831,7 @@ Future<void> _discoverUsbDevices() async {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'POS Opening & Closing',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
@@ -841,6 +847,13 @@ Future<void> _discoverUsbDevices() async {
             ),
           ],
         ),
+        const SizedBox(height: 30),
+        Text(
+          'Cash Drawer',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 30),
+        _buildCashDrawerButton(),
       ],
     );
   }
@@ -1295,6 +1308,30 @@ Future<void> _discoverUsbDevices() async {
         setState(() => _isLoadingClosing = false);
       }
     }
+  }
+
+  Widget _buildCashDrawerButton() {
+    return SizedBox(
+      width: 435,
+      child: ElevatedButton(
+        onPressed: ReceiptPrinter.openCashDrawer,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFE732A0),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: Text(
+          'Open Cash Drawer',
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildTcpConnectionForm() {

@@ -45,6 +45,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool get isLoadingMore => _isLoadingMore;
   bool _customerDisplayInitialized = false;
 
+  final GlobalKey<SettingsScreenState> settingsScreenKey =
+      GlobalKey<SettingsScreenState>();
+
   @override
   void initState() {
     super.initState();
@@ -858,7 +861,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               key: ValueKey(
                   'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
             ),
-            SettingsScreen(),
+            SettingsScreen(key: settingsScreenKey),
           ];
         } else {
           return [
@@ -926,7 +929,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               key: ValueKey(
                   'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
             ),
-            SettingsScreen(),
+            SettingsScreen(key: settingsScreenKey),
           ];
         }
       },
