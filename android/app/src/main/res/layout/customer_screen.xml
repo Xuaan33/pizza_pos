@@ -136,10 +136,13 @@
                         android:textColor="#666666" />
                 </LinearLayout>
 
+                <!-- Discount Row - Will be hidden when itemized discount is applied -->
                 <LinearLayout
+                    android:id="@+id/orderDiscountRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
+                    android:visibility="gone"
                 >
 
                     <TextView
@@ -173,7 +176,8 @@
                     android:layout_height="wrap_content"
                     android:layout_below="@id/taxContainer"
                     android:orientation="horizontal"
-                    android:weightSum="1">
+                    android:weightSum="1"
+                    android:visibility="gone" >
 
                     <TextView
                         android:id="@+id/orderTaxLabel"

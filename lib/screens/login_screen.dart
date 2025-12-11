@@ -106,9 +106,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-     WidgetsBinding.instance.addPostFrameCallback((_) {
-            CustomerDisplayController.showCustomerScreen();
-         });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CustomerDisplayController.showCustomerScreen();
+    });
     return Scaffold(
       backgroundColor: Colors.pink[50],
       body: Center(
@@ -128,82 +128,99 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
 
-                  // Username field
-                  TextField(
-                    controller: _usernameController,
-                    decoration: InputDecoration(
-                      labelText: 'Username',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-
-                  // Merchant ID field - conditionally shown
-                  if (_showMerchantIdField) ...[
-                    TextField(
-                      controller: _merchantIdController,
-                      decoration: InputDecoration(
-                        labelText: 'Merchant ID',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 16),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                  ] else ...[
-                    // Show merchant ID as read-only with edit option
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Merchant ID',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                Text(
-                                  _merchantIdController.text,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                  Row(
+                    children: [
+                      // USERNAME — 70%
+                      Expanded(
+                        flex: 7,
+                        child: SizedBox(
+                          height: 60, // Ensures consistent height
+                          child: TextField(
+                            controller: _usernameController,
+                            decoration: InputDecoration(
+                              labelText: 'Username',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 16),
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 20),
-                            onPressed: _showMerchantIdInput,
-                            tooltip: 'Change Merchant ID',
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 15),
-                  ],
+
+                      const SizedBox(width: 15),
+
+                      // MERCHANT ID — 30%
+                      Expanded(
+                        flex: 3,
+                        child: SizedBox(
+                          height: 60, // Match height exactly
+                          child: _showMerchantIdField
+                              ? TextField(
+                                  controller: _merchantIdController,
+                                  decoration: InputDecoration(
+                                    labelText: 'Merchant ID',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 20, vertical: 16),
+                                  ),
+                                )
+                              : Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 8), // Adjusted to fit height
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    border: Border.all(color: Colors.grey),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              'Merchant ID',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            Text(
+                                              _merchantIdController.text,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.edit, size: 18),
+                                        onPressed: _showMerchantIdInput,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
 
                   const Text("Enter your PIN",
                       style:

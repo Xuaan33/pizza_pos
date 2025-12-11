@@ -36,6 +36,29 @@ class CustomerDisplayController {
     List<Map<String, dynamic>>? taxDetails,
   }) async {
     try {
+      // Check if discount is itemized (applied to individual items)
+      // Itemized discount means items have their own discount_amount > 0
+      bool hasItemizedDiscount = items.any((item) {
+        final itemDiscount = item['discount_amount'] ?? 0.0;
+        return itemDiscount > 0;
+      });
+
+      // Calculate total itemized discount
+      double totalItemizedDiscount = 0.0;
+      if (hasItemizedDiscount) {
+        totalItemizedDiscount = items.fold(0.0, (sum, item) {
+          final itemDiscount = (item['discount_amount'] ?? 0.0);
+          final quantity = (item['quantity'] is int)
+              ? item['quantity'] as int
+              : (item['quantity'] as double).toInt();
+          return sum + (itemDiscount * quantity);
+        });
+      }
+
+      // Only pass discount to summary if it's NOT itemized
+      // When itemized, the discount is shown on each item line, not in summary
+      double summaryDiscount = hasItemizedDiscount ? 0.0 : discount;
+
       await _channel.invokeMethod('updateOrderDisplay', {
         'items': items.map((item) {
           return {
@@ -54,11 +77,12 @@ class CustomerDisplayController {
         }).toList(),
         'subtotal': subtotal,
         'tax': tax,
-        'discount': discount,
+        'discount': summaryDiscount, // Only show in summary if not itemized
         'rounding': rounding,
         'total': total,
         'taxRate': taxRate,
         'taxDetails': taxDetails,
+        'hasItemizedDiscount': hasItemizedDiscount, // Flag for Android side
       });
     } catch (e) {
       print('Error updating order display: $e');

@@ -55,7 +55,39 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginTop="4dp" />
+        android:layout_marginTop="4dp"/>
+
+    <!-- Discount Container (for itemized discounts) -->
+    <LinearLayout
+        android:id="@+id/discountContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="4dp"
+        android:visibility="gone">
+
+        <!-- Original Price (strikethrough) -->
+        <TextView
+            android:id="@+id/originalPriceText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="RM 0.00"
+            android:textSize="11sp"
+            android:textColor="#999999"
+            android:gravity="end"
+            android:textStyle="bold" />
+
+        <!-- Discount Amount -->
+        <TextView
+            android:id="@+id/discountText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Discount: RM 0.00"
+            android:textSize="11sp"
+            android:textColor="#E91E63"
+            android:gravity="end"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <!-- Remarks -->
     <TextView

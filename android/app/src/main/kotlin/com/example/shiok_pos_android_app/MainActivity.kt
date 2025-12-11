@@ -41,6 +41,7 @@ class CustomerDisplay(
     private lateinit var orderTax: TextView
     private lateinit var orderDiscount: TextView
     private lateinit var orderDiscountLabel: TextView
+    private lateinit var orderDiscountRow: LinearLayout
     private lateinit var orderRounding: TextView
     private lateinit var orderTotal: TextView
     private lateinit var orderTaxLabel: TextView 
@@ -72,6 +73,7 @@ class CustomerDisplay(
         orderTax = findViewById(R.id.orderTax)
         orderDiscount = findViewById(R.id.orderDiscount)
         orderDiscountLabel = findViewById(R.id.orderDiscountLabel)
+        orderDiscountRow = findViewById(R.id.orderDiscountRow)
         orderRounding = findViewById(R.id.orderRounding)
         orderTotal = findViewById(R.id.orderTotal)
         slideshowView = findViewById(R.id.videoView)
@@ -114,7 +116,8 @@ class CustomerDisplay(
         rounding: Double,
         total: Double,
         taxRate: String,
-        taxDetails: List<Map<String, Any>>? = null
+        taxDetails: List<Map<String, Any>>? = null,
+        hasItemizedDiscount: Boolean = false
     ) {
         handler.post {
             val taxContainer = findViewById<LinearLayout>(R.id.taxContainer)
@@ -153,6 +156,16 @@ class CustomerDisplay(
                 
                 findViewById<TextView>(R.id.orderTaxLabel).text = "Tax (${taxRate}%):"
                 findViewById<TextView>(R.id.orderTax).text = "RM ${"%.2f".format(tax)}"
+            }
+            
+            // Handle discount row visibility
+            // Hide discount row if: discount is 0 OR if it's itemized discount
+            // When itemized, discount is shown on each item line, not in summary
+            if (discount == 0.0 || hasItemizedDiscount) {
+                orderDiscountRow.visibility = View.GONE
+            } else {
+                orderDiscountRow.visibility = View.VISIBLE
+                orderDiscount.text = "RM ${"%.2f".format(discount)}"
             }
             
             // Create custom adapter for order items
@@ -206,6 +219,27 @@ class CustomerDisplay(
                         }
                     }
 
+                    // Handle itemized discount display (like checkout screen)
+                    val discountContainer = view.findViewById<LinearLayout>(R.id.discountContainer)
+                    val originalPriceText = view.findViewById<TextView>(R.id.originalPriceText)
+                    val discountText = view.findViewById<TextView>(R.id.discountText)
+                    
+                    if (discountAmount > 0) {
+                        discountContainer.visibility = View.VISIBLE
+                        
+                        // Show original price (before discount) with strikethrough
+                        val originalPrice = price + discountAmount
+                        val originalTotal = originalPrice * quantity
+                        originalPriceText.text = "RM ${"%.2f".format(originalTotal)}"
+                        originalPriceText.paintFlags = originalPriceText.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
+                        
+                        // Show discount amount
+                        val totalDiscount = discountAmount * quantity
+                        discountText.text = "Discount: RM ${"%.2f".format(totalDiscount)}"
+                    } else {
+                        discountContainer.visibility = View.GONE
+                    }
+
                     // Handle remarks
                     val remarksView = view.findViewById<TextView>(R.id.itemRemarks)
                     if (remarks.isNotEmpty()) {
@@ -220,42 +254,28 @@ class CustomerDisplay(
                     serveLaterView.visibility = if (serveLater) View.VISIBLE else View.GONE
 
                     return view
-                }        
-            }
-            
-            orderItemsList.adapter = adapter
-            
-            // Auto-scroll to the bottom
-            orderItemsList.post {
-                val adapter = orderItemsList.adapter
-                if (adapter != null && adapter.count > 0) {
-                    orderItemsList.setSelection(adapter.count - 1)
                 }
             }
-            
+
+            orderItemsList.adapter = adapter
+
+            // Update totals
             orderSubtotal.text = "RM ${"%.2f".format(subtotal)}"
-            orderTax.text = "RM ${"%.2f".format(tax)}"
-            if(discount <= 0)
-            {
-                orderDiscountLabel.visibility = View.GONE
-                orderDiscount.visibility = View.GONE
-            }
-            else
-            {
-                orderDiscountLabel.visibility = View.VISIBLE
-                orderDiscount.visibility = View.VISIBLE
-
-                val discountPercent = if (subtotal > 0) {
-                    (discount / subtotal * 100)
-                } else 0.0
-
-                val percentText = "%.0f".format(discountPercent)  // e.g. "10"
-
-                orderDiscountLabel.text = "Discount (${percentText}%):"
-            }
-            orderDiscount.text = "RM ${"%.2f".format(discount)}"
             orderRounding.text = "RM ${"%.2f".format(rounding)}"
             orderTotal.text = "RM ${"%.2f".format(total)}"
+
+            // Show or hide the order details based on items
+            val orderDetailsContainer = findViewById<LinearLayout>(R.id.orderDetailsContainer)
+            if (items.isEmpty()) {
+                showDefaultView()
+            } else {
+                orderDetailsContainer.visibility = View.VISIBLE
+                slideshowView.visibility = View.VISIBLE
+                handler.removeCallbacks(imageChangeRunnable)
+                if (imageUrls.isNotEmpty()) {
+                    handler.post(imageChangeRunnable)
+                }
+            }
         }
     }
 
@@ -552,8 +572,19 @@ class MainActivity : FlutterActivity() {
                         val total = call.argument<Double>("total") ?: 0.0
                         val taxRate = call.argument<String>("taxRate") ?: ""
                         val taxDetails = call.argument<List<Map<String, Any>>>("taxDetails")
+                        val hasItemizedDiscount = call.argument<Boolean>("hasItemizedDiscount") ?: false
 
-                        customerDisplay?.updateOrderDetails(items, subtotal, tax, discount, rounding, total, taxRate, taxDetails)
+                        customerDisplay?.updateOrderDetails(
+                            items, 
+                            subtotal, 
+                            tax, 
+                            discount, 
+                            rounding, 
+                            total, 
+                            taxRate, 
+                            taxDetails,
+                            hasItemizedDiscount
+                        )
                         result.success(null)
                     }
                     "showDefaultDisplay" -> {
