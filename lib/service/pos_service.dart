@@ -891,6 +891,7 @@ class PosService {
       body: {
         'employee': employee,
         'branch': branch,
+        'status': 'Checked Out'
       },
     );
   }

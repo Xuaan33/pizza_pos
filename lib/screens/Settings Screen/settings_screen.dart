@@ -1085,13 +1085,46 @@ Future<void> _discoverUsbDevices() async {
                         itemBuilder: (context, index) {
                           final employee = _employees[index];
                           debugPrint("EMPLOYEE TEST: $employee");
+                          
+                          final status = employee['status'] ?? 'Unknown';
+                          final isCheckedIn = status == 'Checked In';
+                          final checkedInOutAt = employee['checked_in_out_at'];
+                          
+                          // Format the timestamp
+                          String formattedTime = '';
+                          if (checkedInOutAt != null) {
+                            try {
+                              final dateTime = DateTime.parse(checkedInOutAt.toString());
+                              formattedTime = DateFormat('hh:mm a MM/dd/yy').format(dateTime);
+                            } catch (e) {
+                              formattedTime = checkedInOutAt.toString();
+                            }
+                          }
+                          
                           return Card(
                             margin: const EdgeInsets.symmetric(vertical: 8),
                             child: ListTile(
                               leading: const Icon(Icons.person),
                               title:
                                   Text(employee['employee_name'] ?? 'Unknown'),
-                              subtitle: Text(employee['designation'] ?? ''),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (employee['designation'] != null && employee['designation'].toString().isNotEmpty)
+                                    Text(employee['designation']),
+                                  if (formattedTime.isNotEmpty)
+                                    Text(
+                                      isCheckedIn 
+                                          ? 'Clocked in: $formattedTime'
+                                          : 'Clocked out: $formattedTime',
+                                      style: TextStyle(
+                                        color: isCheckedIn ? Colors.green : Colors.grey,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                ],
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -1171,15 +1204,6 @@ Future<void> _discoverUsbDevices() async {
                                     },
                                     tooltip: 'Check Out',
                                   ),
-                                  // Text(
-                                  //   employee['status'] ?? 'Unknown',
-                                  //   style: TextStyle(
-                                  //     color: employee['status'] == 'Checked In'
-                                  //         ? Colors.green
-                                  //         : Colors.grey,
-                                  //     fontWeight: FontWeight.bold,
-                                  //   ),
-                                  // ),
                                 ],
                               ),
                             ),

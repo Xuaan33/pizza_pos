@@ -1021,7 +1021,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ),
             ),
 
-            if (!isDraft && !isCancelled && _shouldShowRefundButton(order)) ...[
+            if (!isDraft &&
+                !isCancelled &&
+                _isToday(_parseDateTime(order['entryTime']))) ...[
               SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => _processRefund(order),
@@ -1405,7 +1407,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Future<void> _processRefund(Map<String, dynamic> order) async {
-    // Show the refund type selection dialog
     final result = await showDialog<dynamic>(
       context: context,
       barrierDismissible: false,
@@ -2261,7 +2262,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
     // Check if order is within 3 months
     final orderDate = _parseDateTime(order['entryTime']);
-    final threeMonthsAgo = DateTime.now().subtract(Duration(days: 90));
+    final threeMonthsAgo = DateTime.now().subtract(Duration(days: 0));
 
     return orderDate.isAfter(threeMonthsAgo);
   }
