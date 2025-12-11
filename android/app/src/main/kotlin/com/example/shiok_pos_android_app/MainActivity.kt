@@ -165,6 +165,11 @@ class CustomerDisplay(
                 orderDiscountRow.visibility = View.GONE
             } else {
                 orderDiscountRow.visibility = View.VISIBLE
+                val discountPercent = (discount / subtotal) * 100
+                val formattedPercent = String.format("%.2f", discountPercent)
+
+                findViewById<TextView>(R.id.orderDiscountLabel).text =
+                    "Discount ($formattedPercent%):"
                 orderDiscount.text = "RM ${"%.2f".format(discount)}"
             }
             
