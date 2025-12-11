@@ -86,7 +86,7 @@ class AuthService {
           'print_merchant_receipt_copy': message['print_merchant_receipt_copy'],
           'enable_fiuu': message['enable_fiuu'],
           'cash_drawer_pin_needed': message['cash_drawer_pin_needed'],
-          'cash_drawer_pin': message['cash_drawer_pin'],
+          'cash_drawer_pin': message['cash_drawer_pin'] ?? '',
         };
       } else {
         return {

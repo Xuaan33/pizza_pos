@@ -211,7 +211,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setInt(
             'cash_drawer_pin_needed', response['cash_drawer_pin_needed'] ?? 0);
         await prefs.setString(
-            'cash_drawer_pin_needed', response['cash_drawer_pin_needed']);
+            'cash_drawer_pin', response['cash_drawer_pin'] ?? '');
 
         DateTime? openingDate;
 
