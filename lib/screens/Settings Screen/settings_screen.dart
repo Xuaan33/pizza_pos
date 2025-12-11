@@ -634,6 +634,7 @@ Future<void> _discoverUsbDevices() async {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final response = await PosService().getEmployees();
@@ -759,6 +760,7 @@ Future<void> _discoverUsbDevices() async {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         final sections = _getSections(tier);
@@ -1119,6 +1121,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                           printMerchantReceiptCopy,
                                           enableFiuu,
+                                          cashDrawerPinNeeded,
                                           cashDrawerPin,
                                         ) {
                                           _employeeCheckIn(
@@ -1156,6 +1159,7 @@ Future<void> _discoverUsbDevices() async {
                                           merchantId,
                                           printMerchantReceiptCopy,
                                           enableFiuu,
+                                          cashDrawerPinNeeded,
                                           cashDrawerPin,
                                         ) {
                                           _employeeCheckOut(
@@ -1285,6 +1289,7 @@ Future<void> _discoverUsbDevices() async {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final response = await PosService().requestClosingVoucher(
@@ -1337,10 +1342,11 @@ Future<void> _discoverUsbDevices() async {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
-            debugPrint("Test: $cashDrawerPin");
-            return cashDrawerPin == 1;
+            debugPrint("Test: $cashDrawerPinNeeded");
+            return cashDrawerPinNeeded == 1;
           },
           orElse: () => false,
         );
@@ -1372,6 +1378,35 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _showCashDrawerPinDialog() async {
     final TextEditingController pinController = TextEditingController();
     bool isLoading = false;
+    final cashDrawerPin = ref.read(authProvider).maybeWhen(
+          authenticated: (
+            sid,
+            apiKey,
+            apiSecret,
+            username,
+            email,
+            fullName,
+            posProfile,
+            branch,
+            paymentMethods,
+            taxes,
+            hasOpening,
+            tier,
+            printKitchenOrder,
+            openingDate,
+            itemsGroups,
+            baseUrl,
+            merchantId,
+            printMerchantReceiptCopy,
+            enableFiuu,
+            cashDrawerPinNeeded,
+            cashDrawerPin,
+          ) {
+            debugPrint("Test: $cashDrawerPin");
+            return cashDrawerPin;
+          },
+          orElse: () => false,
+        );
 
     await showDialog(
       context: context,
@@ -1452,12 +1487,10 @@ Future<void> _discoverUsbDevices() async {
 
                           setState(() => isLoading = true);
 
-                          // TODO: Replace with actual API call when available
-                          // For now, mock with 0000
                           await Future.delayed(
                               const Duration(milliseconds: 500));
 
-                          if (enteredPin == '0000') {
+                          if (enteredPin == cashDrawerPin) {
                             Navigator.pop(context);
                             await ReceiptPrinter.openCashDrawer();
                           } else {

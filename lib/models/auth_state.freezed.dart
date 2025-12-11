@@ -39,7 +39,8 @@ mixin _$AuthState {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)
         authenticated,
     required TResult Function() unauthenticated,
   }) =>
@@ -67,7 +68,8 @@ mixin _$AuthState {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) =>
@@ -95,7 +97,8 @@ mixin _$AuthState {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -207,7 +210,8 @@ class _$InitialImpl implements _Initial {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -238,7 +242,8 @@ class _$InitialImpl implements _Initial {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -269,7 +274,8 @@ class _$InitialImpl implements _Initial {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -345,7 +351,8 @@ abstract class _$$AuthenticatedImplCopyWith<$Res> {
       String merchantId,
       int printMerchantReceiptCopy,
       int enableFiuu,
-      int cashDrawerPin});
+      int cashDrawerPinNeeded,
+      String cashDrawerPin});
 }
 
 /// @nodoc
@@ -380,6 +387,7 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
     Object? merchantId = null,
     Object? printMerchantReceiptCopy = null,
     Object? enableFiuu = null,
+    Object? cashDrawerPinNeeded = null,
     Object? cashDrawerPin = null,
   }) {
     return _then(_$AuthenticatedImpl(
@@ -459,10 +467,14 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
           ? _value.enableFiuu
           : enableFiuu // ignore: cast_nullable_to_non_nullable
               as int,
+      cashDrawerPinNeeded: null == cashDrawerPinNeeded
+          ? _value.cashDrawerPinNeeded
+          : cashDrawerPinNeeded // ignore: cast_nullable_to_non_nullable
+              as int,
       cashDrawerPin: null == cashDrawerPin
           ? _value.cashDrawerPin
           : cashDrawerPin // ignore: cast_nullable_to_non_nullable
-              as int,
+              as String,
     ));
   }
 }
@@ -490,6 +502,7 @@ class _$AuthenticatedImpl implements _Authenticated {
       required this.merchantId,
       required this.printMerchantReceiptCopy,
       required this.enableFiuu,
+      required this.cashDrawerPinNeeded,
       required this.cashDrawerPin})
       : _paymentMethods = paymentMethods,
         _taxes = taxes,
@@ -552,11 +565,13 @@ class _$AuthenticatedImpl implements _Authenticated {
   @override
   final int enableFiuu;
   @override
-  final int cashDrawerPin;
+  final int cashDrawerPinNeeded;
+  @override
+  final String cashDrawerPin;
 
   @override
   String toString() {
-    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening, tier: $tier, printKitchenOrder: $printKitchenOrder, openingDate: $openingDate, itemsGroups: $itemsGroups, baseUrl: $baseUrl, merchantId: $merchantId, printMerchantReceiptCopy: $printMerchantReceiptCopy, enableFiuu: $enableFiuu, cashDrawerPin: $cashDrawerPin)';
+    return 'AuthState.authenticated(sid: $sid, apiKey: $apiKey, apiSecret: $apiSecret, username: $username, email: $email, fullName: $fullName, posProfile: $posProfile, branch: $branch, paymentMethods: $paymentMethods, taxes: $taxes, hasOpening: $hasOpening, tier: $tier, printKitchenOrder: $printKitchenOrder, openingDate: $openingDate, itemsGroups: $itemsGroups, baseUrl: $baseUrl, merchantId: $merchantId, printMerchantReceiptCopy: $printMerchantReceiptCopy, enableFiuu: $enableFiuu, cashDrawerPinNeeded: $cashDrawerPinNeeded, cashDrawerPin: $cashDrawerPin)';
   }
 
   @override
@@ -596,6 +611,8 @@ class _$AuthenticatedImpl implements _Authenticated {
                 other.printMerchantReceiptCopy == printMerchantReceiptCopy) &&
             (identical(other.enableFiuu, enableFiuu) ||
                 other.enableFiuu == enableFiuu) &&
+            (identical(other.cashDrawerPinNeeded, cashDrawerPinNeeded) ||
+                other.cashDrawerPinNeeded == cashDrawerPinNeeded) &&
             (identical(other.cashDrawerPin, cashDrawerPin) ||
                 other.cashDrawerPin == cashDrawerPin));
   }
@@ -622,6 +639,7 @@ class _$AuthenticatedImpl implements _Authenticated {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin
       ]);
 
@@ -657,7 +675,8 @@ class _$AuthenticatedImpl implements _Authenticated {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -681,6 +700,7 @@ class _$AuthenticatedImpl implements _Authenticated {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin);
   }
 
@@ -708,7 +728,8 @@ class _$AuthenticatedImpl implements _Authenticated {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -732,6 +753,7 @@ class _$AuthenticatedImpl implements _Authenticated {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin);
   }
 
@@ -759,7 +781,8 @@ class _$AuthenticatedImpl implements _Authenticated {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),
@@ -785,6 +808,7 @@ class _$AuthenticatedImpl implements _Authenticated {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin);
     }
     return orElse();
@@ -846,7 +870,8 @@ abstract class _Authenticated implements AuthState {
       required final String merchantId,
       required final int printMerchantReceiptCopy,
       required final int enableFiuu,
-      required final int cashDrawerPin}) = _$AuthenticatedImpl;
+      required final int cashDrawerPinNeeded,
+      required final String cashDrawerPin}) = _$AuthenticatedImpl;
 
   String get sid;
   String get apiKey;
@@ -867,7 +892,8 @@ abstract class _Authenticated implements AuthState {
   String get merchantId;
   int get printMerchantReceiptCopy;
   int get enableFiuu;
-  int get cashDrawerPin;
+  int get cashDrawerPinNeeded;
+  String get cashDrawerPin;
 
   /// Create a copy of AuthState
   /// with the given fields replaced by the non-null parameter values.
@@ -938,7 +964,8 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)
         authenticated,
     required TResult Function() unauthenticated,
   }) {
@@ -969,7 +996,8 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult? Function()? unauthenticated,
   }) {
@@ -1000,7 +1028,8 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
             String merchantId,
             int printMerchantReceiptCopy,
             int enableFiuu,
-            int cashDrawerPin)?
+            int cashDrawerPinNeeded,
+            String cashDrawerPin)?
         authenticated,
     TResult Function()? unauthenticated,
     required TResult orElse(),

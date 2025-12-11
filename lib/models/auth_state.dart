@@ -25,7 +25,8 @@ class AuthState with _$AuthState {
     required String merchantId,
     required int printMerchantReceiptCopy,
     required int enableFiuu,
-    required int cashDrawerPin,
+    required int cashDrawerPinNeeded,
+    required String cashDrawerPin,
   }) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
 }

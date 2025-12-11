@@ -126,6 +126,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         setState(() {
@@ -200,6 +201,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) {
                     return posProfile;
@@ -349,6 +351,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         try {
@@ -477,6 +480,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1706,6 +1710,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate and calculate each tax
@@ -1854,6 +1859,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPinNeeded,
                       cashDrawerPin,
                     ) {
                       return posProfile;
@@ -2049,6 +2055,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             return enableFiuu == 0 || m1Value == '-1';
@@ -2077,6 +2084,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             return printMerchantReceiptCopy == 1;
@@ -2137,6 +2145,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPinNeeded,
               cashDrawerPin,
             ) {
               return printKitchenOrder == 1;
@@ -2757,6 +2766,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return tier.toLowerCase() != 'tier 3';
@@ -3266,7 +3276,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                           ChoiceChip(
                             label: Text(
-                              'Itemized Discount',
+                              'Itemised Discount',
                               style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                             selected: selectedDiscountType == 3,
@@ -3843,6 +3853,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPinNeeded,
                       cashDrawerPin,
                     ) {
                       return posProfile;
@@ -3875,7 +3886,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         });
 
         Fluttertoast.showToast(
-          msg: "Itemized discounts applied successfully",
+          msg: "Itemised discounts applied successfully",
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.green,
           textColor: Colors.white,
@@ -3883,7 +3894,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     } catch (e) {
       Fluttertoast.showToast(
-        msg: "Error applying itemized discounts: ${e.toString()}",
+        msg: "Error applying itemised discounts: ${e.toString()}",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
@@ -3940,6 +3951,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) {
                     return posProfile;
@@ -4053,6 +4065,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) =>
                       posProfile,
@@ -4199,6 +4212,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPinNeeded,
                       cashDrawerPin,
                     ) {
                       return posProfile;
@@ -4370,6 +4384,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Find the GST tax rate from the taxes array
@@ -4719,6 +4734,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) {
                     return posProfile;
@@ -4826,6 +4842,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) {
                     return posProfile;
@@ -4944,6 +4961,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) {
           return posProfile;
@@ -5271,6 +5289,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) =>
             posProfile,
@@ -5387,6 +5406,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             if (taxes.isEmpty) {
@@ -5434,6 +5454,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             return List<Map<String, dynamic>>.from(taxes);
@@ -5477,6 +5498,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate

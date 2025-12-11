@@ -85,7 +85,8 @@ class AuthService {
           'merchant_id': message['merchant_id'] ?? merchantId,
           'print_merchant_receipt_copy': message['print_merchant_receipt_copy'],
           'enable_fiuu': message['enable_fiuu'],
-          'cash_drawer_pin': message['cash_drawer_pin']
+          'cash_drawer_pin_needed': message['cash_drawer_pin_needed'],
+          'cash_drawer_pin': message['cash_drawer_pin'],
         };
       } else {
         return {
@@ -144,6 +145,7 @@ class AuthService {
     await prefs.remove('base_url');
     await prefs.remove('print_merchant_receipt_copy');
     await prefs.remove('enable_fiuu');
+    await prefs.remove('cash_drawer_pin_needed');
     await prefs.remove('cash_drawer_pin');
   }
 }

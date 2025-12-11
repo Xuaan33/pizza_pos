@@ -37,6 +37,7 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return Container(

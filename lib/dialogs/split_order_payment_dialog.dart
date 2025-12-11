@@ -87,6 +87,7 @@ class _SplitOrderPaymentDialogState
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) {
                     return posProfile;
@@ -864,6 +865,7 @@ class _SplitOrderPaymentDialogState
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPinNeeded,
               cashDrawerPin,
             ) {
               return printKitchenOrder == 1;
@@ -892,6 +894,7 @@ class _SplitOrderPaymentDialogState
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPinNeeded,
               cashDrawerPin,
             ) {
               return enableFiuu == 0 || m1Value == '-1';
@@ -920,6 +923,7 @@ class _SplitOrderPaymentDialogState
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPinNeeded,
               cashDrawerPin,
             ) {
               return printMerchantReceiptCopy == 1;
@@ -1440,6 +1444,7 @@ class _SplitOrderPaymentDialogState
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             final gstTax = taxes.firstWhere(
@@ -1577,7 +1582,7 @@ class _SplitOrderPaymentDialogState
                         ),
                         ChoiceChip(
                           label: const Text(
-                            'Itemized',
+                            'Itemised',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           selected: selectedDiscountType == 3,
@@ -1832,6 +1837,7 @@ class _SplitOrderPaymentDialogState
                       merchantId,
                       printMerchantReceiptCopy,
                       enableFiuu,
+                      cashDrawerPinNeeded,
                       cashDrawerPin,
                     ) {
                       return posProfile;
@@ -1911,6 +1917,7 @@ class _SplitOrderPaymentDialogState
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) {
                     return posProfile;
@@ -2002,6 +2009,7 @@ class _SplitOrderPaymentDialogState
                     merchantId,
                     printMerchantReceiptCopy,
                     enableFiuu,
+                    cashDrawerPinNeeded,
                     cashDrawerPin,
                   ) =>
                       posProfile,
@@ -2088,6 +2096,7 @@ class _SplitOrderPaymentDialogState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) {
           return posProfile;
@@ -2148,18 +2157,18 @@ class _SplitOrderPaymentDialogState
         // Update the order details with new amounts from server
         await _fetchOrderDetails();
         Fluttertoast.showToast(
-          msg: "Itemized discount applied successfully",
+          msg: "Itemised discount applied successfully",
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.green,
           textColor: Colors.white,
         );
       } else {
         throw Exception(response['message']?['message'] ??
-            'Failed to apply itemized discount.');
+            'Failed to apply itemised discount.');
       }
     } catch (e) {
       Fluttertoast.showToast(
-        msg: "Error applying itemized discount: ${e.toString()}",
+        msg: "Error applying itemised discount: ${e.toString()}",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
@@ -2255,7 +2264,7 @@ class _SplitOrderPaymentDialogState
             return AlertDialog(
               backgroundColor: Colors.white,
               title: const Text(
-                'Apply Itemized Discount',
+                'Apply Itemised Discount',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               content: SizedBox(

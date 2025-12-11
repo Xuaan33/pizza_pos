@@ -191,6 +191,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         if (!hasOpening) {
@@ -311,6 +312,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) {
           return Container(
@@ -371,6 +373,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return Padding(

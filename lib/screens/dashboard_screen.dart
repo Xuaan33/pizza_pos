@@ -77,6 +77,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         try {
@@ -176,6 +177,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         _posProfile = posProfile;
@@ -450,6 +452,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return FutureBuilder<Map<String, dynamic>>(
@@ -1143,6 +1146,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           merchantId,
                           printMerchantReceiptCopy,
                           enableFiuu,
+                          cashDrawerPinNeeded,
                           cashDrawerPin,
                         ) {
                           return paymentMethods.firstWhere(

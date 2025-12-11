@@ -112,6 +112,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             return tier.toLowerCase() != 'tier 3' ? 1 : 2;
@@ -149,6 +150,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           try {
@@ -416,6 +418,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return Scaffold(
@@ -476,6 +479,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           try {
@@ -781,6 +785,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         if (tier.toLowerCase() != 'tier 3') {
@@ -997,6 +1002,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return Container(
@@ -1078,6 +1084,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   mechantId,
                   printMerchantReceiptCopy,
                   enableFiuu,
+                  cashDrawerPinNeeded,
                   cashDrawerPin,
                 ) {
                   if (tier.toLowerCase() != 'tier 3') {

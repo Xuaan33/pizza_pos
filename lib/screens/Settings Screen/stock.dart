@@ -70,6 +70,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final response = await PosService().getStockBalanceSummary(
@@ -175,6 +176,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final response = await PosService().getStockQuantity(
@@ -475,6 +477,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final itemsToStockIn = [
@@ -544,6 +547,7 @@ class _StockManagementSectionState
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final currentQty = (item['actual_qty'] ?? 0).toDouble();

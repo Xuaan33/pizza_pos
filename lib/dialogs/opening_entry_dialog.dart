@@ -52,6 +52,7 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         // Initialize controllers if not done yet

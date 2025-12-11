@@ -17,12 +17,20 @@ class HomeScreen extends ConsumerStatefulWidget {
   final String tableNumber;
   final Map<String, dynamic>? existingOrder;
   final bool isTier1;
+  final bool isExchangeMode; // NEW
+  final List<Map<String, dynamic>>? exchangeReturnItems; // NEW
+  final double? exchangeAmount; // NEW
+  final String? originalOrderId; // NEW
 
   const HomeScreen({
     Key? key,
     required this.tableNumber,
     this.existingOrder,
     this.isTier1 = false, // Default to false
+    this.isExchangeMode = false, // NEW
+    this.exchangeReturnItems, // NEW
+    this.exchangeAmount, // NEW
+    this.originalOrderId, // NEW
   }) : super(key: key);
 
   @override
@@ -47,6 +55,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _canScrollLeft = false;
   bool _canScrollRight = false;
 
+  bool _isExchangeMode = false;
+  List<Map<String, dynamic>> _exchangeReturnItems = [];
+  double _exchangeAmount = 0.0;
+  String? _originalOrderId;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +75,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollButtons();
     });
+
+    if (widget.isExchangeMode) {
+      _isExchangeMode = true;
+      _exchangeReturnItems = widget.exchangeReturnItems ?? [];
+      _exchangeAmount = widget.exchangeAmount ?? 0.0;
+      _originalOrderId = widget.originalOrderId;
+    }
   }
 
   Future<void> _loadBaseUrl() async {
@@ -194,6 +214,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) {
           if (mounted) {
@@ -264,6 +285,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
           final posService = PosService();
@@ -401,6 +423,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         try {
@@ -530,6 +553,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           merchantId,
           printMerchantReceiptCopy,
           enableFiuu,
+          cashDrawerPinNeeded,
           cashDrawerPin,
         ) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -658,6 +682,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                         merchantId,
                                                         printMerchantReceiptCopy,
                                                         enableFiuu,
+                                                        cashDrawerPinNeeded,
                                                         cashDrawerPin,
                                                       ) {
                                                         return Container(
@@ -959,6 +984,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             ),
                                         ],
                                       ),
+                                      // In the build method of HomeScreen, add this before the order items list
+                                      if (_isExchangeMode)
+                                        Container(
+                                          margin: EdgeInsets.all(16),
+                                          padding: EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange[50],
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: Colors.orange[300]!,
+                                                width: 2),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(Icons.swap_horiz,
+                                                      color: Colors.orange[700],
+                                                      size: 24),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    'Exchange Mode',
+                                                    style: TextStyle(
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.orange[700],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              SizedBox(height: 12),
+                                              Text(
+                                                'Original Items: ${_exchangeReturnItems.length} item(s)',
+                                                style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.grey[700]),
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                'Exchange Amount: RM ${_exchangeAmount.toStringAsFixed(2)}',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.orange[700],
+                                                ),
+                                              ),
+                                              SizedBox(height: 12),
+                                              _buildExchangeDifference(),
+                                            ],
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -1032,7 +1112,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                             child: ElevatedButton(
                                               onPressed: _isLoading
                                                   ? null
-                                                  : _goToCheckout,
+                                                  : () {
+                                                      if (_isExchangeMode) {
+                                                        _handleExchangeCheckout();
+                                                      } else {
+                                                        // Normal checkout flow
+                                                        _goToCheckout();
+                                                      }
+                                                    },
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor:
                                                     const Color(0xFFE732A0),
@@ -1814,6 +1901,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return tier.toLowerCase() != 'tier 3';
@@ -1979,6 +2067,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         setState(() => _isLoading = true);
@@ -2151,6 +2240,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         if (!hasOpening) {
@@ -2281,6 +2371,230 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: 'Error: ${e.toString()}',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleExchangeCheckout() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Processing exchange...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) async {
+          final posService = PosService();
+
+          // STEP 1: Return/Refund the old items (negative quantity)
+          List<Map<String, dynamic>> returnItems = [];
+          for (var returnItem in _exchangeReturnItems) {
+            returnItems.add({
+              'qty': (returnItem['quantity'] as num).toDouble(),
+            });
+          }
+
+          // Call refund API for return items only
+          final refundResult = await posService.refundOrder(
+            name: _originalOrderId!,
+            items: returnItems,
+          );
+
+          if (refundResult['success'] != true) {
+            throw Exception(
+                'Failed to process return: ${refundResult['message']}');
+          }
+
+          // Close loading dialog
+          if (mounted) Navigator.pop(context);
+
+          // STEP 2: Navigate to checkout with new items
+          // The checkout will handle submitting the new items as a normal order
+          _goToCheckoutForExchange();
+        },
+      );
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) Navigator.pop(context);
+
+      // Show error message
+      Fluttertoast.showToast(
+        msg: "Failed to process exchange: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+// Add this new method for exchange checkout
+  void _goToCheckoutForExchange() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
+        cashDrawerPinNeeded,
+        cashDrawerPin,
+      ) async {
+        if (!hasOpening) {
+          _showOpeningRequiredDialog();
+          return;
+        }
+
+        // Auto-save all remarks before proceeding
+        _autoSaveAllRemarks();
+
+        // Get the full table name (use a default for exchange orders)
+        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        String tableFullName = '${widget.tableNumber}'; // fallback
+
+        if (floorsResponse['success'] == true) {
+          for (var floor in floorsResponse['message']) {
+            for (var table in floor['tables']) {
+              if (table['title'] == '${widget.tableNumber}') {
+                tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
+                break;
+              }
+            }
+          }
+        }
+
+        // Prepare items with proper structure
+        final items = currentOrderItems.map((item) {
+          dynamic variantInfo = item['custom_variant_info'];
+          double additionalCost = _calculateAdditionalCost(item);
+          double itemPrice = (item['price'] ?? 0) + additionalCost;
+
+          return {
+            'item_code': item['item_code'] ?? '',
+            'qty': item['quantity'],
+            'price_list_rate': itemPrice,
+            'custom_item_remarks': item['custom_item_remarks'] ?? '',
+            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
+            'custom_variant_info': variantInfo ?? [],
+          };
+        }).toList();
+
+        // Create new order for exchange items
+        final response = await PosService().submitOrder(
+          posProfile: posProfile,
+          customer: 'Guest',
+          items: items,
+          table: tableFullName,
+          orderChannel: 'Dine In',
+          remarks: 'Exchange from order: $_originalOrderId',
+        );
+
+        if (response['success'] == true) {
+          final orderName = response['message']['name'];
+
+          // Now proceed to checkout with the new order
+          final result = await Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CheckoutScreen(
+                order: {
+                  'tableNumber': widget.tableNumber,
+                  'tableFullName': tableFullName,
+                  'items': List<Map<String, dynamic>>.from(currentOrderItems),
+                  'entryTime': DateTime.now(),
+                  'invoiceNumber': orderName,
+                  'orderId': orderName,
+                  'remarks': 'Exchange from order: $_originalOrderId',
+                },
+                tablesWithSubmittedOrders:
+                    MainLayout.of(context)?.tablesWithSubmittedOrders ?? {},
+                onOrderSubmitted: (order) =>
+                    MainLayout.of(context)?.addNewOrder(order),
+                onOrderPaid: (tableNumber) =>
+                    MainLayout.of(context)?.markOrderAsPaid(tableNumber),
+                activeOrders: MainLayout.of(context)?.activeOrders ?? [],
+              ),
+            ),
+            (route) => route.isFirst,
+          );
+
+          if (result != null && result['action'] == 'edit') {
+            // Navigate back to HomeScreen with the existing order data
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(
+                  tableNumber: result['tableNumber'],
+                  existingOrder: result['order'],
+                ),
+              ),
+            );
+          }
         }
       });
     } catch (e) {
@@ -2638,6 +2952,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildExchangeDifference() {
+    double newItemsTotal = _calculateSubtotal();
+    double difference = newItemsTotal - _exchangeAmount;
+
+    String message;
+    Color color;
+    IconData icon;
+
+    if (difference > 0) {
+      message = 'Customer pays: RM ${difference.toStringAsFixed(2)}';
+      color = Colors.red[700]!;
+      icon = Icons.arrow_upward;
+    } else if (difference < 0) {
+      message = 'Refund to customer: RM ${difference.abs().toStringAsFixed(2)}';
+      color = Colors.green[700]!;
+      icon = Icons.arrow_downward;
+    } else {
+      message = 'Even exchange (no payment needed)';
+      color = Colors.blue[700]!;
+      icon = Icons.check_circle;
+    }
+
+    return Container(
+      width: double.infinity, // ← ADD THIS LINE to give the Container a width
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 // Add this new method to show remarks dialog
   void _showRemarksDialog(int index) {
     TextEditingController remarksController = TextEditingController(
@@ -2782,6 +3145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate and calculate each tax
@@ -3101,6 +3465,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Calculate total of all applicable taxes
@@ -3144,6 +3509,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate
@@ -3248,6 +3614,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Calculate combined tax rate for rounding calculations
@@ -3378,6 +3745,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // For backward compatibility, return the first tax rate if only one exists

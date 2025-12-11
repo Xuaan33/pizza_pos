@@ -12,9 +12,11 @@ import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
+import 'package:shiok_pos_android_app/dialogs/exchange_item_dialog.dart';
 import 'package:shiok_pos_android_app/dialogs/refund_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
+import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
@@ -133,6 +135,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         setState(() {
@@ -234,6 +237,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
         return Scaffold(
@@ -517,7 +521,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final isSelected = _selectedOrder != null &&
         _selectedOrder!['orderId'] == order['orderId'];
     final isCancelled =
-        order['status']?.toString().toLowerCase() == 'cancelled' || order['custom_is_refund'] == 1;
+        order['status']?.toString().toLowerCase() == 'cancelled' ||
+            order['custom_is_refund'] == 1;
     final isDraft =
         !isCancelled && (order['status']?.toString().toLowerCase() == 'draft');
     final total = _calculateOrderTotal(order);
@@ -609,7 +614,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Widget _buildOrderDetailsPanel(Map<String, dynamic> order) {
     final isDraft = (order['status']?.toString() ?? 'Draft') == 'Draft';
     final isCancelled =
-        (order['status']?.toString() ?? 'Cancelled') == 'Cancelled' || order['custom_is_refund'] == 1;
+        (order['status']?.toString() ?? 'Cancelled') == 'Cancelled' ||
+            order['custom_is_refund'] == 1;
 
     // Calculate discount amounts
     final orderLevelDiscount =
@@ -636,9 +642,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         (order['total'] as num?)?.toDouble() ?? (subtotal + tax + rounding);
 
     // Ensure total is not negative - if negative, set to 0.00
-    if (total < 0) {
-      total = 0.00;
-    }
 
     // Calculate the actual subtotal to display (original - discount, but not less than 0)
     double displaySubtotal = originalSubtotal;
@@ -1278,7 +1281,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       // Determine the actual status of the order
       final isCancelled =
-          order['status']?.toString().toLowerCase() == 'cancelled' || order['custom_is_refund'] == 1;
+          order['status']?.toString().toLowerCase() == 'cancelled' ||
+              order['custom_is_refund'] == 1;
       final isDraft = !isCancelled &&
           (order['status']?.toString().toLowerCase() == 'draft');
 
@@ -1362,7 +1366,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
     final tableFullName = order['tableNumber'];
 
-    print("OIII: ${order['custom_table']}");
+    print("OIII: ${order['tableNumber']}");
 
     Navigator.push(
       context,
@@ -1401,17 +1405,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Future<void> _processRefund(Map<String, dynamic> order) async {
-    // First, show the refund type selection dialog
-    final result = await showDialog<Map<String, dynamic>>(
+    // Show the refund type selection dialog
+    final result = await showDialog<dynamic>(
       context: context,
-      barrierDismissible: false, // Prevent accidental dismissal
+      barrierDismissible: false,
       builder: (context) => RefundDialog(
         order: order,
         paymentMethods: _paymentMethods,
         onRefund: (orderId, items) {
+          // Return refund data
           Navigator.pop(context, {
+            'type': 'refund',
             'orderId': orderId,
             'items': items,
+          });
+        },
+        onExchange: (selectedItems) {
+          // Return exchange data
+          Navigator.pop(context, {
+            'type': 'exchange',
+            'selectedItems': selectedItems,
           });
         },
       ),
@@ -1420,10 +1433,55 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     // If user cancelled the dialog, return
     if (result == null) return;
 
+    // IMPORTANT: Wait for dialog to fully close before proceeding
+    await Future.delayed(Duration(milliseconds: 100));
+
+    // Check the type of action
+    if (result['type'] == 'exchange') {
+      // Handle exchange - navigate to HomeScreen
+      final selectedItems =
+          result['selectedItems'] as List<Map<String, dynamic>>;
+
+      // Calculate exchange amount
+      double exchangeAmount = 0.0;
+      for (var item in selectedItems) {
+        final quantity = (item['quantity'] as num).toDouble();
+        final price = (item['price'] as num).toDouble();
+        final variantCost = _calculateVariantCost(item['custom_variant_info']);
+        exchangeAmount += (price + variantCost) * quantity;
+      }
+
+      // Ensure we're in the right context before navigating
+      if (!mounted) return;
+
+      // Navigate to HomeScreen in exchange mode
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(
+            tableNumber: order['tableNumber']?.toString() ?? 'N/A',
+            isExchangeMode: true,
+            exchangeReturnItems: selectedItems,
+            exchangeAmount: exchangeAmount,
+            originalOrderId: order['orderId']?.toString(),
+            isTier1: tier.toLowerCase() == 'tier 1',
+          ),
+        ),
+      ).then((_) {
+        // Refresh orders when returning from exchange
+        if (mounted) {
+          _refreshOrders();
+        }
+      });
+
+      return; // Exit early - don't process refund
+    }
+
+    // If we get here, it's a regular refund
     final orderId = result['orderId'];
     final items = result['items'] as List<Map<String, dynamic>>?;
 
-    // Show confirmation dialog
+    // Show confirmation dialog for refund
     final confirmed = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
@@ -1540,6 +1598,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               merchantId,
               printMerchantReceiptCopy,
               enableFiuu,
+              cashDrawerPinNeeded,
               cashDrawerPin,
             ) {
               return enableFiuu == 0 || m1Value == '-1';
@@ -1576,7 +1635,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         return;
       }
 
-      // For non-cash payments (card/QR), we need to handle POS terminal communication
+      // For non-cash payments (card/QR), handle POS terminal communication
       final posInvoiceNumber = order['pos_invoice_number']?.toString();
 
       if (posInvoiceNumber == null || posInvoiceNumber.isEmpty) {
@@ -1657,7 +1716,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         );
       }
 
-      // Re-throw for debugging
       debugPrint('Refund error details: $e');
       rethrow;
     }
@@ -1906,7 +1964,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   double _calculateOrderTotal(Map<String, dynamic> order) {
     // Use server values if available
     if (order['total'] != null) {
-      double total = (order['total'] as num).toDouble();
+      double total = (order['total']).toDouble();
       // Ensure total is not negative
       return total;
     }
@@ -1918,7 +1976,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     double total = subtotal + tax + rounding;
 
     // Ensure total is not negative
-    return total < 0 ? 0.00 : total;
+    return total;
   }
 
   double _calculateVariantCost(dynamic variantInfo) {
@@ -1988,6 +2046,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             merchantId,
             printMerchantReceiptCopy,
             enableFiuu,
+            cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
             // Filter out taxes with 0% rate

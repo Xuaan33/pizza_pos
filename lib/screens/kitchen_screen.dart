@@ -62,6 +62,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
         cashDrawerPin,
       ) async {
         try {
@@ -120,6 +121,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         merchantId,
         printMerchantReceiptCopy,
         enableFiuu,
+        cashDrawerPinNeeded,
+
         cashDrawerPin,
       ) async {
         try {
