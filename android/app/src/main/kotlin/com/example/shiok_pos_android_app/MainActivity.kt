@@ -580,7 +580,7 @@ class MainActivity : FlutterActivity() {
                 
                 if (secondaryDisplay != null) {
                     val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                    val baseUrl = prefs.getString("flutter.base_url", "https://harper.briosocialclub.com/") ?: "hhttps://harper.briosocialclub.com/"
+                    val baseUrl = prefs.getString("flutter.base_url", "https://wakuwaku.joydivisionpadel.com/") ?: "https://wakuwaku.joydivisionpadel.com/"
                     
                     customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken, baseUrl)
                     customerDisplay?.show()

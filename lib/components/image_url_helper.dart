@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ImageUrlHelper {
   static Future<String> getBaseImageUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('base_url') ?? 'https://harper.briosocialclub.com';
+    return prefs.getString('base_url') ?? 'https://wakuwaku.joydivisionpadel.com/';
   }
 
   static Future<String> getFullImageUrl(String imagePath) async {

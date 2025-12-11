@@ -892,13 +892,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Image.network(
                     baseImageUrl.startsWith('https')
                         ? "${method['custom_payment_mode_image']}"
-                        : "$baseImageUrl${method['custom_payment_mode_image']}",
+                        : "$baseImageUrl/${method['custom_payment_mode_image']}",
                     height: 60,
                     width: 60,
                     errorBuilder: (context, error, stackTrace) =>
                         baseImageUrl.startsWith('https')
                             ? Image.network(
-                                "$baseImageUrl${method['custom_payment_mode_image']}",
+                                "$baseImageUrl/${method['custom_payment_mode_image']}",
                                 height: 60,
                                 width: 60,
                               )

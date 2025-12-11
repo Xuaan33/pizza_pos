@@ -7,7 +7,7 @@ import 'auth_service.dart';
 class PosService {
   // Remove hardcoded baseUrl and get it dynamically
   Future<String> _getBaseUrl() async {
-    return 'https://harper.briosocialclub.com';
+    return 'https://wakuwaku.joydivisionpadel.com';
   }
 
   // Helper method for common request handling
