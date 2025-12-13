@@ -12,13 +12,14 @@ class RefundDialog extends StatefulWidget {
   final List<Map<String, dynamic>> paymentMethods;
   final Function(String, List<Map<String, dynamic>>?) onRefund;
   final Function(List<Map<String, dynamic>>)? onExchange;
-
+  final List<Map<String, dynamic>>? availableItems;
   const RefundDialog({
     Key? key,
     required this.order,
     required this.paymentMethods,
     required this.onRefund,
     this.onExchange,
+    this.availableItems,
   }) : super(key: key);
 
   @override
@@ -31,32 +32,59 @@ class _RefundDialogState extends State<RefundDialog> {
   Map<String, Map<String, dynamic>> _selectedItemsWithQuantity = {};
   double _totalRefundAmount = 0.0;
   bool _isCashPayment = true; // Track if payment is cash/offline
+  List<Map<String, dynamic>> _availableItems = []; // Store available items
 
   @override
   void initState() {
     super.initState();
     _checkPaymentMethod();
+    _initializeAvailableItems();
     _calculateRefundAmount();
   }
 
   void _checkPaymentMethod() {
     // Get the payment method from the order
     final paymentMethod = widget.order['paymentMethod']?.toString() ?? 'Cash';
-    
+
     // Find the corresponding payment method to check if it's cash
     final paymentMethodData = widget.paymentMethods.firstWhere(
       (method) => method['name'] == paymentMethod,
       orElse: () => {'name': 'Cash', 'custom_fiuu_m1_value': '-1'},
     );
-    
-    final m1Value = paymentMethodData['custom_fiuu_m1_value']?.toString() ?? '-1';
-    
+
+    final m1Value =
+        paymentMethodData['custom_fiuu_m1_value']?.toString() ?? '-1';
+
     // Determine if it's cash/offline payment
     _isCashPayment = m1Value == '-1' || paymentMethod.toLowerCase() == 'cash';
-    
+
     // If not cash payment and user somehow selected itemized/exchange, reset to full
-    if (!_isCashPayment && (_selectedType == RefundType.itemized || _selectedType == RefundType.exchange )) {
+    if (!_isCashPayment &&
+        (_selectedType == RefundType.itemized ||
+            _selectedType == RefundType.exchange)) {
       _selectedType = RefundType.full;
+    }
+  }
+
+  void _initializeAvailableItems() {
+    if (widget.availableItems != null && widget.availableItems!.isNotEmpty) {
+      // Use available items from API response
+      _availableItems = widget.availableItems!;
+    } else {
+      // Fallback to all order items (for backward compatibility)
+      final items = (widget.order['items'] as List?) ?? [];
+      _availableItems = items.map((item) {
+        return {
+          'name': item['name'] ?? '',
+          'item_name': item['item_name'] ?? item['name'] ?? '',
+          'item_code': item['item_code'] ?? '',
+          'quantity': (item['quantity'] ?? item['qty'] ?? 0).toDouble(),
+          'price': (item['price'] ?? 0).toDouble(),
+          'custom_variant_info': item['custom_variant_info'],
+          'max_available_qty':
+              (item['quantity'] ?? item['qty'] ?? 0).toDouble(),
+        };
+      }).toList();
     }
   }
 
@@ -64,14 +92,22 @@ class _RefundDialogState extends State<RefundDialog> {
     double amount = 0.0;
 
     if (_selectedType == RefundType.full) {
-      // Full refund - use the order total
-      amount = _calculateOrderTotal(widget.order);
-    } else if (_selectedType == RefundType.itemized || _selectedType == RefundType.exchange) {
+      // Full refund - calculate from available items
+      for (var item in _availableItems) {
+        final quantity = (item['quantity'] as num).toDouble();
+        final price = (item['price'] as num).toDouble();
+        final variantCost = _calculateVariantCost(item['custom_variant_info']);
+        final totalPrice = price + variantCost;
+        amount += totalPrice * quantity;
+      }
+    } else if (_selectedType == RefundType.itemized ||
+        _selectedType == RefundType.exchange) {
       // Calculate based on selected items with their quantities
       _selectedItemsWithQuantity.forEach((key, itemData) {
         final quantity = (itemData['selectedQuantity'] as num).toDouble();
         final price = (itemData['price'] as num).toDouble();
-        final variantCost = _calculateVariantCost(itemData['custom_variant_info']);
+        final variantCost =
+            _calculateVariantCost(itemData['custom_variant_info']);
         final totalPrice = price + variantCost;
         amount += totalPrice * quantity;
       });
@@ -136,7 +172,8 @@ class _RefundDialogState extends State<RefundDialog> {
     return totalVariantCost;
   }
 
-  void _onItemSelectionChanged(String itemKey, Map<String, dynamic> item, bool selected) {
+  void _onItemSelectionChanged(
+      String itemKey, Map<String, dynamic> item, bool selected) {
     setState(() {
       if (selected) {
         // Initialize with quantity 1 when first selected
@@ -155,7 +192,9 @@ class _RefundDialogState extends State<RefundDialog> {
   void _onQuantityChanged(String itemKey, double newQuantity) {
     setState(() {
       if (_selectedItemsWithQuantity.containsKey(itemKey)) {
-        final maxQty = (_selectedItemsWithQuantity[itemKey]!['maxQuantity'] as num).toDouble();
+        final maxQty =
+            (_selectedItemsWithQuantity[itemKey]!['maxQuantity'] as num)
+                .toDouble();
         // Ensure quantity is between 1 and max
         final clampedQty = newQuantity.clamp(1.0, maxQty);
         _selectedItemsWithQuantity[itemKey]!['selectedQuantity'] = clampedQty;
@@ -228,6 +267,20 @@ class _RefundDialogState extends State<RefundDialog> {
                       color: Colors.grey[600],
                     ),
                   ),
+                  if (_availableItems.isNotEmpty &&
+                          _availableItems.length <
+                              ((widget.order['items'] as List?)?.length ?? 0))
+                    Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        '${_availableItems.length} item(s) available for refund',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -281,10 +334,10 @@ class _RefundDialogState extends State<RefundDialog> {
                           _buildRefundTypeTile(
                             type: RefundType.itemized,
                             title: 'Itemized Refund',
-                            subtitle: _isCashPayment 
+                            subtitle: _isCashPayment
                                 ? 'Select specific items and quantities to refund'
-                                : 'Only available for cash payments',
-                            enabled: false,
+                                : 'Only available for cash/non-fiuu payments',
+                            enabled: true,
                           ),
                           _buildRefundTypeTile(
                             type: RefundType.exchange,
@@ -317,23 +370,39 @@ class _RefundDialogState extends State<RefundDialog> {
                                 ),
                               ),
                               SizedBox(height: 8),
+                              if (_availableItems.isEmpty)
+                                Padding(
+                                  padding: EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    'No items available for refund',
+                                    style: TextStyle(
+                                      color: Colors.orange[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
                       ),
 
                     if (_selectedType == RefundType.itemized ||
-                        _selectedType == RefundType.exchange)
+                        _selectedType == RefundType.exchange &&
+                            _availableItems.isNotEmpty)
                       SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
-                            final item = items[index];
+                            final item = _availableItems[index];
                             final itemKey = item['name'] ?? index.toString();
-                            final isSelected = _selectedItemsWithQuantity.containsKey(itemKey);
+                            final isSelected =
+                                _selectedItemsWithQuantity.containsKey(itemKey);
                             final maxQuantity =
-                                (item['qty'] ?? item['quantity'] ?? 1).toDouble();
+                                (item['qty'] ?? item['quantity'] ?? 1)
+                                    .toDouble();
                             final selectedQuantity = isSelected
-                                ? (_selectedItemsWithQuantity[itemKey]!['selectedQuantity'] as num).toDouble()
+                                ? (_selectedItemsWithQuantity[itemKey]![
+                                        'selectedQuantity'] as num)
+                                    .toDouble()
                                 : 1.0;
                             final price = (item['price'] ??
                                     item['rate'] ??
@@ -408,16 +477,18 @@ class _RefundDialogState extends State<RefundDialog> {
                                       ),
                                     ),
                                   ),
-                                  
+
                                   // Quantity selector - only show when item is selected
                                   if (isSelected)
                                     Padding(
-                                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                      padding:
+                                          EdgeInsets.fromLTRB(16, 0, 16, 12),
                                       child: Container(
                                         padding: EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: Colors.blue[50],
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: Row(
                                           children: [
@@ -434,7 +505,8 @@ class _RefundDialogState extends State<RefundDialog> {
                                             InkWell(
                                               onTap: selectedQuantity > 1
                                                   ? () => _onQuantityChanged(
-                                                      itemKey, selectedQuantity - 1)
+                                                      itemKey,
+                                                      selectedQuantity - 1)
                                                   : null,
                                               child: Container(
                                                 width: 32,
@@ -443,7 +515,8 @@ class _RefundDialogState extends State<RefundDialog> {
                                                   color: selectedQuantity > 1
                                                       ? Colors.white
                                                       : Colors.grey[300],
-                                                  borderRadius: BorderRadius.circular(6),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
                                                   border: Border.all(
                                                     color: selectedQuantity > 1
                                                         ? Colors.blue
@@ -466,11 +539,15 @@ class _RefundDialogState extends State<RefundDialog> {
                                                   horizontal: 16, vertical: 6),
                                               decoration: BoxDecoration(
                                                 color: Colors.white,
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(color: Colors.blue),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                    color: Colors.blue),
                                               ),
                                               child: Text(
-                                                selectedQuantity.toInt().toString(),
+                                                selectedQuantity
+                                                    .toInt()
+                                                    .toString(),
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.bold,
@@ -481,20 +558,25 @@ class _RefundDialogState extends State<RefundDialog> {
                                             SizedBox(width: 12),
                                             // Increase button
                                             InkWell(
-                                              onTap: selectedQuantity < maxQuantity
+                                              onTap: selectedQuantity <
+                                                      maxQuantity
                                                   ? () => _onQuantityChanged(
-                                                      itemKey, selectedQuantity + 1)
+                                                      itemKey,
+                                                      selectedQuantity + 1)
                                                   : null,
                                               child: Container(
                                                 width: 32,
                                                 height: 32,
                                                 decoration: BoxDecoration(
-                                                  color: selectedQuantity < maxQuantity
+                                                  color: selectedQuantity <
+                                                          maxQuantity
                                                       ? Colors.white
                                                       : Colors.grey[300],
-                                                  borderRadius: BorderRadius.circular(6),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
                                                   border: Border.all(
-                                                    color: selectedQuantity < maxQuantity
+                                                    color: selectedQuantity <
+                                                            maxQuantity
                                                         ? Colors.blue
                                                         : Colors.grey[400]!,
                                                   ),
@@ -502,7 +584,8 @@ class _RefundDialogState extends State<RefundDialog> {
                                                 child: Icon(
                                                   Icons.add,
                                                   size: 18,
-                                                  color: selectedQuantity < maxQuantity
+                                                  color: selectedQuantity <
+                                                          maxQuantity
                                                       ? Colors.blue
                                                       : Colors.grey[600],
                                                 ),
@@ -516,7 +599,7 @@ class _RefundDialogState extends State<RefundDialog> {
                               ),
                             );
                           },
-                          childCount: items.length,
+                          childCount: _availableItems.length,
                         ),
                       ),
 
@@ -627,17 +710,20 @@ class _RefundDialogState extends State<RefundDialog> {
                         ? (_selectedItemsWithQuantity.isNotEmpty
                             ? () {
                                 // Handle exchange - convert to list format
-                                final selectedItemsList = _selectedItemsWithQuantity.values
-                                    .map((item) => {
-                                          'name': item['name'],
-                                          'item_name': item['item_name'],
-                                          'item_code': item['item_code'],
-                                          'quantity': item['selectedQuantity'],
-                                          'price': item['price'],
-                                          'custom_variant_info': item['custom_variant_info'],
-                                        })
-                                    .toList();
-                                
+                                final selectedItemsList =
+                                    _selectedItemsWithQuantity.values
+                                        .map((item) => {
+                                              'name': item['name'],
+                                              'item_name': item['item_name'],
+                                              'item_code': item['item_code'],
+                                              'quantity':
+                                                  item['selectedQuantity'],
+                                              'price': item['price'],
+                                              'custom_variant_info':
+                                                  item['custom_variant_info'],
+                                            })
+                                        .toList();
+
                                 if (widget.onExchange != null) {
                                   widget.onExchange!(selectedItemsList);
                                 }
@@ -649,18 +735,20 @@ class _RefundDialogState extends State<RefundDialog> {
                                     (widget.order['items'] as List?) ?? [];
 
                                 // Check if all items with full quantities are selected
-                                final bool isFullRefund = _selectedType ==
-                                        RefundType.full ||
-                                    (_selectedType == RefundType.itemized &&
-                                        _isFullOrderSelected(items));
-                                
+                                final bool isFullRefund =
+                                    _selectedType == RefundType.full ||
+                                        (_selectedType == RefundType.itemized &&
+                                            _isFullOrderSelected(items));
+
                                 // Prepare items for refund API
                                 List<Map<String, dynamic>>? refundItems;
 
                                 if (!isFullRefund &&
                                     _selectedType == RefundType.itemized &&
                                     _selectedItemsWithQuantity.isNotEmpty) {
-                                  refundItems = _selectedItemsWithQuantity.values.map((item) {
+                                  refundItems = _selectedItemsWithQuantity
+                                      .values
+                                      .map((item) {
                                     return {
                                       'name': item['name'], // RowID of the item
                                       'qty': -(item['selectedQuantity'] as num)
@@ -695,18 +783,21 @@ class _RefundDialogState extends State<RefundDialog> {
 
   // Helper method to check if all items with full quantities are selected
   bool _isFullOrderSelected(List items) {
-    if (_selectedItemsWithQuantity.length != items.length) return false;
-    
-    for (var item in items) {
-      final itemKey = item['name'] ?? items.indexOf(item).toString();
+    if (_selectedItemsWithQuantity.length != _availableItems.length)
+      return false;
+
+    for (var item in _availableItems) {
+      final itemKey = item['name'] ?? _availableItems.indexOf(item).toString();
       if (!_selectedItemsWithQuantity.containsKey(itemKey)) return false;
-      
+
       final maxQty = (item['qty'] ?? item['quantity'] ?? 1).toDouble();
-      final selectedQty = (_selectedItemsWithQuantity[itemKey]!['selectedQuantity'] as num).toDouble();
-      
+      final selectedQty =
+          (_selectedItemsWithQuantity[itemKey]!['selectedQuantity'] as num)
+              .toDouble();
+
       if (selectedQty != maxQty) return false;
     }
-    
+
     return true;
   }
 

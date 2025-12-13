@@ -350,6 +350,46 @@ class PosService {
     }
   }
 
+  Future<Map<String, dynamic>> checkItemsAvailableForRefund({
+    required String posInvoice,
+  }) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final baseUrl = await _getBaseUrl();
+
+      // For GET request, add parameters to query string
+      final uri = Uri.parse(
+          '$baseUrl/api/method/shiok_pos.api.items_available_for_refund?pos_invoice=$posInvoice');
+
+      print('🔍 checkItemsAvailableForRefund GET API Call:');
+      print('   URL: $uri');
+      print('   Token: ${token.substring(0, min(20, token.length))}...');
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': token,
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      print('   Response Status: ${response.statusCode}');
+      print('   Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ??
+            'Request failed with status ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ checkItemsAvailableForRefund Error: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> refundOrder({
     required String name,
     List<Map<String, dynamic>>? items,
@@ -891,7 +931,6 @@ class PosService {
       body: {
         'employee': employee,
         'branch': branch,
-        'status': 'Checked Out'
       },
     );
   }

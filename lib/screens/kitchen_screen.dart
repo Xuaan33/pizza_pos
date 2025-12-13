@@ -1108,7 +1108,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   }
 
   void _showFulfillOrderDialog(Map<String, dynamic> order, bool fulfilled) {
-    final action = fulfilled ? 'mark as fulfilled' : 'reopen';
+    // final action = fulfilled ? 'mark as fulfilled' : 'reopen';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

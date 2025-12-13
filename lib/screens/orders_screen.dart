@@ -12,7 +12,6 @@ import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
-import 'package:shiok_pos_android_app/dialogs/exchange_item_dialog.dart';
 import 'package:shiok_pos_android_app/dialogs/refund_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
@@ -474,7 +473,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             child: widget.isLoading
                 ? Center(child: CircularProgressIndicator())
                 : orders.isEmpty
-                    ? Center(child: Text('No orders found'))
+                    ? Center(
+                        child: Text(
+                        'No orders found',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ))
                     : NotificationListener<ScrollNotification>(
                         onNotification: (scrollNotification) {
                           // This will be handled by the scroll controller in main_layout
@@ -1021,9 +1024,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               ),
             ),
 
-            if (!isDraft &&
-                !isCancelled &&
-                _isToday(_parseDateTime(order['entryTime']))) ...[
+            if (!isDraft && !isCancelled && _shouldShowRefundButton(order)) ...[
               SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => _processRefund(order),
@@ -1407,12 +1408,38 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   }
 
   Future<void> _processRefund(Map<String, dynamic> order) async {
+    final orderIdForRefund = order['orderId'];
+
+    final refundCheckResponse = await PosService().checkItemsAvailableForRefund(
+      posInvoice: orderIdForRefund,
+    );
+    final availableItems = refundCheckResponse['message'] as List<dynamic>;
+
+    // Check if refund is available
+    if (refundCheckResponse['success'] == true) {
+      if (availableItems.isEmpty) {
+        // No items available for refund
+        Fluttertoast.showToast(
+          msg: "This order has already been fully refunded",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.orange,
+          textColor: Colors.white,
+        );
+        return;
+      }
+    }
+
+    // Convert available items to the format needed by the dialog
+    final formattedAvailableItems =
+        await _formatAvailableItems(order, availableItems);
+
     final result = await showDialog<dynamic>(
       context: context,
       barrierDismissible: false,
       builder: (context) => RefundDialog(
         order: order,
         paymentMethods: _paymentMethods,
+        availableItems: formattedAvailableItems, // Pass available items
         onRefund: (orderId, items) {
           // Return refund data
           Navigator.pop(context, {
@@ -1563,6 +1590,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         ),
       ),
     );
+    Completer<void>? dialogCompleter;
 
     try {
       // Get the payment method from the order
@@ -1607,6 +1635,35 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             orElse: () => false,
           );
 
+      final printMerchantReceiptCopy = ref.read(authProvider).maybeWhen(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId,
+              printMerchantReceiptCopy,
+              enableFiuu,
+              cashDrawerPinNeeded,
+              cashDrawerPin,
+            ) {
+              return printMerchantReceiptCopy == 1;
+            },
+            orElse: () => false,
+          );
+
       final isCashPayment =
           isOfflinePayment || paymentMethod.toLowerCase() == 'cash';
 
@@ -1619,8 +1676,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
         // Close loading dialog
         if (mounted) Navigator.of(context).pop();
-
         if (refundResponse['success'] == true) {
+          // Show success toast first
           if (mounted) {
             Fluttertoast.showToast(
               msg: "Refund Successful",
@@ -1628,9 +1685,44 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               backgroundColor: Colors.green,
               textColor: Colors.white,
             );
+          }
+
+          // Handle any required merchant copy printing
+          if (printMerchantReceiptCopy) {
+            await ReceiptPrinter.showPrintDialog(
+                context, refundResponse['message']['name'],
+                shouldPrintKitchenOrder: false);
+          }
+
+          // Ask user if they want to print receipt
+          final shouldPrintReceipt = await _showPrintReceiptDialog();
+
+          // Handle the print dialog
+          if (shouldPrintReceipt) {
+            await ReceiptPrinter.showPrintDialog(
+              context,
+              refundResponse['message']['name'],
+              shouldPrintKitchenOrder: false,
+            );
+          }
+
+          // Only refresh orders AFTER all dialogs are done
+          if (mounted) {
+            // Close the loading dialog if still open
+            if (dialogCompleter != null && !dialogCompleter.isCompleted) {
+              Navigator.of(context).pop();
+              dialogCompleter.complete();
+            }
+
+            // Wait a moment for UI to settle, then refresh
+            await Future.delayed(Duration(milliseconds: 300));
             _refreshOrders();
           }
         } else {
+          if (dialogCompleter != null && !dialogCompleter.isCompleted) {
+            Navigator.of(context).pop();
+            dialogCompleter.complete();
+          }
           throw Exception(refundResponse['message'] ?? 'Refund failed');
         }
         return;
@@ -1691,6 +1783,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         if (mounted) Navigator.of(context).pop();
 
         if (refundResponse['success'] == true) {
+          // Show success toast first
           if (mounted) {
             Fluttertoast.showToast(
               msg: "Refund Successful",
@@ -1698,6 +1791,37 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               backgroundColor: Colors.green,
               textColor: Colors.white,
             );
+          }
+
+          // Handle any required merchant copy printing
+          if (printMerchantReceiptCopy) {
+            await ReceiptPrinter.showPrintDialog(
+                context, refundResponse['message']['name'],
+                shouldPrintKitchenOrder: false);
+          }
+
+          // Ask user if they want to print receipt
+          final shouldPrintReceipt = await _showPrintReceiptDialog();
+
+          // Handle the print dialog
+          if (shouldPrintReceipt) {
+            await ReceiptPrinter.showPrintDialog(
+              context,
+              refundResponse['message']['name'],
+              shouldPrintKitchenOrder: false,
+            );
+          }
+
+          // Only refresh orders AFTER all dialogs are done
+          if (mounted) {
+            // Close the loading dialog if still open
+            if (dialogCompleter != null && !dialogCompleter.isCompleted) {
+              Navigator.of(context).pop();
+              dialogCompleter.complete();
+            }
+
+            // Wait a moment for UI to settle, then refresh
+            await Future.delayed(Duration(milliseconds: 300));
             _refreshOrders();
           }
         }
@@ -1917,12 +2041,12 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     }
   }
 
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
-  }
+  // bool _isToday(DateTime date) {
+  //   final now = DateTime.now();
+  //   return date.year == now.year &&
+  //       date.month == now.month &&
+  //       date.day == now.day;
+  // }
 
   double _calculateOrderSubtotal(Map<String, dynamic> order) {
     final items = (order['items'] as List?) ?? [];
@@ -2262,8 +2386,130 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
     // Check if order is within 3 months
     final orderDate = _parseDateTime(order['entryTime']);
-    final threeMonthsAgo = DateTime.now().subtract(Duration(days: 0));
+    final threeMonthsAgo = DateTime.now().subtract(Duration(days: 30));
 
     return orderDate.isAfter(threeMonthsAgo);
+  }
+
+  Future<bool> _showPrintReceiptDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Print Receipt?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: const Text(
+                'Would you like to print the receipt for this transaction?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text(
+                    'No',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text(
+                    'Yes',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Future<List<Map<String, dynamic>>> _formatAvailableItems(
+      Map<String, dynamic> order, List<dynamic> availableItems) async {
+    final allOrderItems = (order['items'] as List?) ?? [];
+    final formattedItems = <Map<String, dynamic>>[];
+
+    for (var availableItem in availableItems) {
+      // The 'name' field in availableItem is likely the row ID from POS Invoice Item
+      final availableItemRowId = availableItem['name']?.toString() ?? '';
+      final availableItemCode = availableItem['item_code']?.toString() ?? '';
+
+      // Try to find the item in the original order by row ID (name field)
+      Map<String, dynamic>? matchingItem;
+
+      for (var orderItem in allOrderItems) {
+        final orderItemMap = orderItem as Map<String, dynamic>;
+        final orderItemRowId = orderItemMap['name']?.toString() ?? '';
+
+        if (orderItemRowId == availableItemRowId) {
+          matchingItem = orderItemMap;
+          break;
+        }
+      }
+
+      if (matchingItem != null) {
+        // Get price and other details from the matching order item
+        final price = (matchingItem['price'] as num?)?.toDouble() ?? 0.0;
+        final itemName = matchingItem['item_name']?.toString() ??
+            matchingItem['name']?.toString() ??
+            availableItemCode;
+        final variantInfo = availableItem['custom_variant_info'] ??
+            matchingItem['custom_variant_info'];
+
+        formattedItems.add({
+          'name': availableItemRowId, // This is the row ID
+          'item_name': itemName,
+          'item_code': availableItemCode,
+          'quantity': (availableItem['qty'] as num?)?.toDouble() ?? 0.0,
+          'price': price,
+          'custom_variant_info': variantInfo,
+          'max_available_qty':
+              (availableItem['qty'] as num?)?.toDouble() ?? 0.0,
+        });
+      } else {
+        // Log warning but still add the item with placeholder price
+        debugPrint(
+            'Could not find matching order item for row ID: $availableItemRowId, item: $availableItemCode');
+
+        // Try to estimate price by looking for any item with same item code
+        double estimatedPrice = 0.0;
+        String estimatedName = availableItemCode;
+
+        for (var orderItem in allOrderItems) {
+          final orderItemMap = orderItem as Map<String, dynamic>;
+          final orderItemCode = orderItemMap['item_code']?.toString() ?? '';
+
+          if (orderItemCode == availableItemCode) {
+            estimatedPrice = (orderItemMap['price'] as num?)?.toDouble() ?? 0.0;
+            estimatedName =
+                orderItemMap['item_name']?.toString() ?? availableItemCode;
+            break;
+          }
+        }
+
+        formattedItems.add({
+          'name': availableItemRowId,
+          'item_name': estimatedName,
+          'item_code': availableItemCode,
+          'quantity': (availableItem['qty'] as num?)?.toDouble() ?? 0.0,
+          'price': estimatedPrice,
+          'custom_variant_info': availableItem['custom_variant_info'],
+          'max_available_qty':
+              (availableItem['qty'] as num?)?.toDouble() ?? 0.0,
+          'price_estimated':
+              estimatedPrice == 0.0, // Flag if price was estimated
+        });
+      }
+    }
+
+    return formattedItems;
   }
 }

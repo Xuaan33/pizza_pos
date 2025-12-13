@@ -44,16 +44,16 @@ class CustomerDisplayController {
       });
 
       // Calculate total itemized discount
-      double totalItemizedDiscount = 0.0;
-      if (hasItemizedDiscount) {
-        totalItemizedDiscount = items.fold(0.0, (sum, item) {
-          final itemDiscount = (item['discount_amount'] ?? 0.0);
-          final quantity = (item['quantity'] is int)
-              ? item['quantity'] as int
-              : (item['quantity'] as double).toInt();
-          return sum + (itemDiscount * quantity);
-        });
-      }
+      // double totalItemizedDiscount = 0.0;
+      // if (hasItemizedDiscount) {
+      //   totalItemizedDiscount = items.fold(0.0, (sum, item) {
+      //     final itemDiscount = (item['discount_amount'] ?? 0.0);
+      //     final quantity = (item['quantity'] is int)
+      //         ? item['quantity'] as int
+      //         : (item['quantity'] as double).toInt();
+      //     return sum + (itemDiscount * quantity);
+      //   });
+      // }
 
       // Only pass discount to summary if it's NOT itemized
       // When itemized, the discount is shown on each item line, not in summary

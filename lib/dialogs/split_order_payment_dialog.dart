@@ -2047,7 +2047,7 @@ class _SplitOrderPaymentDialogState
         // Double-check and force clear any discount values that might have persisted
         setState(() {
           if (_discountAmount > 0) _discountAmount = 0;
-          if (_voucherCode?.isNotEmpty == true) _voucherCode = '';
+          if (_voucherCode.isNotEmpty == true) _voucherCode = '';
         });
 
         Fluttertoast.showToast(
