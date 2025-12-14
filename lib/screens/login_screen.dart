@@ -147,7 +147,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
-                          fontFamily: 'Neutas',
+                          fontFamily: 'Meutas-Bold',
                           color: Color(0xFF00203A),
                         ),
                       ),
@@ -207,7 +207,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    fontFamily: 'Neutas',
+                                    fontFamily: 'Meutas-Bold',
                                   ),
                                 ),
                         ),
@@ -226,41 +226,111 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget _buildLeftContent() {
     return Padding(
       padding: const EdgeInsets.all(60),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Logo
-          Image.asset(
-            'assets/logo-shiokpos-horizontal.png',
-            height: 100,
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            // Ensure the scrollable area fills the available height so children keep their intended sizes
+            minHeight: MediaQuery.of(context).size.height - 120,
           ),
-          const SizedBox(height: 60),
+          child: IntrinsicHeight(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Logo
+                SizedBox(
+                  height: 10,
+                ),
+                Image.asset(
+                  'assets/logo-shiokpos-horizontal.png',
+                  height: 100,
+                ),
+                const SizedBox(height: 60),
 
-          // Welcome text
-          const Text(
-            "Welcome!",
-            style: TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'Neutas',
-              color: Color(0xFF00203A),
-            ),
-          ),
-          const SizedBox(height: 50),
+                // Welcome text
+                const Text(
+                  "Welcome!",
+                  style: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Meutas-Bold',
+                    color: Color(0xFF00203A),
+                  ),
+                ),
+                const SizedBox(height: 50),
 
-          // Merchant ID Field
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: _showMerchantIdField
-                ? TextField(
-                    controller: _merchantIdController,
+                // Merchant ID Field
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: _showMerchantIdField
+                      ? TextField(
+                          controller: _merchantIdController,
+                          decoration: const InputDecoration(
+                            labelText: 'Merchant ID',
+                            border: InputBorder.none,
+                            labelStyle: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 14,
+                            ),
+                          ),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00203A),
+                          ),
+                        )
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Merchant ID',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _merchantIdController.text,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF00203A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 20),
+                              onPressed: _showMerchantIdInput,
+                              color: const Color(0xFF00203A),
+                            ),
+                          ],
+                        ),
+                ),
+                const SizedBox(height: 30),
+
+                // Username Field
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: TextField(
+                    controller: _usernameController,
                     decoration: const InputDecoration(
-                      labelText: 'Merchant ID',
+                      labelText: 'Username',
                       border: InputBorder.none,
                       labelStyle: TextStyle(
                         color: Colors.grey,
@@ -269,70 +339,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
                       color: Color(0xFF00203A),
                     ),
-                  )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Merchant ID',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _merchantIdController.text,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF00203A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
-                        onPressed: _showMerchantIdInput,
-                        color: const Color(0xFF00203A),
-                      ),
-                    ],
                   ),
-          ),
-          const SizedBox(height: 30),
-
-          // Username Field
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                labelText: 'Username',
-                border: InputBorder.none,
-                labelStyle: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
                 ),
-              ),
-              style: const TextStyle(
-                fontSize: 18,
-                color: Color(0xFF00203A),
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -386,7 +400,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Neutas',
+                        fontFamily: 'Meutas-Bold',
                         color: Color(0xFF00203A),
                       ),
                     ),

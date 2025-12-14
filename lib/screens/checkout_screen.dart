@@ -220,23 +220,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final invoice = invoices.first;
           final List<dynamic> serverItems = invoice['items'] ?? [];
 
-          debugPrint('=== SERVER ORDER DATA ===');
-          debugPrint('Grand Total: ${invoice['grand_total']}');
-          debugPrint('Subtotal (total): ${invoice['total']}');
-          debugPrint('Discount: ${invoice['discount_amount']}');
-          debugPrint('Taxes: ${invoice['total_taxes_and_charges']}');
-          debugPrint('Rounding: ${invoice['base_rounding_adjustment']}');
+          // debugPrint('=== SERVER ORDER DATA ===');
+          // debugPrint('Grand Total: ${invoice['grand_total']}');
+          // debugPrint('Subtotal (total): ${invoice['total']}');
+          // debugPrint('Discount: ${invoice['discount_amount']}');
+          // debugPrint('Taxes: ${invoice['total_taxes_and_charges']}');
+          // debugPrint('Rounding: ${invoice['base_rounding_adjustment']}');
 
-          debugPrint('=== SERVER ITEMS ===');
-          for (final serverItem in serverItems) {
-            debugPrint('Item: ${serverItem['item_name']}');
-            debugPrint('  - Rate: ${serverItem['rate']}');
-            debugPrint('  - Qty: ${serverItem['qty']}');
-            debugPrint(
-                '  - Amount: ${(serverItem['rate'] as num?)?.toDouble() ?? 0.0 * (serverItem['qty'] as num?)!.toDouble() ?? 1.0}');
-            debugPrint(
-                '  - Variant Info: ${serverItem['custom_variant_info']}');
-          }
+          // debugPrint('=== SERVER ITEMS ===');
+          // for (final serverItem in serverItems) {
+          //   debugPrint('Item: ${serverItem['item_name']}');
+          //   debugPrint('  - Rate: ${serverItem['rate']}');
+          //   debugPrint('  - Qty: ${serverItem['qty']}');
+          //   debugPrint(
+          //       '  - Amount: ${(serverItem['rate'] as num?)?.toDouble() ?? 0.0 * (serverItem['qty'] as num?)!.toDouble() ?? 1.0}');
+          //   debugPrint(
+          //       '  - Variant Info: ${serverItem['custom_variant_info']}');
+          // }
 
           setState(() {
             // Update order details
@@ -1293,15 +1293,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final totalItemPrice = basePrice + variantCost;
       final amount = totalItemPrice * quantity;
 
-      debugPrint('Item $i: ${item['name']}');
-      debugPrint('  - Base Price: RM$basePrice');
-      debugPrint('  - Variant Cost: RM$variantCost');
-      debugPrint('  - Total Price (base + variant): RM$totalItemPrice');
-      debugPrint('  - Quantity: $quantity');
-      debugPrint('  - Amount: RM$amount');
-      debugPrint('  - Variant Info: $variantInfo');
+      // debugPrint('Item $i: ${item['name']}');
+      // debugPrint('  - Base Price: RM$basePrice');
+      // debugPrint('  - Variant Cost: RM$variantCost');
+      // debugPrint('  - Total Price (base + variant): RM$totalItemPrice');
+      // debugPrint('  - Quantity: $quantity');
+      // debugPrint('  - Amount: RM$amount');
+      // debugPrint('  - Variant Info: $variantInfo');
     }
-    debugPrint('=== END ITEMS DEBUG ===');
+    // debugPrint('=== END ITEMS DEBUG ===');
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(62), // Image column

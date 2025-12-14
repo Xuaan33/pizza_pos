@@ -15,7 +15,7 @@ class PosService {
     required String endpoint,
     Map<String, dynamic>? body,
     String method = 'GET',
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 60),
   }) async {
     try {
       final token = await AuthService.getAuthToken();
@@ -180,7 +180,7 @@ class PosService {
             },
             body: jsonEncode(requestBody),
           )
-          .timeout(Duration(seconds: 10));
+          .timeout(Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -333,7 +333,7 @@ class PosService {
 
       final response = await http
           .delete(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
 
       print('API Response: ${response.statusCode} - ${response.body}');
 
@@ -372,7 +372,7 @@ class PosService {
         headers: {
           'Authorization': token,
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       print('   Response Status: ${response.statusCode}');
       print('   Response Body: ${response.body}');
@@ -420,7 +420,7 @@ class PosService {
 
       final response = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
 
       print('API Response: ${response.statusCode} - ${response.body}');
 
@@ -464,7 +464,7 @@ class PosService {
 
       final response = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15)); // Increased timeout
+          .timeout(const Duration(seconds: 45)); // Increased timeout
 
       print('🖨️ API Response Status: ${response.statusCode}');
       print('🖨️ API Response Body Length: ${response.body.length} characters');
@@ -1024,7 +1024,7 @@ class PosService {
             headers: headers,
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 45));
 
       print('🖨️ API Response Status: ${response.statusCode}');
       print(

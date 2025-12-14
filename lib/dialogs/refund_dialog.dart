@@ -736,9 +736,7 @@ class _RefundDialogState extends State<RefundDialog> {
 
                                 // Check if all items with full quantities are selected
                                 final bool isFullRefund =
-                                    _selectedType == RefundType.full ||
-                                        (_selectedType == RefundType.itemized &&
-                                            _isFullOrderSelected(items));
+                                    _selectedType == RefundType.full;
 
                                 // Prepare items for refund API
                                 List<Map<String, dynamic>>? refundItems;
