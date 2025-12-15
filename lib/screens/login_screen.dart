@@ -108,13 +108,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CustomerDisplayController.showCustomerScreen();
     });
+    // Get screen dimensions
+    final screenSize = MediaQuery.of(context).size;
+    final isLandscape = screenSize.width > screenSize.height;
+    final isTablet = screenSize.shortestSide > 600;
+    final isSmallScreen = screenSize.shortestSide < 350;
 
     return Scaffold(
-      body: Row(
-        children: [
-          // LEFT SIDE
-          Expanded(
-            child: Container(
+      body:
+          _buildResponsiveLayout(context, isLandscape, isTablet, isSmallScreen),
+    );
+  }
+
+  Widget _buildResponsiveLayout(BuildContext context, bool isLandscape,
+      bool isTablet, bool isSmallScreen) {
+    // For very small screens or landscape on small devices, use column layout
+    final screenSize = MediaQuery.of(context).size;
+    final isLandscape = screenSize.width > screenSize.height;
+    final isTablet = screenSize.shortestSide > 600;
+    final isSmallScreen = screenSize.shortestSide < 350;
+    if (isSmallScreen || (isLandscape && !isTablet)) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            // LEFT CONTENT (Top on small screens)
+            Container(
+              width: double.infinity,
+              height: isLandscape
+                  ? screenSize.height * 0.5
+                  : screenSize.height * 0.4,
               decoration: const BoxDecoration(
                 color: Color(0xFFFFF0BF),
               ),
@@ -126,232 +148,322 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       fit: BoxFit.cover,
                     ),
                   ),
-                  _buildLeftContent(),
+                  _buildLeftContent(isLandscape, isTablet, isSmallScreen),
                 ],
               ),
             ),
-          ),
-
-          // RIGHT SIDE - PIN PAD
-          Expanded(
-            child: Container(
+            // RIGHT CONTENT (Bottom on small screens)
+            Container(
+              width: double.infinity,
+              height: isLandscape
+                  ? screenSize.height * 0.5
+                  : screenSize.height * 0.6,
               color: const Color(0xFFFFE3FF),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(60),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Enter your PIN",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Meutas-Bold',
-                          color: Color(0xFF00203A),
-                        ),
-                      ),
-                      const SizedBox(height: 30),
+              child: _buildPinSection(
+                  context, isLandscape, isTablet, isSmallScreen),
+            ),
+          ],
+        ),
+      );
+    }
 
-                      // PIN DOTS
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(4, (index) {
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 8),
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: index < enteredPin.length
-                                  ? const Color(0xFF00203A)
-                                  : Colors.grey.shade400,
-                            ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 40),
-
-                      _buildPinPad(),
-                      const SizedBox(height: 30),
-
-                      SizedBox(
-                        width: 300,
-                        child: ElevatedButton(
-                          onPressed: _isLoading || enteredPin.length != 4
-                              ? null
-                              : _validateCredentials,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF00203A),
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              side: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Color(0xFF00203A),
-                                  ),
-                                )
-                              : const Text(
-                                  "Sign In",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'Meutas-Bold',
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
+    // For larger screens, use row layout
+    return Row(
+      children: [
+        // LEFT SIDE
+        Expanded(
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF0BF),
+            ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/bg-login.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
-              ),
+                _buildLeftContent(isLandscape, isTablet, isSmallScreen),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        // RIGHT SIDE - PIN PAD
+        Expanded(
+          child: Container(
+            color: const Color(0xFFFFE3FF),
+            child:
+                _buildPinSection(context, isLandscape, isTablet, isSmallScreen),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildLeftContent() {
+  Widget _buildLeftContent(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.all(60),
+      padding: EdgeInsets.all(
+          _getPaddingValue(isLandscape, isTablet, isSmallScreen)),
       child: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            // Ensure the scrollable area fills the available height so children keep their intended sizes
-            minHeight: MediaQuery.of(context).size.height - 120,
+            minHeight: MediaQuery.of(context).size.height -
+                (2 * _getPaddingValue(isLandscape, isTablet, isSmallScreen)),
           ),
-          child: IntrinsicHeight(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Logo
-                SizedBox(
-                  height: 10,
-                ),
-                Image.asset(
-                  'assets/logo-shiokpos-horizontal.png',
-                  height: 100,
-                ),
-                const SizedBox(height: 60),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Logo
+              SizedBox(
+                height: _getSpacingValue(
+                    isLandscape, isTablet, isSmallScreen, 10, 20, 30),
+              ),
+              Image.asset(
+                'assets/logo-shiokpos-horizontal.png',
+                height: _getHeightValue(
+                    isLandscape, isTablet, isSmallScreen, 60, 80, 100),
+                fit: BoxFit.contain,
+              ),
+              SizedBox(
+                  height: _getSpacingValue(
+                      isLandscape, isTablet, isSmallScreen, 20, 40, 60)),
 
-                // Welcome text
-                const Text(
-                  "Welcome!",
-                  style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Meutas-Bold',
-                    color: Color(0xFF00203A),
-                  ),
+              // Welcome text
+              Text(
+                "Welcome!",
+                style: TextStyle(
+                  fontSize: _getFontSizeValue(
+                      isLandscape, isTablet, isSmallScreen, 32, 40, 48),
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Meutas-Bold',
+                  color: const Color(0xFF00203A),
                 ),
-                const SizedBox(height: 50),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(
+                  height: _getSpacingValue(
+                      isLandscape, isTablet, isSmallScreen, 20, 30, 50)),
 
-                // Merchant ID Field
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: _showMerchantIdField
-                      ? TextField(
-                          controller: _merchantIdController,
-                          decoration: const InputDecoration(
-                            labelText: 'Merchant ID',
-                            border: InputBorder.none,
-                            labelStyle: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 14,
-                            ),
+              // Merchant ID Field
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(
+                    _getPaddingValue(isLandscape, isTablet, isSmallScreen)),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_getBorderRadiusValue(
+                      isLandscape, isTablet, isSmallScreen)),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: _showMerchantIdField
+                    ? TextField(
+                        controller: _merchantIdController,
+                        decoration: InputDecoration(
+                          labelText: 'Merchant ID',
+                          border: InputBorder.none,
+                          labelStyle: TextStyle(
+                            color: Colors.grey,
+                            fontSize: _getFontSizeValue(isLandscape, isTablet,
+                                isSmallScreen, 12, 13, 14),
                           ),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF00203A),
-                          ),
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Merchant ID',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _merchantIdController.text,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF00203A),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit, size: 20),
-                              onPressed: _showMerchantIdInput,
-                              color: const Color(0xFF00203A),
-                            ),
-                          ],
                         ),
-                ),
-                const SizedBox(height: 30),
-
-                // Username Field
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: TextField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      border: InputBorder.none,
-                      labelStyle: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
+                        style: TextStyle(
+                          fontSize: _getFontSizeValue(
+                              isLandscape, isTablet, isSmallScreen, 16, 17, 18),
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF00203A),
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Merchant ID',
+                                  style: TextStyle(
+                                    fontSize: _getFontSizeValue(isLandscape,
+                                        isTablet, isSmallScreen, 12, 13, 14),
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  _merchantIdController.text,
+                                  style: TextStyle(
+                                    fontSize: _getFontSizeValue(isLandscape,
+                                        isTablet, isSmallScreen, 16, 17, 18),
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF00203A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.edit,
+                                size: _getIconSizeValue(
+                                    isLandscape, isTablet, isSmallScreen)),
+                            onPressed: _showMerchantIdInput,
+                            color: const Color(0xFF00203A),
+                          ),
+                        ],
                       ),
-                    ),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      color: Color(0xFF00203A),
+              ),
+              SizedBox(
+                  height: _getSpacingValue(
+                      isLandscape, isTablet, isSmallScreen, 15, 20, 30)),
+
+              // Username Field
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal:
+                      _getPaddingValue(isLandscape, isTablet, isSmallScreen),
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(_getBorderRadiusValue(
+                      isLandscape, isTablet, isSmallScreen)),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: TextField(
+                  controller: _usernameController,
+                  decoration: InputDecoration(
+                    labelText: 'Username',
+                    border: InputBorder.none,
+                    labelStyle: TextStyle(
+                      color: Colors.grey,
+                      fontSize: _getFontSizeValue(
+                          isLandscape, isTablet, isSmallScreen, 12, 13, 14),
                     ),
                   ),
+                  style: TextStyle(
+                    fontSize: _getFontSizeValue(
+                        isLandscape, isTablet, isSmallScreen, 16, 17, 18),
+                    color: const Color(0xFF00203A),
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPinPad() {
+  Widget _buildPinSection(BuildContext context, bool isLandscape, bool isTablet,
+      bool isSmallScreen) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(
+            _getPaddingValue(isLandscape, isTablet, isSmallScreen)),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                "Enter your PIN",
+                style: TextStyle(
+                  fontSize: _getFontSizeValue(
+                      isLandscape, isTablet, isSmallScreen, 24, 28, 32),
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Meutas-Bold',
+                  color: const Color(0xFF00203A),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(
+                  height: _getSpacingValue(
+                      isLandscape, isTablet, isSmallScreen, 15, 20, 30)),
+
+              // PIN DOTS
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(4, (index) {
+                  return Container(
+                    margin: EdgeInsets.symmetric(
+                        horizontal: _getMarginValue(
+                            isLandscape, isTablet, isSmallScreen)),
+                    width:
+                        _getDotSizeValue(isLandscape, isTablet, isSmallScreen),
+                    height:
+                        _getDotSizeValue(isLandscape, isTablet, isSmallScreen),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: index < enteredPin.length
+                          ? const Color(0xFF00203A)
+                          : Colors.grey.shade400,
+                    ),
+                  );
+                }),
+              ),
+              SizedBox(
+                  height: _getSpacingValue(
+                      isLandscape, isTablet, isSmallScreen, 20, 30, 40)),
+
+              _buildPinPad(isLandscape, isTablet, isSmallScreen),
+              SizedBox(
+                  height: _getSpacingValue(
+                      isLandscape, isTablet, isSmallScreen, 15, 20, 30)),
+
+              SizedBox(
+                width:
+                    _getButtonWidthValue(isLandscape, isTablet, isSmallScreen),
+                child: ElevatedButton(
+                  onPressed: _isLoading || enteredPin.length != 4
+                      ? null
+                      : _validateCredentials,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF00203A),
+                    padding: EdgeInsets.symmetric(
+                        vertical: _getButtonPaddingValue(
+                            isLandscape, isTablet, isSmallScreen)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_getBorderRadiusValue(
+                              isLandscape, isTablet, isSmallScreen) *
+                          2),
+                      side: BorderSide(
+                        color: Colors.grey.shade300,
+                      ),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: _isLoading
+                      ? SizedBox(
+                          height: _getLoadingIndicatorSize(
+                              isLandscape, isTablet, isSmallScreen),
+                          width: _getLoadingIndicatorSize(
+                              isLandscape, isTablet, isSmallScreen),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF00203A),
+                          ),
+                        )
+                      : Text(
+                          "Sign In",
+                          style: TextStyle(
+                            fontSize: _getFontSizeValue(isLandscape, isTablet,
+                                isSmallScreen, 16, 17, 18),
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Meutas-Bold',
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinPad(bool isLandscape, bool isTablet, bool isSmallScreen) {
     final keys = [
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -359,18 +471,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       ['C', '0', '⌫']
     ];
 
+    final buttonSize = _getPinButtonSize(isLandscape, isTablet, isSmallScreen);
+    final buttonFontSize =
+        _getPinButtonFontSize(isLandscape, isTablet, isSmallScreen);
+
     return Column(
       children: keys.map((row) {
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(
+              vertical: _getSpacingValue(
+                  isLandscape, isTablet, isSmallScreen, 4, 6, 8)),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: row.map((key) {
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.symmetric(
+                    horizontal: _getSpacingValue(
+                        isLandscape, isTablet, isSmallScreen, 6, 8, 12)),
                 child: SizedBox(
-                  width: 80,
-                  height: 80,
+                  width: buttonSize,
+                  height: buttonSize,
                   child: ElevatedButton(
                     onPressed: _isLoading
                         ? null
@@ -397,11 +517,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                     child: Text(
                       key,
-                      style: const TextStyle(
-                        fontSize: 24,
+                      style: TextStyle(
+                        fontSize: buttonFontSize,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'Meutas-Bold',
-                        color: Color(0xFF00203A),
+                        color: const Color(0xFF00203A),
                       ),
                     ),
                   ),
@@ -412,5 +532,95 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         );
       }).toList(),
     );
+  }
+
+  // Helper methods for responsive values
+  double _getPaddingValue(bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 16;
+    if (isTablet) return 40;
+    return 60;
+  }
+
+  double _getSpacingValue(bool isLandscape, bool isTablet, bool isSmallScreen,
+      double small, double medium, double large) {
+    if (isSmallScreen) return small;
+    if (isTablet) return medium;
+    return large;
+  }
+
+  double _getHeightValue(bool isLandscape, bool isTablet, bool isSmallScreen,
+      double small, double medium, double large) {
+    if (isSmallScreen) return small;
+    if (isTablet) return medium;
+    return large;
+  }
+
+  double _getFontSizeValue(bool isLandscape, bool isTablet, bool isSmallScreen,
+      double small, double medium, double large) {
+    if (isSmallScreen) return small;
+    if (isTablet) return medium;
+    return large;
+  }
+
+  double _getBorderRadiusValue(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 8;
+    if (isTablet) return 12;
+    return 15;
+  }
+
+  double _getIconSizeValue(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 16;
+    if (isTablet) return 18;
+    return 20;
+  }
+
+  double _getMarginValue(bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 4;
+    if (isTablet) return 6;
+    return 8;
+  }
+
+  double _getDotSizeValue(bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 12;
+    if (isTablet) return 14;
+    return 16;
+  }
+
+  double _getButtonWidthValue(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (isSmallScreen) return screenWidth * 0.8;
+    if (isTablet) return 350;
+    return 300;
+  }
+
+  double _getButtonPaddingValue(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 14;
+    if (isTablet) return 16;
+    return 18;
+  }
+
+  double _getLoadingIndicatorSize(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 20;
+    if (isTablet) return 22;
+    return 24;
+  }
+
+  double _getPinButtonSize(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 60;
+    if (isTablet) return 70;
+    return 80;
+  }
+
+  double _getPinButtonFontSize(
+      bool isLandscape, bool isTablet, bool isSmallScreen) {
+    if (isSmallScreen) return 18;
+    if (isTablet) return 22;
+    return 24;
   }
 }
