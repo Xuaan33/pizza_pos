@@ -32,7 +32,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Future<void>? _refreshFuture;
   DateTime _selectedDate = DateTime.now();
   int _pageLimit = 30;
-  String _filterStatus = 'Pay Later'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
+  String _filterStatus = 'All'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
   String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -142,10 +142,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           try {
             String? fromDateStr;
             String? toDateStr;
-            if (_filterStatus == 'Pay Later') {
-              fromDateStr = null;
-              toDateStr = null;
-            } else if (_useDateRange && _fromDate != null && _toDate != null) {
+            if (_useDateRange && _fromDate != null && _toDate != null) {
               fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
               toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
             } else {
@@ -162,8 +159,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
-            final effectivePageLimit =
-                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
+            final effectivePageLimit = _pageLimit;
             final nextStart = (_currentPage + 1) * effectivePageLimit;
 
             final response = await PosService().getOrders(
@@ -463,17 +459,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             String? fromDateStr;
             String? toDateStr;
 
-            if (_filterStatus == 'Pay Later' || forceAllForPayLater) {
-              fromDateStr = null;
-              toDateStr = null;
+            if (_useDateRange && _fromDate != null && _toDate != null) {
+              fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
+              toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
             } else {
-              if (_useDateRange && _fromDate != null && _toDate != null) {
-                fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
-                toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
-              } else {
-                fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-                toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-              }
+              fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+              toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
             }
 
             String? apiStatus;
@@ -485,9 +476,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               apiStatus = 'Cancelled';
             }
 
-            final effectivePageLimit =
-                _filterStatus == 'Pay Later' ? 1000 : _pageLimit;
-                
+            final effectivePageLimit = _pageLimit;
+
             final future = PosService().getOrders(
               posProfile: posProfile,
               fromDate: fromDateStr,
@@ -630,28 +620,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
               // Sort orders: All orders by timestamp
               processedOrders.sort((a, b) {
-                final isPayLaterA =
-                    a['status']?.toString().toLowerCase() == 'draft';
-                final isPayLaterB =
-                    b['status']?.toString().toLowerCase() == 'draft';
-
-                if (isPayLaterA && isPayLaterB) {
-                  // Both are Pay Later - sort by entryTime descending (newest first)
-                  final timeA = a['entryTime'] as DateTime;
-                  final timeB = b['entryTime'] as DateTime;
-                  return timeB.compareTo(timeA);
-                } else if (isPayLaterA) {
-                  // Only A is Pay Later - A comes first
-                  return -1;
-                } else if (isPayLaterB) {
-                  // Only B is Pay Later - B comes first
-                  return 1;
-                } else {
-                  // Both are not Pay Later - sort by order ID
-                  final idA = a['orderId']?.toString() ?? '';
-                  final idB = b['orderId']?.toString() ?? '';
-                  return idB.compareTo(idA); // Descending order
-                }
+                // Both are not Pay Later - sort by order ID
+                final idA = a['orderId']?.toString() ?? '';
+                final idB = b['orderId']?.toString() ?? '';
+                return idB.compareTo(idA); // Descending order
               });
 
               setState(() {
@@ -1079,9 +1051,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               );
 
               if (isOrdersScreen) {
-                setState(() {
-                  _filterStatus = 'Pay Later';
-                });
                 // Refresh orders with the new filters
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _refreshOrders();

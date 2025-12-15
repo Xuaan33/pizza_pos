@@ -266,7 +266,7 @@ class CustomerDisplay(
                 val url = URL(apiUrl)
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
-                connection.connectTimeout = 10000 // 10 seconds
+                connection.connectTimeout = 10000
                 connection.readTimeout = 10000
 
                 authToken?.let { token ->
@@ -284,10 +284,14 @@ class CustomerDisplay(
                         val imagesArray = json.getJSONArray("message")
                         val newImageUrls = mutableListOf<String>()
                         for (i in 0 until imagesArray.length()) {
-                            newImageUrls.add(imagesArray.getString(i))
+                            var imageUrl = imagesArray.getString(i)
+                            // Convert HTTP to HTTPS if needed
+                            if (imageUrl.startsWith("http://")) {
+                                imageUrl = imageUrl.replace("http://", "https://")
+                            }
+                            newImageUrls.add(imageUrl)
                         }
                         
-                        // Update UI on main thread
                         handler.post {
                             imageUrls.clear()
                             imageUrls.addAll(newImageUrls)
@@ -580,7 +584,7 @@ class MainActivity : FlutterActivity() {
                 
                 if (secondaryDisplay != null) {
                     val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                    val baseUrl = prefs.getString("flutter.base_url", "https://harper.briosocialclub.com/") ?: "hhttps://harper.briosocialclub.com/"
+                    val baseUrl = prefs.getString("flutter.base_url", "https://harper.briosocialclub.com/") ?: "https://harper.briosocialclub.com/"
                     
                     customerDisplay = CustomerDisplay(this, secondaryDisplay, authToken, baseUrl)
                     customerDisplay?.show()
