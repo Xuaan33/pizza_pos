@@ -3640,8 +3640,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _calculateAdditionalCost(Map<String, dynamic> item) {
     if (item['additional_cost'] != null) {
       return (item['additional_cost'] as num).toDouble();
+    }else{
+      return _calculateVariantCost(item['custom_variant_info']);
     }
-    return 0.0;
+    
   }
 
   double _calculateVariantCost(dynamic variantInfo) {
