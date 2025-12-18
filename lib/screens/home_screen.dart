@@ -3210,7 +3210,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (item['additional_cost'] != null) {
       return (item['additional_cost'] as num).toDouble();
     } else {
-      return 0.0;
+      return _calculateVariantCost(item['custom_variant_info']);
     }
   }
 

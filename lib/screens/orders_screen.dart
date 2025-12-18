@@ -607,7 +607,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final originalSubtotal = _calculateOriginalSubtotal(order);
 
     // Calculate final values with proper negative handling
-    final subtotal = (order['subtotal'] as num?)?.toDouble() ??
+    final subtotal = (order['net_total'] as num?)?.toDouble() ??
         _calculateOrderSubtotal(order);
     final tax = (order['total_taxes_and_charges'] as num?)?.toDouble() ??
         _calculateOrderTax(order);
@@ -1035,7 +1035,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       final quantity = (item['quantity'] ?? 1).toDouble();
       final price = (item['price'] ?? 0).toDouble();
       final variantCost = _calculateVariantCost(item['custom_variant_info']);
-      final totalPrice = price;
+      final totalPrice = price + variantCost;
       return sum + (totalPrice * quantity);
     });
 
@@ -1047,9 +1047,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     // For item-level discounts, calculate original prices with variants
     return items.fold(0.0, (sum, item) {
       final quantity = (item['quantity'] ?? 1).toDouble();
+      final currentPrice = (item['price'] ?? 0).toDouble();
       final variantCost = _calculateVariantCost(item['custom_variant_info']);
-      final itemPrice = (item['price'] ?? 0).toDouble();
-      final currentPrice = itemPrice - variantCost;
       final discountAmount =
           (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
       final discountPercentage =
@@ -1073,8 +1072,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 // Helper method to build item price column with proper original/discounted price display
   List<Widget> _buildItemPriceColumn(Map<String, dynamic> item) {
     final quantity = (item['quantity'] ?? 1).toDouble();
+    final basePrice = (item['price'] ?? 0).toDouble();
     final variantCost = _calculateVariantCost(item['custom_variant_info']);
-    final basePrice = ((item['price'] ?? 0).toDouble()) - variantCost;
     final totalPricePerItem = basePrice + variantCost;
     final discountAmount = (item['discount_amount'] as num?)?.toDouble() ?? 0.0;
     final discountPercentage =
