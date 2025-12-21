@@ -935,19 +935,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           Expanded(
             child: Row(
               children: [
-                // if (_isSplitting)
-                //   Expanded(
-                //     child: _buildActionButton(
-                //       'Cancel Split',
-                //       Colors.grey,
-                //       onPressed: _isProcessingPayment ? null : _toggleSplitMode,
-                //     ),
-                //   )
-                // else
-                //   Expanded(
-                //     child: _buildPayLaterButton(),
-                //   ),
-                // const SizedBox(width: 10),
+                if (_isSplitting)
+                  Expanded(
+                    child: _buildActionButton(
+                      'Cancel Split',
+                      Colors.grey,
+                      onPressed: _isProcessingPayment ? null : _toggleSplitMode,
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: _buildPayLaterButton(),
+                  ),
+                const SizedBox(width: 10),
                 if (_isSplitting)
                   Expanded(
                     child: _buildActionButton(

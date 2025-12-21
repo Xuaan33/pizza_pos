@@ -835,7 +835,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               fromDate: _fromDate,
               toDate: _toDate,
             ),
-            DashboardScreen(),
+            // DashboardScreen(),
             KitchenScreen(
               key: ValueKey(
                   'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
@@ -903,7 +903,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 useDateRange: _useDateRange,
                 fromDate: _fromDate,
                 toDate: _toDate),
-            DashboardScreen(),
+            // DashboardScreen(),
             KitchenScreen(
               key: ValueKey(
                   'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
@@ -993,11 +993,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               ],
               _buildNavItem(tier.toLowerCase() != 'tier 3' ? 1 : 2,
                   'assets/img-sidebar-orders.png', 'Orders'),
+              // _buildNavItem(tier.toLowerCase() != 'tier 3' ? 2 : 3,
+              //     'assets/img-sidebar-dashboard.png', 'Dashboard'),
               _buildNavItem(tier.toLowerCase() != 'tier 3' ? 2 : 3,
-                  'assets/img-sidebar-dashboard.png', 'Dashboard'),
-              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 3 : 4,
                   'assets/img-sidebar-kitchen.png', 'Fulfilment'),
-              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 4 : 5,
+              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 3 : 4,
                   'assets/img-sidebar-settings.png', 'Settings'),
               const Spacer(),
               _buildNavItem(
