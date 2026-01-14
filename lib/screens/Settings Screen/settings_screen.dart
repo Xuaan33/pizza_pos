@@ -8,6 +8,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_terminal_manager.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
@@ -637,7 +638,7 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await PosService().getEmployees();
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getEmployees());
           if (response['success'] == true) {
             if (mounted) {
               setState(() {
@@ -674,10 +675,10 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _employeeCheckIn(String employeeId, String branch) async {
     try {
       setState(() => _isEmployeeLoading = true);
-      final response = await PosService().employeeCheckIn(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().employeeCheckIn(
         employee: employeeId,
         branch: branch,
-      );
+      ));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -705,10 +706,10 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _employeeCheckOut(String employeeId, String branch) async {
     try {
       setState(() => _isEmployeeLoading = true);
-      final response = await PosService().employeeCheckOut(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().employeeCheckOut(
         employee: employeeId,
         branch: branch,
-      );
+      ));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -1316,9 +1317,9 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await PosService().requestClosingVoucher(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().requestClosingVoucher(
             posProfile: posProfile,
-          );
+          ));
 
           if (mounted) {
             showDialog(
@@ -1369,7 +1370,6 @@ Future<void> _discoverUsbDevices() async {
             cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
-            debugPrint("Test: $cashDrawerPinNeeded");
             return cashDrawerPinNeeded == 1;
           },
           orElse: () => false,
@@ -1426,7 +1426,6 @@ Future<void> _discoverUsbDevices() async {
             cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
-            debugPrint("Test: $cashDrawerPin");
             return cashDrawerPin;
           },
           orElse: () => false,

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
@@ -65,7 +66,7 @@ class _SplitOrderPaymentDialogState
 
   Future<void> _fetchOrderDetails() async {
     try {
-      final response = await PosService().getOrders(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getOrders(
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
                     sid,
@@ -96,7 +97,7 @@ class _SplitOrderPaymentDialogState
                 ) ??
             '',
         search: widget.order['name'],
-      );
+      ));
 
       if (response['message']?['success'] == true) {
         final invoices = response['message']?['message'] ?? [];
@@ -991,10 +992,10 @@ class _SplitOrderPaymentDialogState
       }
 
       // Complete the payment
-      final response = await PosService().checkoutOrder(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().checkoutOrder(
         invoiceName: widget.order['name'],
         payments: payments,
-      );
+      ));
 
       if (response['success'] == true) {
         if (_selectedPaymentMethod == 'Cash') {
@@ -1109,7 +1110,7 @@ class _SplitOrderPaymentDialogState
         throw Exception('Invalid order name');
       }
 
-      final response = await PosService().deleteOrder(orderName);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -1764,7 +1765,7 @@ class _SplitOrderPaymentDialogState
       // Convert user input to uppercase
       final uppercaseVoucherCode = voucherCode.toUpperCase();
 
-      final response = await PosService().validateVoucher(uppercaseVoucherCode);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().validateVoucher(uppercaseVoucherCode));
 
       if (response['success'] == true) {
         final voucherData = response['message'];
@@ -1814,7 +1815,7 @@ class _SplitOrderPaymentDialogState
         _voucherCode = voucherName;
       });
 
-      final response = await PosService().submitOrder(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
           name: orderName,
           posProfile: ref.read(authProvider).maybeWhen(
                     authenticated: (
@@ -1867,7 +1868,7 @@ class _SplitOrderPaymentDialogState
           }).toList(),
           couponCode: couponCode,
           custom_user_voucher: voucherName,
-          remarks: _orderDetails['remarks'] ?? "N/A");
+          remarks: _orderDetails['remarks'] ?? "N/A"));
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -1894,7 +1895,7 @@ class _SplitOrderPaymentDialogState
         _discountAmount = amount;
       });
 
-      final response = await PosService().submitOrder(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
         name: orderName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -1945,7 +1946,7 @@ class _SplitOrderPaymentDialogState
         }).toList(),
         remarks: _orderDetails['remarks'] ?? "N/A",
         discountAmount: amount, // Pass the discount amount directly
-      );
+      ));
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -1986,7 +1987,7 @@ class _SplitOrderPaymentDialogState
         _voucherCode = '';
       });
 
-      final response = await PosService().submitOrder(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
         name: orderName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -2038,7 +2039,7 @@ class _SplitOrderPaymentDialogState
         custom_user_voucher: null, // Set to null to remove
         discountAmount: 0, // Set to 0 to remove
         remarks: _orderDetails['remarks'] ?? "N/A",
-      );
+      ));
 
       if (response['success'] == true) {
         // Force a complete refresh of order details
@@ -2138,7 +2139,7 @@ class _SplitOrderPaymentDialogState
         return itemData;
       }).toList();
 
-      final response = await PosService().submitOrder(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
         name: _orderDetails['name'],
         posProfile: posProfile,
         customer: _orderDetails['customer'] ?? 'Guest',
@@ -2150,7 +2151,7 @@ class _SplitOrderPaymentDialogState
         couponCode: null,
         custom_user_voucher: null,
         remarks: _orderDetails['remarks'],
-      );
+      ));
 
       if (response['success'] == true ||
           response['message']?['success'] == true) {

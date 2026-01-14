@@ -80,14 +80,13 @@ class _TableScreenState extends ConsumerState<TableScreen>
       if (branch == null) throw Exception('Branch not set');
 
       final posService = PosService();
-      final response = await posService.getFloorsAndTables(branch);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => posService.getFloorsAndTables(branch));
+      print('Floors and Tables Response: $response');
 
       if (response['success'] == true) {
         final floorsData = response['message'];
         final floorTables = <String, List<Map<String, dynamic>>>{};
         final floors = <String>[];
-
-        Map<String, dynamic>? defaultTable;
 
         for (var floor in floorsData) {
           final floorName = floor['floor'];
@@ -100,16 +99,12 @@ class _TableScreenState extends ConsumerState<TableScreen>
             tables = List<Map<String, dynamic>>.from(floor['tables']);
           }
 
-          // Check for default table
-          for (var table in tables) {
-            if (table['is_default'] == 1) {
-              defaultTable = table;
-              break;
-            }
-          }
-
-          // Filter out default table from display
-          tables = tables.where((table) => table['is_default'] != 1).toList();
+          // FILTER OUT tables with is_default == 1 (takeaway/default table)
+          tables = tables.where((table) {
+            // Check if table has is_default property and it's NOT set to 1
+            final isDefault = (table['is_default'] ?? 0) == 1;
+            return !isDefault; // Only include non-default tables
+          }).toList();
 
           if (tables.isNotEmpty) {
             floorTables[floorName] = tables;
@@ -140,7 +135,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
   Future<void> _loadTodayInfo() async {
     try {
-      final response = await PosService().getTodayInfo();
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getTodayInfo());
 
       if (response['success'] == true) {
         setState(() {
@@ -195,17 +190,16 @@ class _TableScreenState extends ConsumerState<TableScreen>
         cashDrawerPin,
       ) {
         if (!hasOpening) {
-          // Show dialog if no opening entry exists
           _showOpeningRequiredDialog();
           return;
         }
 
-        // Proceed with normal table tap handling
+        // Extract the table number from the table data
+        final tableNumber = table['title']?.toString() ?? 'Table';
+        final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
+
         var existingOrder = widget.activeOrders.firstWhere(
-          (order) =>
-              order['tableNumber'] ==
-                  int.parse(table['title'].split(' ').last) &&
-              !order['isPaid'],
+          (order) => order['tableNumber'] == tableNum && !order['isPaid'],
           orElse: () => {},
         );
 
@@ -213,15 +207,15 @@ class _TableScreenState extends ConsumerState<TableScreen>
           context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              tableNumber:
-                  "int.parse(table['title'].split(' ').last)", // TO FIX
+              tableNumber: tableNumber, // Pass the actual table number
               existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
+              isTier1: false, // This is for tier 3 table screen
+                isDefaultTable: false,
             ),
           ),
         ).then((result) {
           if (result != null) {
-            _handleOrderResult(
-                int.parse(table['title'].split(' ').last), result);
+            _handleOrderResult(tableNum, result);
           }
         });
       },
@@ -419,21 +413,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
     );
   }
 
-  int _getAvailableTablesCount() {
-    if (_floorTables.isEmpty) return 0;
-    final currentFloorTables = _floorTables[_selectedFloor] ?? [];
-    final occupiedTables =
-        currentFloorTables.where((table) => table['active'] == 1).length;
-    return currentFloorTables.length - occupiedTables;
-  }
-
-  double _getTotalRevenue() {
-    return widget.activeOrders.where((order) => !order['isPaid']).fold(0.0,
-        (sum, order) {
-      return sum + _calculateOrderTotal(order);
-    });
-  }
-
   Widget _buildStatPill(String label, String value, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
@@ -482,9 +461,9 @@ class _TableScreenState extends ConsumerState<TableScreen>
   }
 
   Widget _buildTableIcon(Map<String, dynamic> table) {
-    final tableNumber = table['title'];
-    final tableNum = int.parse(table['title'].split(' ').last);
-    final hasOrder = table['active'] == 0 ||
+    final tableNumber = table['title']?.toString() ?? 'Table';
+    final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
+    final hasOrder = table['active'] == 1 ||
         widget.tablesWithSubmittedOrders.contains(tableNum);
 
     // Calculate unpaid amount for this table
@@ -493,7 +472,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
       orElse: () => {},
     );
 
-    final unpaidAmount = table['unpaid_order']?.toDouble();
+    final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
 
     final capacity = table['capacity'] ?? 4;
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/stock_item_card.dart';
@@ -73,12 +74,11 @@ class _StockManagementSectionState
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await PosService().getStockBalanceSummary(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
             date: DateFormat('yyyy-MM-dd').format(_selectedDate),
-          );
-
+          ));
           if (response['success'] == true) {
             final items =
                 List<Map<String, dynamic>>.from(response['message'] ?? []);
@@ -179,12 +179,11 @@ class _StockManagementSectionState
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await PosService().getStockQuantity(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getStockQuantity(
             posProfile: posProfile,
             itemCode: itemCode,
             date: DateFormat('yyyy-MM-dd').format(_selectedDate),
-          );
-
+          ));
           if (response['success'] == true) {
             final updatedQty = (response['message']['qty'] ?? 0).toDouble();
 
@@ -487,10 +486,10 @@ class _StockManagementSectionState
             }
           ];
 
-          final response = await PosService().stockInItems(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().stockInItems(
             posProfile: posProfile,
             items: itemsToStockIn,
-          );
+          ));
 
           if (response['success'] == true) {
             Fluttertoast.showToast(
@@ -561,10 +560,10 @@ class _StockManagementSectionState
             }
           ];
 
-          final response = await PosService().adjustStock(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().adjustStock(
             posProfile: posProfile,
             items: itemsToAdjust,
-          );
+          ));
 
           if (response['success'] == true) {
             Fluttertoast.showToast(

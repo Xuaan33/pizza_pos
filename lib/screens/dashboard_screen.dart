@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -81,12 +82,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await PosService().getOrders(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getOrders(
             posProfile: posProfile,
             status: 'Draft',
             pageLength: 1000,
-          );
-
+          ));
           // Check if message exists and what it contains
           if (response['message'] == null) {
             print('ERROR: message field is null');
@@ -225,35 +225,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         // Fetch all data concurrently - UPDATED: Now 7 futures
         final results = await Future.wait([
           // 0: Total sales
-          PosService().makeRequest(
+          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
             endpoint:
                 'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-          ),
+          )),
           // 1: Peak time
-          PosService().makeRequest(
+          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
             endpoint:
                 'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-          ),
+          )),
           // 2: Today info
-          PosService().getTodayInfo(),
+          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getTodayInfo()),
           // 3: Revenue data
-          PosService().makeRequest(
+          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
             endpoint: 'shiok_pos.api.get_revenue?'
                 'pos_profile=$posProfile&'
                 'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
                 'xaxis=$xaxisParam',
-          ),
+          )),
           // 4: Popular items
-          PosService().makeRequest(
+          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
             endpoint:
                 'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
-          ),
+          )),
           // 5: Payment methods
-          PosService().getPaymentMethodDistribution(
+          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getPaymentMethodDistribution(
             posProfile: posProfile,
             fromDate: dateFormat.format(fromDate),
             toDate: dateFormat.format(toDate),
-          ),
+          )),
           // 6: Applied vouchers
           // PosService().getAppliedUserVouchers(
           //   posProfile: posProfile,

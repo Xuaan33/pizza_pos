@@ -17,6 +17,7 @@ class HomeScreen extends ConsumerStatefulWidget {
   final String tableNumber;
   final Map<String, dynamic>? existingOrder;
   final bool isTier1;
+  final bool isDefaultTable; // NEW PARAMETER
   final bool isExchangeMode; // NEW
   final List<Map<String, dynamic>>? exchangeReturnItems; // NEW
   final double? exchangeAmount; // NEW
@@ -27,6 +28,7 @@ class HomeScreen extends ConsumerStatefulWidget {
     required this.tableNumber,
     this.existingOrder,
     this.isTier1 = false, // Default to false
+    this.isDefaultTable = false, // NEW DEFAULT
     this.isExchangeMode = false, // NEW
     this.exchangeReturnItems, // NEW
     this.exchangeAmount, // NEW
@@ -59,21 +61,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<Map<String, dynamic>> _exchangeReturnItems = [];
   double _exchangeAmount = 0.0;
   String? _originalOrderId;
+  bool isDefault = false;
 
   @override
   void initState() {
     super.initState();
+    isDefault = widget.isDefaultTable;
+
     _loadBaseUrl();
     _loadItemGroups();
-    _loadAvailableItems();
     _initializeOrderItems();
-
+    
     // Listen to scroll events
     _scrollController.addListener(_updateScrollButtons);
 
-    // Initialize scroll buttons after build
+    // Initialize scroll buttons and API calls after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollButtons();
+      
+      // Delay API calls until context is available
+      _loadAvailableItems();
+      
+      _getDefaultTable().then((defaultTable) {
+        if (defaultTable != null) {
+          final defaultTableTitle = defaultTable['title'] ?? '';
+          final currentTableTitle = widget.tableNumber;
+          isDefault = defaultTableTitle == currentTableTitle;
+          print(
+              'Current table: $currentTableTitle, Default table: $defaultTableTitle, isDefault: $isDefault');
+        } else {
+          print('No default table found.');
+        }
+      });
     });
 
     if (widget.isExchangeMode) {
@@ -87,6 +106,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _loadBaseUrl() async {
     baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
     setState(() {}); // Refresh UI
+  }
+
+  Future<Map<String, dynamic>?> _getDefaultTable() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final branch = prefs.getString('branch');
+      if (branch == null) return null;
+
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
+      if (response['success'] == true) {
+        final floorsData = response['message'];
+
+        if (floorsData is List) {
+          // First, try to find a table with is_default = 1
+          for (var floor in floorsData) {
+            final tables = floor['tables'];
+
+            // Case 1: Single-table in a Map
+            if (tables is Map<String, dynamic>) {
+              if (tables['is_default'] == 1) {
+                isDefault = true;
+                return tables;
+              }
+            }
+            // Case 2: Multi-table List
+            else if (tables is List) {
+              for (var table in tables) {
+                // Check if table has is_default property and it's set to 1
+                if (table['is_default'] == 1) {
+                  isDefault = true;
+                  return table;
+                }
+              }
+            }
+          }
+
+          // If no default table found, take the first available table
+          for (var floor in floorsData) {
+            final tables = floor['tables'];
+
+            // Case 1: Single-table in a Map
+            if (tables is Map<String, dynamic>) {
+              return tables; // Return the single table
+            }
+            // Case 2: Multi-table List
+            else if (tables is List && tables.isNotEmpty) {
+              return tables[0]; // Return first table from the list
+            }
+          }
+        }
+      }
+
+      return null; // No tables found at all
+    } catch (e, stackTrace) {
+      print('Error getting default table: $e\n$stackTrace');
+      return null;
+    }
   }
 
   void _initializeOrderItems() {
@@ -290,7 +366,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ) async {
           final posService = PosService();
           final response =
-              await posService.getItems(posProfile); // Pass posProfile here
+              await MainLayout.of(context)!.safeExecuteAPICall(() => posService.getItems(posProfile)); // Pass posProfile here
 
           if (response['success'] == true) {
             if (mounted) {
@@ -324,7 +400,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _loadVariantGroupsForItems() async {
     try {
-      final response = await PosService().getVariantGroups();
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
 
       if (response['success'] == true) {
         final variantGroups =
@@ -427,12 +503,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await PosService().getStockBalanceSummary(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
             disable: 0,
-          );
-
+          ));
           if (response['success'] == true) {
             final newStockQuantities = <String, int>{};
 
@@ -623,7 +698,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                           children: [
                                             // Back Button
                                             if (tier.toLowerCase() ==
-                                                'tier 3') ...[
+                                                    'tier 3' &&
+                                                !isDefault) ...[
                                               IconButton(
                                                 icon: const Icon(
                                                     Icons.arrow_back),
@@ -642,7 +718,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                   CrossAxisAlignment.center,
                                               children: [
                                                 Text(
-                                                  widget.isTier1
+                                                  widget.isTier1 || isDefault
                                                       ? 'Instant Order'
                                                       : '${widget.tableNumber}',
                                                   style: const TextStyle(
@@ -1078,8 +1154,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       const SizedBox(height: 10),
                                       Column(
                                         children: [
-                                          if (tier.toLowerCase() ==
-                                              'tier 3') ...[
+                                          if (tier.toLowerCase() == 'tier 3' &&
+                                              !isDefault) ...[
                                             SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
@@ -2074,7 +2150,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         try {
           // 1. Get the full table name from floors and tables API
-          final floorsResponse = await PosService().getFloorsAndTables(branch);
+          final floorsResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
           String tableFullName = '${widget.tableNumber}'; // fallback
 
           if (floorsResponse['success'] == true) {
@@ -2105,14 +2181,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }).toList();
 
           // 3. Submit with proper table format and order channel
-          final response = await PosService().submitOrder(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
             posProfile: posProfile,
             customer: 'Guest',
             items: items,
             table: tableFullName, // e.g. "MK-Floor 1-Table 1"
             orderChannel: 'Dine In', // Hardcoded as requested
             name: hasExistingOrder ? widget.existingOrder!['orderId'] : null,
-          );
+          ));
 
           if (response['success'] == true) {
             Navigator.pop(context, {
@@ -2253,7 +2329,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoSaveAllRemarks();
 
         // Get the full table name from floors and tables API
-        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        final floorsResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
         String? tableFullName;
 
         for (var floor in floorsResponse['message']) {
@@ -2297,7 +2373,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Submit/Update the order first
         if (hasExistingOrder) {
           // Update existing order
-          final response = await PosService().submitOrder(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
               posProfile: posProfile,
               customer: 'Guest',
               items: items,
@@ -2307,7 +2383,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               couponCode: widget.existingOrder!['coupon_code'],
               remarks: widget.existingOrder!['remarks'],
               custom_user_voucher:
-                  widget.existingOrder!['custom_user_voucher']);
+                  widget.existingOrder!['custom_user_voucher']));
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -2316,13 +2392,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         } else {
           // Create new order
-          final response = await PosService().submitOrder(
+          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
             posProfile: posProfile,
             customer: 'Guest',
             items: items,
             table: tableFullName,
             orderChannel: 'Dine In',
-          );
+          ));
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -2444,10 +2520,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
 
           // Call refund API for return items only
-          final refundResult = await posService.refundOrder(
+          final refundResult = await MainLayout.of(context)!.safeExecuteAPICall(() => posService.refundOrder(
             name: _originalOrderId!,
             items: returnItems,
-          );
+          ));
 
           if (refundResult['success'] != true) {
             throw Exception(
@@ -2514,7 +2590,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoSaveAllRemarks();
 
         // Get the full table name (use a default for exchange orders)
-        final floorsResponse = await PosService().getFloorsAndTables(branch);
+        final floorsResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
         String tableFullName = '${widget.tableNumber}'; // fallback
 
         if (floorsResponse['success'] == true) {
@@ -2545,14 +2621,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }).toList();
 
         // Create new order for exchange items
-        final response = await PosService().submitOrder(
+        final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
           posProfile: posProfile,
           customer: 'Guest',
           items: items,
           table: tableFullName,
           orderChannel: 'Dine In',
           remarks: 'Exchange from order: $_originalOrderId',
-        );
+        ));
 
         if (response['success'] == true) {
           final orderName = response['message']['name'];
@@ -3246,7 +3322,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         throw Exception('Order ID not found');
       }
 
-      final response = await PosService().deleteOrder(orderName);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3640,10 +3716,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _calculateAdditionalCost(Map<String, dynamic> item) {
     if (item['additional_cost'] != null) {
       return (item['additional_cost'] as num).toDouble();
-    }else{
+    } else {
       return _calculateVariantCost(item['custom_variant_info']);
     }
-    
   }
 
   double _calculateVariantCost(dynamic variantInfo) {

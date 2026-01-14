@@ -950,12 +950,14 @@ class PosService {
     required String kitchenStation,
     required String fromDate,
     required String toDate,
+    String? orderSource, // Add this parameter
   }) async {
     final params = {
       'pos_profile': posProfile,
       'kitchen_station': kitchenStation,
       'from_date': fromDate,
       'to_date': toDate,
+      if (orderSource != null) 'order_source': orderSource, // Add conditionally
     };
 
     final queryString = Uri(queryParameters: params).query;

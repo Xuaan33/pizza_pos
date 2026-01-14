@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class ItemGroupManagementScreen extends ConsumerStatefulWidget {
@@ -38,7 +39,7 @@ class _ItemGroupManagementScreenState
   Future<void> _loadItemGroups() async {
     setState(() => _isLoading = true);
     try {
-      final response = await PosService().getItemGroups();
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroups());
       // Handle the actual API response structure
       final message = response['message'];
       List<dynamic> itemGroupsList = [];
@@ -75,7 +76,7 @@ class _ItemGroupManagementScreenState
   Future<void> _loadItemGroupDetails(String name) async {
     setState(() => _isLoading = true);
     try {
-      final response = await PosService().getItemGroup(name);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroup(name));
       final data = response['message'];
 
       // Add null checks and type safety
@@ -101,23 +102,23 @@ class _ItemGroupManagementScreenState
     try {
       if (_selectedItemGroup == null) {
         // Create new
-        await PosService().createItemGroup(
+        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createItemGroup(
           itemGroupName: _nameController.text,
           parentItemGroup:
               _parentController.text.isEmpty ? null : _parentController.text,
           isGroup: _isGroup ? 1 : 0,
-        );
+        ));
         _showSuccess('Item group created successfully');
       } else {
         // Update existing
-        await PosService().updateItemGroup(
+        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItemGroup(
           name: _selectedItemGroup!,
           itemGroupName: _nameController.text,
           parentItemGroup:
               _parentController.text.isEmpty ? null : _parentController.text,
           isGroup: _isGroup ? 1 : 0,
           disabled: 0
-        );
+        ));
         _showSuccess('Item group updated successfully');
       }
       _loadItemGroups();

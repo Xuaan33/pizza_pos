@@ -56,6 +56,8 @@ dependencies:
   flutter_cache_manager: ^3.3.3
   flutter_thermal_printer: ^1.2.4
   esc_pos_utils_plus: ^2.0.4
+  flutter_local_notifications: ^19.5.0
+  audioplayers: ^6.5.1
 
 
 dev_dependencies:
@@ -100,6 +102,8 @@ flutter:
     - assets/img-sidebar-table.png
     - assets/img-sidebar-kitchen.png
     - assets/logo_shiokpos_launcher.png
+    - assets/icon-grab.png
+    - assets/grab_notification.mp3
 
   fonts:
     - family: Raleway

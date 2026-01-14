@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/item_group.dart';
@@ -122,10 +123,10 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         return;
       }
 
-      final responses = await Future.wait([
-        PosService().getAllItems(posProfile),
-        PosService().getItemGroups(),
-        PosService().getVariantGroups(),
+      final responses = await  Future.wait([
+        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getAllItems(posProfile)),
+        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroups()),
+        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups()),
       ]);
 
       if (!mounted) return;
@@ -195,7 +196,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
               return _detailedItemsCache[basicItem.itemCode]!;
             }
 
-            final response = await PosService().getItem(basicItem.itemCode);
+            final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(basicItem.itemCode));
 
             if (response['success'] == true) {
               final detailedItem = Item.fromDetailedJson(
@@ -247,7 +248,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         }
 
         // Fetch detailed item information
-        final response = await PosService().getItem(basicItem.itemCode);
+        final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(basicItem.itemCode));
 
         if (!mounted) break; // Check again after async operation
 
@@ -280,7 +281,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
   Future<void> _refreshItemDetails(Item item) async {
     try {
       // Fetch updated detailed information
-      final response = await PosService().getItem(item.itemCode);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(item.itemCode));
 
       if (!mounted) return;
 
@@ -469,7 +470,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       });
 
       // Fetch updated item details
-      final response = await PosService().getItem(itemCode);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(itemCode));
 
       if (!mounted) return;
 
@@ -531,7 +532,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       await _refreshItemDetails(item);
       final currentItem = _detailedItemsCache[item.itemCode] ?? item;
 
-      await PosService().updateItem(
+      await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItem(
         itemCode: item.itemCode,
         itemName: currentItem.itemName,
         itemGroup: currentItem.itemGroup,
@@ -542,7 +543,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
                 })
             .toList(),
         disabled: isActive ? 0 : 1,
-      );
+      ));
 
       // Instead of reloading all data, just update this specific item
       await _refreshItemDetails(item);
@@ -1498,14 +1499,14 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await PosService().createItem(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createItem(
         itemCode: _codeController.text.trim(),
         itemName: _nameController.text.trim(),
         itemGroup: _selectedItemGroup!,
         variantGroupTable: _selectedVariantGroups,
         description: _descriptionController.text.trim(),
         isPosItem: _isPosItem ? 1 : 0,
-      );
+      ));
 
       if (response['success'] == true) {
         widget.onSave();
@@ -1936,14 +1937,14 @@ class _EditItemDialogState extends State<EditItemDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await PosService().updateItem(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItem(
         itemCode: widget.item.itemCode,
         itemName: _nameController.text.trim(),
         itemGroup: _selectedItemGroup!,
         variantGroupTable: _selectedVariantGroups,
         description: _descriptionController.text.trim(),
         isPosItem: _isPosItem ? 1 : 0,
-      );
+      ));
 
       if (response['success'] == true) {
         widget.onSave();

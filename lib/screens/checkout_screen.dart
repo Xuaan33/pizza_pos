@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/components/pos_hex_generator.dart';
 import 'package:shiok_pos_android_app/components/pos_terminal_manager.dart';
@@ -89,18 +90,42 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.initState();
     _loadBaseUrl();
     _loadPaymentMethods();
-    _loadTodayInfo();
-    _fetchOrderDetails();
-    _checkStockForItems();
+    
     // Initialize remarks
     _selectedOrderChannel = widget.order['orderType'] ?? 'Dine In';
     _currentRemarks = widget.order['remarks'] ?? '';
     _remarksController.text = _currentRemarks;
+    
+    // Delay API calls until after the first frame when MainLayout context is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadTodayInfo();
+        _fetchOrderDetails();
+        _checkStockForItems();
+      }
+    });
   }
 
   Future<void> _loadBaseUrl() async {
     baseImageUrl = await ImageUrlHelper.getBaseImageUrl();
     setState(() {}); // Refresh UI
+  }
+
+  /// Safe wrapper for API calls that works whether or not CheckoutScreen is inside MainLayout
+  Future<T> _safeExecuteAPICall<T>(Future<T> Function() apiCall) async {
+    try {
+      // Try to use MainLayout's queue if available
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.executeProtectedAPICall(apiCall);
+      }
+    } catch (e) {
+      // MainLayout not found or error accessing it
+      debugPrint('MainLayout not available, executing API call directly: $e');
+    }
+    
+    // Fallback: execute API call directly
+    return await apiCall();
   }
 
   void _loadPaymentMethods() {
@@ -146,7 +171,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _loadTodayInfo() async {
     try {
-      final response = await PosService().getTodayInfo();
+      final response = await _safeExecuteAPICall(() => PosService().getTodayInfo());
 
       if (response['success'] == true) {
         setState(() {
@@ -179,7 +204,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (invoiceName == null) return;
 
       debugPrint('=== FETCHING ORDER DETAILS FROM SERVER ===');
-      final response = await PosService().getOrders(
+      final response = await _safeExecuteAPICall(() => PosService().getOrders(
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
                     sid,
@@ -210,7 +235,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ) ??
             '',
         search: invoiceName,
-      );
+      ));
 
       debugPrint('Server response: ${jsonEncode(response)}');
 
@@ -358,12 +383,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final newStockQuantities = <String, int>{};
 
           // Call API once to get all stock data
-          final response = await PosService().getStockBalanceSummary(
+          final response = await _safeExecuteAPICall(() => PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
             disable: 0,
-          );
-
+          ));
           if (response['success'] == true) {
             final message = response['message'];
 
@@ -1836,7 +1860,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
           name: invoiceName,
           posProfile: ref.read(authProvider).maybeWhen(
                     authenticated: (
@@ -1885,7 +1909,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           couponCode: widget.order['coupon_code'],
           custom_user_voucher: _voucherCode,
           remarks: _remarksController.text,
-          discountAmount: widget.order['discount_amount']);
+          discountAmount: widget.order['discount_amount']));
 
       if (response['success'] == true) {
         setState(() {
@@ -2177,7 +2201,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               cashDrawerPinNeeded,
               cashDrawerPin,
             ) {
-              debugPrint("Test: $cashDrawerPinNeeded");
               return cashDrawerPinNeeded == 1;
             },
             orElse: () => false,
@@ -2343,10 +2366,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       } else {
         // Original payment processing code
-        final response = await PosService().checkoutOrder(
+        final response = await _safeExecuteAPICall(() => PosService().checkoutOrder(
           invoiceName: invoiceName,
           payments: payments,
-        );
+        ));
 
         if (response['success'] == true) {
           // In the _completePayment method, around line 1320, modify the cash payment section:
@@ -3063,7 +3086,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isProcessingPayment = true);
 
     try {
-      final response = await PosService().deleteOrder(orderName);
+      final response = await _safeExecuteAPICall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3154,7 +3177,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isProcessingPayment = true);
 
     try {
-      final response = await PosService().deleteOrder(orderName);
+      final response = await _safeExecuteAPICall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3864,7 +3887,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         return itemData;
       }).toList();
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
           name: invoiceName,
           posProfile: ref.read(authProvider).maybeWhen(
                     authenticated: (
@@ -3902,7 +3925,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           couponCode: widget.order['coupon_code'],
           custom_user_voucher: widget.order['user_voucher_code'],
           discountAmount: widget.order['discount_amount'],
-          remarks: widget.order['remarks'] ?? "N/A");
+          remarks: widget.order['remarks'] ?? "N/A"));
 
       if (response['success'] == true) {
         // Update the order details with new amounts
@@ -3962,7 +3985,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       });
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -4010,7 +4033,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }).toList(),
         remarks: widget.order['remarks'] ?? "N/A",
         discountAmount: amount, // Pass the discount amount directly
-      );
+      ));
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -4076,7 +4099,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       });
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -4125,7 +4148,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         custom_user_voucher: null, // Set to null to remove
         discountAmount: 0, // Set to 0 to remove
         remarks: widget.order['remarks'] ?? "N/A",
-      );
+      ));
 
       if (response['success'] == true) {
         // Force a complete refresh of order details
@@ -4169,7 +4192,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Convert user input to uppercase
       final uppercaseVoucherCode = voucherCode.toUpperCase();
 
-      final response = await PosService().validateVoucher(uppercaseVoucherCode);
+      final response = await _safeExecuteAPICall(() => PosService().validateVoucher(uppercaseVoucherCode));
 
       if (response['success'] == true) {
         final voucherData = response['message'];
@@ -4223,7 +4246,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         // The _fetchOrderDetails() call below will update the actual discount amount
       });
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
           name: invoiceName,
           posProfile: ref.read(authProvider).maybeWhen(
                     authenticated: (
@@ -4272,7 +4295,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           couponCode: couponCode,
           // Use user_voucher_code if available, otherwise use the voucher name
           custom_user_voucher: widget.order['user_voucher_code'] ?? voucherName,
-          remarks: widget.order['remarks'] ?? "N/A");
+          remarks: widget.order['remarks'] ?? "N/A"));
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -4745,7 +4768,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -4795,7 +4818,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         custom_user_voucher: _voucherCode,
         remarks: _remarksController.text,
         discountAmount: widget.order['discount_amount'],
-      );
+      ));
 
       if (response['success'] == true) {
         // Update local state
@@ -4853,7 +4876,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final invoiceName = widget.order['invoiceNumber'];
       if (invoiceName == null) return;
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
         name: invoiceName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -4903,7 +4926,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         custom_user_voucher: widget.order['user_voucher_code'],
         discountAmount: widget.order['discount_amount'],
         remarks: widget.order['remarks'] ?? "N/A",
-      );
+      ));
 
       if (response['success'] == true) {
         // Update the order details with new amounts
@@ -5006,7 +5029,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (posProfile == null) throw Exception('Not authenticated');
 
       // 1. Create new order with split items
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
           posProfile: posProfile,
           customer: 'Guest',
           items: _itemsToSplit
@@ -5024,7 +5047,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               .toList(),
           remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
-          orderChannel: _selectedOrderChannel);
+          orderChannel: _selectedOrderChannel));
 
       if (response['success'] == true) {
         final splitOrder = response['message'];
@@ -5048,7 +5071,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
         } else {
           // If payment failed or cancelled, delete the split order
-          await PosService().deleteOrder(splitOrder['name']);
+          await _safeExecuteAPICall(() => PosService().deleteOrder(splitOrder['name']));
 
           Fluttertoast.showToast(
             msg: "Split cancelled - items restored to original order",
@@ -5353,14 +5376,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       debugPrint('🔄 Submitting updated order to server...');
 
-      final response = await PosService().submitOrder(
+      final response = await _safeExecuteAPICall(() => PosService().submitOrder(
           name: invoiceName,
           posProfile: posProfile,
           customer: 'Guest',
           items: itemsToSubmit,
           remarks: widget.order['remarks'] ?? "N/A",
           table: widget.order['tableFullName'],
-          orderChannel: _selectedOrderChannel);
+          orderChannel: _selectedOrderChannel));
 
       if (response['success'] == true) {
         // Update local state with the preserved items
@@ -5444,7 +5467,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             cashDrawerPinNeeded,
             cashDrawerPin,
           ) {
-            debugPrint("Test: $cashDrawerPin");
             return cashDrawerPin;
           },
           orElse: () => false,

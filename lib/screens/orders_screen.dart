@@ -1410,9 +1410,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Future<void> _processRefund(Map<String, dynamic> order) async {
     final orderIdForRefund = order['orderId'];
 
-    final refundCheckResponse = await PosService().checkItemsAvailableForRefund(
+    final refundCheckResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().checkItemsAvailableForRefund(
       posInvoice: orderIdForRefund,
-    );
+    ));
     final availableItems = refundCheckResponse['message'] as List<dynamic>;
 
     // Check if refund is available
@@ -1669,10 +1669,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       if (isCashPayment) {
         // For cash payments, use the new refund API
-        final refundResponse = await PosService().refundOrder(
+        final refundResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().refundOrder(
           name: orderId,
           items: items,
-        );
+        ));
 
         // Close loading dialog
         if (mounted) Navigator.of(context).pop();
@@ -1774,10 +1774,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         }
 
         // If POS transaction successful, call the refund API
-        final refundResponse = await PosService().refundOrder(
+        final refundResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().refundOrder(
           name: orderId,
           items: items,
-        );
+        ));
 
         // Close loading dialog
         if (mounted) Navigator.of(context).pop();

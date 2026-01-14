@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -17,11 +18,13 @@ class KitchenScreen extends ConsumerStatefulWidget {
 class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   List<Map<String, dynamic>> _kitchenStations = [];
   List<Map<String, dynamic>> _kitchenOrders = [];
+  List<Map<String, dynamic>> _grabOrders = [];
   String? _selectedKitchenStation;
   bool _isLoadingStations = true;
   bool _isLoadingOrders = false;
   DateTime _selectedDate = DateTime.now();
   int _selectedTabIndex = 0; // 0: Pending, 1: Done
+  bool _showGrabStation = true; // Show GRAB as first station
 
   @override
   void initState() {
@@ -66,9 +69,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await PosService().getKitchenStations(
-            posProfile: posProfile,
-          );
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getKitchenStations(
+                    posProfile: posProfile,
+                  ));
 
           if (!mounted) return;
 
@@ -77,8 +81,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
             setState(() {
               _kitchenStations = stations.cast<Map<String, dynamic>>();
               if (_kitchenStations.isNotEmpty) {
-                _selectedKitchenStation = _kitchenStations.first['name'];
+                // Default to GRAB station if available
+                _selectedKitchenStation = 'GRAB';
                 _loadKitchenOrders();
+                _loadGrabOrders();
               }
             });
           }
@@ -94,6 +100,12 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
   Future<void> _loadKitchenOrders() async {
     if (_selectedKitchenStation == null || !mounted) return;
+
+    // If GRAB station is selected, use grab orders
+    if (_selectedKitchenStation == 'GRAB') {
+      _loadGrabOrders();
+      return;
+    }
 
     if (mounted) {
       setState(() => _isLoadingOrders = true);
@@ -122,19 +134,19 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         printMerchantReceiptCopy,
         enableFiuu,
         cashDrawerPinNeeded,
-
         cashDrawerPin,
       ) async {
         try {
           final fromDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
           final toDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-          final response = await PosService().getKitchenOrders(
-            posProfile: posProfile,
-            kitchenStation: _selectedKitchenStation!,
-            fromDate: fromDate,
-            toDate: toDate,
-          );
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getKitchenOrders(
+                    posProfile: posProfile,
+                    kitchenStation: _selectedKitchenStation!,
+                    fromDate: fromDate,
+                    toDate: toDate,
+                  ));
 
           if (!mounted) return;
 
@@ -157,16 +169,92 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     }
   }
 
+  Future<void> _loadGrabOrders() async {
+    if (!mounted) return;
+
+    if (mounted && _selectedKitchenStation != 'GRAB') {
+      setState(() => _isLoadingOrders = true);
+    }
+
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
+        cashDrawerPinNeeded,
+        cashDrawerPin,
+      ) async {
+        try {
+          final fromDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+          final toDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+          // Find a real kitchen station to use for the API call
+          final firstStation =
+              _kitchenStations.isNotEmpty ? _kitchenStations.first['name'] : '';
+
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getKitchenOrders(
+                    posProfile: posProfile,
+                    kitchenStation: firstStation,
+                    fromDate: fromDate,
+                    toDate: toDate,
+                    orderSource: 'grab', // Add this parameter for GRAB orders
+                  ));
+
+          if (!mounted) return;
+
+          if (response['success'] == true) {
+            final orders = (response['message'] as List?) ?? [];
+            if (mounted) {
+              setState(() {
+                _grabOrders = orders.cast<Map<String, dynamic>>();
+              });
+            }
+          }
+        } catch (e) {
+          print('Error loading GRAB orders: $e');
+        }
+      },
+    );
+
+    if (mounted && _selectedKitchenStation != 'GRAB') {
+      setState(() => _isLoadingOrders = false);
+    }
+  }
+
   Future<void> _fulfillItem(String posInvoiceItem, bool fulfilled) async {
     try {
-      final response = await PosService().fulfillKitchenItem(
-        posInvoiceItem: posInvoiceItem,
-        fulfilled: fulfilled ? 1 : 0,
-      );
+      final response = await MainLayout.of(context)!
+          .safeExecuteAPICall(() => PosService().fulfillKitchenItem(
+                posInvoiceItem: posInvoiceItem,
+                fulfilled: fulfilled ? 1 : 0,
+              ));
       if (!mounted) return;
 
       if (response['success'] == true) {
-        _loadKitchenOrders();
+        // Reload appropriate orders based on current station
+        if (_selectedKitchenStation == 'GRAB') {
+          _loadGrabOrders();
+        } else {
+          _loadKitchenOrders();
+        }
 
         if (mounted) {
           Fluttertoast.showToast(
@@ -198,16 +286,21 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
       return; // Add mounted check
 
     try {
-      final response = await PosService().fulfillKitchenOrder(
-        posInvoice: posInvoice,
-        kitchenStation: _selectedKitchenStation!,
-        fulfilled: fulfilled ? 1 : 0,
-      );
-
+      final response = await MainLayout.of(context)!
+          .safeExecuteAPICall(() => PosService().fulfillKitchenOrder(
+                posInvoice: posInvoice,
+                kitchenStation: _selectedKitchenStation!,
+                fulfilled: fulfilled ? 1 : 0,
+              ));
       if (!mounted) return; // Check after async operation
 
       if (response['success'] == true) {
-        _loadKitchenOrders(); // This will have its own mounted checks
+        // Reload appropriate orders based on current station
+        if (_selectedKitchenStation == 'GRAB') {
+          _loadGrabOrders();
+        } else {
+          _loadKitchenOrders();
+        }
 
         if (mounted) {
           // Check before showing toast
@@ -310,6 +403,40 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     );
   }
 
+  // Build GRAB order tag
+  Widget _buildGrabTag() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Color(0xFF00B14F).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: Color(0xFF00B14F),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/icon-grab.png',
+            width: 12,
+            height: 12,
+          ),
+          SizedBox(width: 4),
+          Text(
+            'GRAB',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF00B14F),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getUrgencyColor(String? orderTime) {
     if (orderTime == null) return Colors.grey;
     try {
@@ -323,18 +450,37 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     }
   }
 
-  // Get pending orders (not fully fulfilled)
+  // Get pending orders (not fully fulfilled) for current station
   List<Map<String, dynamic>> get _pendingOrders {
-    return _kitchenOrders.where((order) {
-      return order['custom_fulfilled'] != 1;
-    }).toList();
+    if (_selectedKitchenStation == 'GRAB') {
+      return _grabOrders.where((order) {
+        return order['custom_fulfilled'] != 1;
+      }).toList();
+    } else {
+      return _kitchenOrders.where((order) {
+        return order['custom_fulfilled'] != 1;
+      }).toList();
+    }
   }
 
-  // Get completed orders (fully fulfilled)
+  // Get completed orders (fully fulfilled) for current station
   List<Map<String, dynamic>> get _completedOrders {
-    return _kitchenOrders.where((order) {
-      return order['custom_fulfilled'] == 1;
-    }).toList();
+    if (_selectedKitchenStation == 'GRAB') {
+      return _grabOrders.where((order) {
+        return order['custom_fulfilled'] == 1;
+      }).toList();
+    } else {
+      return _kitchenOrders.where((order) {
+        return order['custom_fulfilled'] == 1;
+      }).toList();
+    }
+  }
+
+  // Count unread GRAB orders (pending orders)
+  int get _unreadGrabCount {
+    return _grabOrders.where((order) {
+      return order['custom_fulfilled'] != 1;
+    }).length;
   }
 
   @override
@@ -382,7 +528,11 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                       );
                       if (picked != null && picked != _selectedDate) {
                         setState(() => _selectedDate = picked);
-                        _loadKitchenOrders();
+                        if (_selectedKitchenStation == 'GRAB') {
+                          _loadGrabOrders();
+                        } else {
+                          _loadKitchenOrders();
+                        }
                       }
                     },
                     icon: Icon(Icons.calendar_today, size: 20),
@@ -404,101 +554,237 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
             ),
             SizedBox(height: 10),
 
-            // Kitchen Station Pill Buttons
+            // Kitchen Station Pill Buttons (including GRAB)
             _isLoadingStations
                 ? Center(child: CircularProgressIndicator())
-                : _kitchenStations.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No kitchen stations available',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      )
-                    : Container(
-                        height: 60,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _kitchenStations.length,
-                          itemBuilder: (context, index) {
-                            final station = _kitchenStations[index];
-                            final isSelected =
-                                _selectedKitchenStation == station['name'];
-
-                            return Container(
-                              margin: EdgeInsets.only(right: 12),
-                              child: ChoiceChip(
-                                label: Text(
-                                  station['title'] ?? station['name'],
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.black87,
+                : Container(
+                    height: 60,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount:
+                          _kitchenStations.length + (_showGrabStation ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        // First item is GRAB station
+                        if (index == 0 && _showGrabStation) {
+                          final isSelected = _selectedKitchenStation == 'GRAB';
+                          return Container(
+                            height: 60, // ✅ Match the ListView height
+                            alignment: Alignment.center, // ✅ Center vertically
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  margin: EdgeInsets.only(right: 12),
+                                  child: ChoiceChip(
+                                    label: Row(
+                                      children: [
+                                        Image.asset(
+                                          'assets/icon-grab.png',
+                                          width: 20,
+                                          height: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'GRAB',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    selected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        _selectedKitchenStation = 'GRAB';
+                                      });
+                                      _loadGrabOrders();
+                                    },
+                                    selectedColor:
+                                        Color(0xFF00B14F), // Grab green
+                                    backgroundColor: Colors.white,
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? Color(0xFF00B14F)
+                                          : Colors.grey.shade300,
+                                      width: 2,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 10,
+                                    ),
                                   ),
                                 ),
-                                selected: isSelected,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    _selectedKitchenStation = station['name'];
-                                  });
-                                  _loadKitchenOrders();
-                                },
-                                selectedColor: Color(0xFFE732A0),
-                                backgroundColor: Colors.white,
-                                side: BorderSide(
+                                // Unread notification badge for GRAB
+                                if (_unreadGrabCount > 0 && !isSelected)
+                                  Positioned(
+                                    top: -6,
+                                    right: 0,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.red.withOpacity(0.3),
+                                            blurRadius: 4,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      constraints: BoxConstraints(
+                                        minWidth: 20,
+                                        minHeight: 20,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          _unreadGrabCount > 99
+                                              ? '99+'
+                                              : _unreadGrabCount.toString(),
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        // Regular kitchen stations
+                        final stationIndex = index - (_showGrabStation ? 1 : 0);
+                        if (stationIndex >= 0 &&
+                            stationIndex < _kitchenStations.length) {
+                          final station = _kitchenStations[stationIndex];
+                          final isSelected =
+                              _selectedKitchenStation == station['name'];
+
+                          return Container(
+                            margin: EdgeInsets.only(right: 12),
+                            child: ChoiceChip(
+                              label: Text(
+                                station['title'] ?? station['name'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
                                   color: isSelected
-                                      ? Color(0xFFE732A0)
-                                      : Colors.grey.shade300,
-                                  width: 2,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
+                                      ? Colors.white
+                                      : Colors.black87,
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  _selectedKitchenStation = station['name'];
+                                });
+                                _loadKitchenOrders();
+                              },
+                              selectedColor: Color(0xFFE732A0),
+                              backgroundColor: Colors.white,
+                              side: BorderSide(
+                                color: isSelected
+                                    ? Color(0xFFE732A0)
+                                    : Colors.grey.shade300,
+                                width: 2,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return SizedBox.shrink();
+                      },
+                    ),
+                  ),
+
+            SizedBox(height: 16),
+
+            // Pending/Done Tabs (only for non-GRAB stations)
+            if (_selectedKitchenStation != 'GRAB')
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildTabButton(
+                        index: 0,
+                        label: 'Pending',
+                        count: _pendingOrders.length,
+                        isSelected: _selectedTabIndex == 0,
                       ),
+                    ),
+                    Expanded(
+                      child: _buildTabButton(
+                        index: 1,
+                        label: 'Done',
+                        count: _completedOrders.length,
+                        isSelected: _selectedTabIndex == 1,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              // GRAB Orders Summary Header
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Color(0xFF00B14F).withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Color(0xFF00B14F).withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildGrabStatCard(
+                      'Pending',
+                      _pendingOrders.length.toString(),
+                      Colors.orange,
+                    ),
+                    _buildGrabStatCard(
+                      'Completed',
+                      _completedOrders.length.toString(),
+                      Colors.green,
+                    ),
+                    _buildGrabStatCard(
+                      'Total',
+                      _grabOrders.length.toString(),
+                      Color(0xFF00B14F),
+                    ),
+                  ],
+                ),
+              ),
 
             SizedBox(height: 16),
 
-            // Pending/Done Tabs
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildTabButton(
-                      index: 0,
-                      label: 'Pending',
-                      count: _pendingOrders.length,
-                      isSelected: _selectedTabIndex == 0,
-                    ),
-                  ),
-                  Expanded(
-                    child: _buildTabButton(
-                      index: 1,
-                      label: 'Done',
-                      count: _completedOrders.length,
-                      isSelected: _selectedTabIndex == 1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 16),
-
-            // Orders Grid based on selected tab
+            // Orders Grid based on selected tab/station
             Expanded(
               child: _isLoadingOrders
                   ? Center(child: CircularProgressIndicator())
@@ -565,61 +851,153 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     );
   }
 
-  Widget _buildOrdersGrid() {
-    final orders = _selectedTabIndex == 0 ? _pendingOrders : _completedOrders;
-
-    if (orders.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _selectedTabIndex == 0
-                  ? Icons.restaurant_menu
-                  : Icons.check_circle,
-              size: 80,
-              color: Colors.grey[400],
-            ),
-            SizedBox(height: 20),
-            Text(
-              _selectedTabIndex == 0
-                  ? 'No pending orders for selected date'
-                  : 'No completed orders for selected date',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+  Widget _buildGrabStatCard(String title, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w600,
+          ),
         ),
+        SizedBox(height: 4),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color, width: 1.5),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrdersGrid() {
+    final isGrabStation = _selectedKitchenStation == 'GRAB';
+
+    if (isGrabStation) {
+      // GRAB station - show all grab orders
+      final orders = _grabOrders;
+
+      if (orders.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/icon-grab.png',
+                width: 80,
+                height: 80,
+                color: Colors.grey[400],
+              ),
+              SizedBox(height: 20),
+              Text(
+                'No GRAB orders for selected date',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return GridView.builder(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          final items = (order['items'] as List?) ?? [];
+          final isOrderFulfilled = order['custom_fulfilled'] == 1;
+          final unfulfilledItems =
+              items.where((item) => item['custom_fulfilled'] != 1).length;
+
+          return _buildOrderCard(
+            order: order,
+            items: items,
+            isOrderFulfilled: isOrderFulfilled,
+            unfulfilledItems: unfulfilledItems,
+            showInDoneTab: false, // GRAB station doesn't have Done tab
+            isGrabOrder: true,
+          );
+        },
+      );
+    } else {
+      // Regular kitchen station - show pending/done based on selected tab
+      final orders = _selectedTabIndex == 0 ? _pendingOrders : _completedOrders;
+
+      if (orders.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _selectedTabIndex == 0
+                    ? Icons.restaurant_menu
+                    : Icons.check_circle,
+                size: 80,
+                color: Colors.grey[400],
+              ),
+              SizedBox(height: 20),
+              Text(
+                _selectedTabIndex == 0
+                    ? 'No pending orders for selected date'
+                    : 'No completed orders for selected date',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return GridView.builder(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          final items = (order['items'] as List?) ?? [];
+          final isOrderFulfilled = order['custom_fulfilled'] == 1;
+          final unfulfilledItems =
+              items.where((item) => item['custom_fulfilled'] != 1).length;
+
+          return _buildOrderCard(
+            order: order,
+            items: items,
+            isOrderFulfilled: isOrderFulfilled,
+            unfulfilledItems: unfulfilledItems,
+            showInDoneTab: _selectedTabIndex == 1,
+            isGrabOrder: false,
+          );
+        },
       );
     }
-
-    return GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // Changed to 2 for larger cards
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: orders.length,
-      itemBuilder: (context, index) {
-        final order = orders[index];
-        final items = (order['items'] as List?) ?? [];
-        final isOrderFulfilled = order['custom_fulfilled'] == 1;
-        final unfulfilledItems =
-            items.where((item) => item['custom_fulfilled'] != 1).length;
-
-        return _buildOrderCard(
-          order: order,
-          items: items,
-          isOrderFulfilled: isOrderFulfilled,
-          unfulfilledItems: unfulfilledItems,
-          showInDoneTab: _selectedTabIndex == 1,
-        );
-      },
-    );
   }
 
   Widget _buildOrderCard({
@@ -628,19 +1006,28 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     required bool isOrderFulfilled,
     required int unfulfilledItems,
     bool showInDoneTab = false,
+    bool isGrabOrder = false,
   }) {
     final urgencyColor = _getUrgencyColor(order['order_time']);
+    final isTableGrab =
+        (order['table']?.toString() ?? '').toUpperCase().contains('GRAB');
 
     return Card(
       elevation: isOrderFulfilled ? 1 : 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isOrderFulfilled ? Colors.green : urgencyColor,
+          color: isOrderFulfilled
+              ? (isGrabOrder ? Color(0xFF00B14F) : Colors.green)
+              : (isGrabOrder ? Color(0xFF00B14F) : urgencyColor),
           width: 3,
         ),
       ),
-      color: isOrderFulfilled ? Colors.green[50] : Colors.white,
+      color: isOrderFulfilled
+          ? (isGrabOrder
+              ? Color(0xFF00B14F).withOpacity(0.05)
+              : Colors.green[50])
+          : Colors.white,
       child: Container(
         constraints: BoxConstraints(minHeight: 75, maxHeight: 75),
         child: Padding(
@@ -667,6 +1054,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                 letterSpacing: 1,
                               ),
                             ),
+                            SizedBox(width: 8),
+                            if (isGrabOrder || isTableGrab) _buildGrabTag(),
                           ],
                         ),
                         SizedBox(height: 2),
@@ -675,7 +1064,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 24,
-                            color: Colors.black87,
+                            color: isGrabOrder
+                                ? Color(0xFF00B14F)
+                                : Colors.black87,
                           ),
                         ),
                         SizedBox(height: 2),
@@ -685,19 +1076,25 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Color(0xFFE732A0).withOpacity(0.1),
+                            color: isGrabOrder
+                                ? Color(0xFF00B14F).withOpacity(0.1)
+                                : Color(0xFFE732A0).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Color(0xFFE732A0),
+                              color: isGrabOrder
+                                  ? Color(0xFF00B14F)
+                                  : Color(0xFFE732A0),
                               width: 1.5,
                             ),
                           ),
                           child: Text(
-                            'TABLE ${order['table']?.toString() ?? 'N/A'}',
+                            '${isTableGrab ? 'GRAB' : 'TABLE'} ${order['table']?.toString() ?? 'N/A'}',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFFE732A0),
+                              color: isGrabOrder
+                                  ? Color(0xFF00B14F)
+                                  : Color(0xFFE732A0),
                             ),
                           ),
                         ),
@@ -721,7 +1118,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                     width: 60,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.blue,
+                      color: isGrabOrder ? Color(0xFF00B14F) : Colors.blue,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
@@ -750,21 +1147,31 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
               SizedBox(height: 10),
 
-              // Progress indicator (only show in pending tab)
-              if (!isOrderFulfilled && !showInDoneTab)
+              // Progress indicator (only show in pending tab for non-GRAB orders)
+              if (!isOrderFulfilled && !showInDoneTab && !isGrabOrder)
                 Column(
                   children: [
-                    LinearProgressIndicator(
-                      value: (items.length - unfulfilledItems) / items.length,
-                      backgroundColor: Colors.grey[200],
-                      valueColor: AlwaysStoppedAnimation<Color>(urgencyColor),
-                      minHeight: 6,
-                    ),
+                    if (items.length > 0)
+                      LinearProgressIndicator(
+                        value: (items.length - unfulfilledItems) / items.length,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(urgencyColor),
+                        minHeight: 6,
+                      )
+                    else
+                      LinearProgressIndicator(
+                        value: 0,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(urgencyColor),
+                        minHeight: 6,
+                      ),
                     SizedBox(height: 4),
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        '${items.length - unfulfilledItems}/${items.length} completed',
+                        items.length > 0
+                            ? '${items.length - unfulfilledItems}/${items.length} completed'
+                            : '0/0 completed',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -781,9 +1188,16 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!, width: 2),
+                    border: Border.all(
+                      color: isGrabOrder
+                          ? Color(0xFF00B14F).withOpacity(0.3)
+                          : Colors.grey[300]!,
+                      width: 2,
+                    ),
                     borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[50],
+                    color: isGrabOrder
+                        ? Color(0xFF00B14F).withOpacity(0.05)
+                        : Colors.grey[50],
                   ),
                   child: ScrollConfiguration(
                     behavior: ScrollConfiguration.of(context).copyWith(
@@ -793,6 +1207,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                       physics: BouncingScrollPhysics(),
                       padding: EdgeInsets.all(8),
                       itemCount: items.length,
+                      shrinkWrap: true,
                       itemBuilder: (context, itemIndex) {
                         final item = items[itemIndex];
                         final isItemFulfilled = item['custom_fulfilled'] == 1;
@@ -803,13 +1218,19 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                           padding: EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: isItemFulfilled
-                                ? Colors.green[100]
+                                ? (isGrabOrder
+                                    ? Color(0xFF00B14F).withOpacity(0.1)
+                                    : Colors.green[100])
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isItemFulfilled
-                                  ? Colors.green
-                                  : Colors.grey[300]!,
+                                  ? (isGrabOrder
+                                      ? Color(0xFF00B14F)
+                                      : Colors.green)
+                                  : (isGrabOrder
+                                      ? Color(0xFF00B14F).withOpacity(0.3)
+                                      : Colors.grey[300]!),
                               width: 2,
                             ),
                           ),
@@ -827,12 +1248,19 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: isItemFulfilled
-                                        ? Colors.green
+                                        ? (isGrabOrder
+                                            ? Color(0xFF00B14F)
+                                            : Colors.green)
                                         : Colors.white,
                                     border: Border.all(
                                       color: isItemFulfilled
-                                          ? Colors.green
-                                          : Colors.grey.shade400,
+                                          ? (isGrabOrder
+                                              ? Color(0xFF00B14F)
+                                              : Colors.green)
+                                          : (isGrabOrder
+                                              ? Color(0xFF00B14F)
+                                                  .withOpacity(0.5)
+                                              : Colors.grey.shade400),
                                       width: 2,
                                     ),
                                   ),
@@ -859,7 +1287,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Colors.orange,
+                                            color: isGrabOrder
+                                                ? Color(0xFF00B14F)
+                                                : Colors.orange,
                                             borderRadius:
                                                 BorderRadius.circular(6),
                                           ),
@@ -989,7 +1419,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                   child: ElevatedButton(
                     onPressed: () => _showFulfillOrderDialog(order, true),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor:
+                          isGrabOrder ? Color(0xFF00B14F) : Colors.green,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -1014,7 +1445,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                   child: ElevatedButton(
                     onPressed: () => _showFulfillOrderDialog(order, false),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
+                      backgroundColor: isGrabOrder
+                          ? Color(0xFF00B14F).withOpacity(0.8)
+                          : Colors.orange,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -1037,21 +1470,32 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                   width: double.infinity,
                   padding: EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.green[100],
+                    color: isGrabOrder
+                        ? Color(0xFF00B14F).withOpacity(0.1)
+                        : Colors.green[100],
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green, width: 2),
+                    border: Border.all(
+                      color: isGrabOrder ? Color(0xFF00B14F) : Colors.green,
+                      width: 2,
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 24),
+                      Icon(
+                        Icons.check_circle,
+                        color: isGrabOrder ? Color(0xFF00B14F) : Colors.green,
+                        size: 24,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'COMPLETED',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green[800],
+                          color: isGrabOrder
+                              ? Color(0xFF00B14F)
+                              : Colors.green[800],
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -1108,7 +1552,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   }
 
   void _showFulfillOrderDialog(Map<String, dynamic> order, bool fulfilled) {
-    // final action = fulfilled ? 'mark as fulfilled' : 'reopen';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

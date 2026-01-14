@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -215,10 +216,10 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
         });
       }
 
-      final response = await PosService().createOpeningVoucher(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createOpeningVoucher(
         posProfile: posProfile,
         balanceDetails: balanceDetails,
-      );
+      ));
 
       print(response);
 

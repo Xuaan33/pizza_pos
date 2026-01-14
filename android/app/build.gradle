@@ -18,6 +18,7 @@ android {
     ndkVersion = "25.1.8937393"
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -66,6 +67,9 @@ flutter {
 }
 
 dependencies {
+    // Add core library desugaring for Java 8+ features
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+
     implementation "com.github.bumptech.glide:glide:4.16.0"
     annotationProcessor "com.github.bumptech.glide:compiler:4.16.0"
     implementation "com.github.bumptech.glide:okhttp3-integration:4.16.0"

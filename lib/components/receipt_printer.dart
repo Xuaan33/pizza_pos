@@ -7,6 +7,7 @@ import 'package:flutter_thermal_printer/utils/printer.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image/image.dart' as img;
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class ReceiptPrinter {

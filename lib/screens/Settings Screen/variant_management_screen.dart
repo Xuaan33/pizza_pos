@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
@@ -66,7 +67,7 @@ class _VariantManagementScreenState
   Future<void> _loadVariantGroups() async {
     setState(() => _isLoading = true);
     try {
-      final response = await PosService().getVariantGroups();
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
       final newVariantGroups = response['message'] ?? [];
 
       final mappedVariantGroups = newVariantGroups.map((group) {
@@ -102,7 +103,7 @@ class _VariantManagementScreenState
   Future<void> _loadVariantGroupDetails(String name) async {
     setState(() => _isLoading = true);
     try {
-      final response = await PosService().getVariantGroup(name);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroup(name));
       final data = response['message'];
 
       setState(() {
@@ -147,24 +148,24 @@ class _VariantManagementScreenState
       }).toList();
 
       if (_selectedVariantGroup == null) {
-        await PosService().createVariantGroup(
+        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createVariantGroup(
           title: _titleController.text,
           variantInfoTable: mappedVariantInfoTable,
           required: _isRequired ? 1 : 0,
           optionRequiredNo: _optionRequiredNo,
           maximumSelection: _maximumSelection,
           allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
-        );
+        ));
         _showSuccess('Variant group created successfully');
       } else {
-        await PosService().updateVariantGroup(
+        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateVariantGroup(
           name: _selectedVariantGroup!,
           variantInfoTable: mappedVariantInfoTable,
           required: _isRequired ? 1 : 0,
           optionRequiredNo: _optionRequiredNo,
           maximumSelection: _maximumSelection,
           allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
-        );
+        ));
         _showSuccess('Variant group updated successfully');
       }
       await _loadVariantGroups();

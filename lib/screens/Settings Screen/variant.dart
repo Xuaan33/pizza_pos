@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/dialogs/option_dialog.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/variant_group.dart';
@@ -48,7 +49,7 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
         setState(() => isLoading = true);
       }
 
-      final response = await PosService().getVariantGroups();
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
       if (response['success'] == true) {
         if (mounted) {
           setState(() {
@@ -373,14 +374,14 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
   ) async {
     try {
       setState(() => isLoading = true);
-      final response = await PosService().createVariantGroup(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createVariantGroup(
         title: title,
         variantInfoTable: [],
         required: isRequired ? 1 : 0,
         optionRequiredNo: optionRequiredNo,
         maximumSelection: maximumSelection,
         allowMultipleSelection: maximumSelection > 1 ? 1 : 0,
-      );
+      ));
 
       if (response['success'] == true) {
         _loadDataAfterCreate(); // Use the new method
@@ -740,14 +741,14 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
                   });
                 }
 
-                await PosService().updateVariantGroup(
+                await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateVariantGroup(
                   name: nameController.text.trim(),
                   required: isRequired ? 1 : 0,
                   optionRequiredNo: optionRequiredNo,
                   maximumSelection: maximumSelection,
                   allowMultipleSelection: allowMultipleSelection ? 1 : 0,
                   variantInfoTable: confirmedOptions,
-                );
+                ));
 
                 Navigator.pop(context);
 
@@ -767,7 +768,7 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
   Future<void> _refreshSingleVariantGroup(String variantGroupName) async {
     try {
       // Fetch all variant groups and find the updated one
-      final response = await PosService().getVariantGroups();
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
 
       if (response['success'] == true && mounted) {
         final allGroups = (response['message'] as List)
@@ -826,10 +827,10 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
         });
       }
 
-      await PosService().disableVariantGroup(
+      await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().disableVariantGroup(
         variantGroup: group.variantGroup,
         disabled: isActive ? 0 : 1,
-      );
+      ));
 
       // NEW: Update only the specific variant group
       await _refreshSingleVariantGroup(group.variantGroup);

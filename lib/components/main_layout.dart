@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/providers/grab_notifications_provider.dart';
+import 'package:shiok_pos_android_app/providers/grab_orders_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/kitchen_screen.dart';
@@ -10,11 +15,11 @@ import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
 import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
-import 'package:shiok_pos_android_app/screens/delivery_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
+import 'package:shiok_pos_android_app/components/grab_notification_overlay.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   static MainLayoutState? of(BuildContext context) =>
@@ -31,8 +36,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool _isLoggingOut = false;
   Future<void>? _refreshFuture;
   DateTime _selectedDate = DateTime.now();
-  String _filterStatus = 'All'; // 'All', 'Pay Later', 'Paid', 'Cancelled'
-  String _filterOrderType = 'All'; // 'All', 'Dine in', 'Takeaway', 'Delivery'
+  String _filterStatus = 'All';
+  String _filterOrderType = 'All';
   DateTime? _fromDate;
   DateTime? _toDate;
   bool _useDateRange = false;
@@ -45,18 +50,375 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool get isLoadingMore => _isLoadingMore;
   bool _customerDisplayInitialized = false;
 
+  // ============ IMPROVED GRAB REFRESH SYSTEM ============
+  Timer? _globalGrabRefreshTimer;
+  List<Map<String, dynamic>> _cachedGrabOrders = []; // Cache for comparison
+  bool _isLoadingGlobalGrab = false;
+  DateTime? _lastGlobalGrabLoad;
+
+  // API Queue System
+  final List<Future<void> Function()> _apiQueue = [];
+  bool _isProcessingQueue = false;
+  Completer<void>? _currentApiCall;
+
   final GlobalKey<SettingsScreenState> settingsScreenKey =
       GlobalKey<SettingsScreenState>();
+  late FlutterLocalNotificationsPlugin _localNotifications;
+
+  // ============ GRAB ORDERS BADGE COUNT ============
+  /// Get the count of pending Grab orders for navigation badge
+  int get _pendingGrabOrdersCount {
+    final grabOrders = ref.read(grabOrdersProvider);
+    return grabOrders.where((order) {
+      return order['custom_fulfilled'] != 1; // Count unfulfilled orders
+    }).length;
+  }
 
   @override
   void initState() {
     super.initState();
     _ordersScrollController.addListener(_onOrdersScroll);
-    // Initialize customer display once
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeCustomerDisplay();
+
+    _initializeLocalNotifications();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeCustomerDisplay();
       ref.read(authProvider.notifier).loadFromSharedPreferences();
+      await ref.read(grabNotificationsProvider.notifier).loadNotifiedOrders();
+      await GrabNotificationOverlay.initialize();
+
+      _startGlobalGrabTimer();
+      _refreshGlobalGrabOrders(); // Initial load
     });
+  }
+
+  Future<void> _initializeLocalNotifications() async {
+    _localNotifications = FlutterLocalNotificationsPlugin();
+
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+    );
+
+    await _localNotifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        _handleNotificationTap(response);
+      },
+    );
+  }
+
+  void _handleNotificationTap(NotificationResponse response) {
+    if (mounted) {
+      final authState = ref.read(authProvider);
+      authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) {
+          final ordersTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
+          setState(() {
+            _selectedTabIndex = ordersTabIndex;
+          });
+        },
+      );
+    }
+  }
+
+  // ============ IMPROVED TIMER SYSTEM ============
+  void _startGlobalGrabTimer() {
+    _globalGrabRefreshTimer?.cancel();
+
+    _globalGrabRefreshTimer =
+        Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (mounted) {
+        _refreshGlobalGrabOrders();
+      }
+    });
+  }
+
+  void _stopGlobalGrabTimer() {
+    _globalGrabRefreshTimer?.cancel();
+    _globalGrabRefreshTimer = null;
+  }
+
+  // ============ BACKGROUND REFRESH WITHOUT FLICKERING ============
+  Future<void> _refreshGlobalGrabOrders() async {
+    // Don't start a new refresh if one is already in progress
+    if (_isLoadingGlobalGrab || !mounted) {
+      print('⏸️  Skipping GRAB refresh - already loading or not mounted');
+      return;
+    }
+
+    // Add to queue instead of executing immediately
+    _addToApiQueue(() => _performGrabRefresh());
+  }
+
+  Future<void> _performGrabRefresh() async {
+    _isLoadingGlobalGrab = true;
+
+    try {
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) async {
+          try {
+            final fromDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+            final toDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+            // Get first kitchen station
+            final stationsResponse = await PosService().getKitchenStations(
+              posProfile: posProfile,
+            );
+
+            String firstStation = '';
+            if (stationsResponse['success'] == true) {
+              final stations = (stationsResponse['message'] as List?) ?? [];
+              if (stations.isNotEmpty) {
+                firstStation = stations[0]['name']?.toString() ?? '';
+              }
+            }
+
+            if (firstStation.isNotEmpty) {
+              final response = await PosService().getKitchenOrders(
+                posProfile: posProfile,
+                kitchenStation: firstStation,
+                fromDate: fromDate,
+                toDate: toDate,
+                orderSource: 'grab',
+              );
+
+              if (response['success'] == true && mounted) {
+                final newOrders = (response['message'] as List?)
+                        ?.cast<Map<String, dynamic>>() ??
+                    [];
+
+                // Only update if there are actual changes
+                if (_hasOrdersChanged(newOrders)) {
+                  print('✅ GRAB orders changed, updating...');
+
+                  // Update cached orders
+                  _cachedGrabOrders = List.from(newOrders);
+                  _lastGlobalGrabLoad = DateTime.now();
+
+                  // Update provider (this won't cause flickering)
+                  ref.read(grabOrdersProvider.notifier).updateOrders(newOrders);
+
+                  // Check for new orders and notify
+                  await _checkAndNotifyNewOrders(newOrders);
+                } else {
+                  print('ℹ️  No changes in GRAB orders');
+                }
+              }
+            }
+          } catch (e) {
+            print('❌ Error loading GRAB orders: $e');
+          }
+        },
+      );
+    } finally {
+      _isLoadingGlobalGrab = false;
+    }
+  }
+
+  // ============ DETECT CHANGES WITHOUT REBUILDING UI ============
+  bool _hasOrdersChanged(List<Map<String, dynamic>> newOrders) {
+    if (_cachedGrabOrders.length != newOrders.length) {
+      return true;
+    }
+
+    // Compare order IDs and fulfillment status
+    final cachedIds = _cachedGrabOrders
+        .map((o) => '${o['name']}_${o['custom_fulfilled']}')
+        .toSet();
+    final newIds =
+        newOrders.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
+
+    return !cachedIds.containsAll(newIds) || !newIds.containsAll(cachedIds);
+  }
+
+  // ============ API QUEUE SYSTEM ============
+  Future<void> _addToApiQueue(Future<void> Function() apiCall) async {
+    _apiQueue.add(apiCall);
+
+    // Start processing if not already processing
+    if (!_isProcessingQueue) {
+      await _processApiQueue();
+    }
+  }
+
+  Future<void> _processApiQueue() async {
+    if (_apiQueue.isEmpty) {
+      _isProcessingQueue = false;
+      return;
+    }
+
+    _isProcessingQueue = true;
+
+    while (_apiQueue.isNotEmpty) {
+      final apiCall = _apiQueue.removeAt(0);
+
+      try {
+        // Execute the API call
+        await apiCall();
+
+        // Small delay between API calls to prevent overwhelming the server
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (e) {
+        print('❌ Error in API queue: $e');
+      }
+    }
+
+    _isProcessingQueue = false;
+  }
+
+  // ============ NOTIFICATION SYSTEM ============
+  Future<void> _checkAndNotifyNewOrders(
+      List<Map<String, dynamic>> orders) async {
+    final notificationProvider = ref.read(grabNotificationsProvider.notifier);
+    final newOrders = notificationProvider.filterNewOrders(orders);
+
+    if (newOrders.isNotEmpty) {
+      print('🔔 Found ${newOrders.length} new GRAB order(s)');
+
+      for (var order in newOrders) {
+        final orderId = order['name']?.toString() ?? '';
+        if (orderId.isNotEmpty) {
+          await _showGrabNotification(order);
+          await notificationProvider.markAsNotified(orderId);
+        }
+      }
+    }
+  }
+
+  Future<void> _showGrabNotification(Map<String, dynamic> order) async {
+    try {
+      final orderId = order['name']?.toString() ?? 'Unknown';
+      final customerName = order['customer_name']?.toString() ?? 'Customer';
+
+      // Show custom in-app notification overlay
+      if (mounted && context.mounted) {
+        await GrabNotificationOverlay.show(
+          context,
+          orderId: orderId,
+          customerName: customerName,
+          onTap: () {
+            // Navigate to Kitchen screen with GRAB station selected
+            final authState = ref.read(authProvider);
+            authState.whenOrNull(
+              authenticated: (
+                sid,
+                apiKey,
+                apiSecret,
+                username,
+                email,
+                fullName,
+                posProfile,
+                branch,
+                paymentMethods,
+                taxes,
+                hasOpening,
+                tier,
+                printKitchenOrder,
+                openingDate,
+                itemsGroups,
+                baseUrl,
+                merchantId,
+                printMerchantReceiptCopy,
+                enableFiuu,
+                cashDrawerPinNeeded,
+                cashDrawerPin,
+              ) {
+                final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
+                if (mounted) {
+                  setState(() {
+                    _selectedTabIndex = kitchenTabIndex;
+                  });
+                }
+              },
+            );
+          },
+        );
+      }
+    } catch (e) {
+      print('❌ Error showing notification: $e');
+    }
+  }
+
+  // ============ PUBLIC API WRAPPER ============
+  /// Wrap other API calls with this method to prevent conflicts with GRAB refresh
+  Future<T> executeProtectedAPICall<T>(Future<T> Function() apiCall) async {
+    final completer = Completer<T>();
+
+    _addToApiQueue(() async {
+      try {
+        final result = await apiCall();
+        if (!completer.isCompleted) {
+          completer.complete(result);
+        }
+      } catch (e) {
+        if (!completer.isCompleted) {
+          completer.completeError(e);
+        }
+      }
+    });
+
+    return completer.future;
+  }
+
+  Future<T> safeExecuteAPICall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.executeProtectedAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available, executing API call directly: $e');
+    }
+    return await apiCall(); // Fallback to direct call
   }
 
   Future<void> _initializeCustomerDisplay() async {
@@ -74,8 +436,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   void dispose() {
-    _refreshFuture = null; // break reference
+    _stopGlobalGrabTimer();
     _ordersScrollController.dispose();
+    GrabNotificationOverlay.dispose(); // Clean up audio player (async)
     super.dispose();
   }
 
@@ -176,14 +539,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             final effectivePageLimit = 30;
             final nextStart = (_currentPage + 1) * effectivePageLimit;
 
-            final response = await PosService().getOrders(
-              posProfile: posProfile,
-              fromDate: fromDateStr,
-              toDate: toDateStr,
-              status: apiStatus,
-              pageLength: effectivePageLimit,
-              start: nextStart,
-            );
+            final response =
+                await safeExecuteAPICall(() => PosService().getOrders(
+                      posProfile: posProfile,
+                      fromDate: fromDateStr,
+                      toDate: toDateStr,
+                      status: apiStatus,
+                      pageLength: effectivePageLimit,
+                      start: nextStart,
+                    ));
 
             if (!mounted) return;
 
@@ -505,14 +869,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
             final effectivePageLimit = 30;
 
-            final future = PosService().getOrders(
-              posProfile: posProfile,
-              fromDate: fromDateStr,
-              toDate: toDateStr,
-              status: apiStatus,
-              pageLength: effectivePageLimit,
-              start: 0,
-            );
+            final future = safeExecuteAPICall(() => PosService().getOrders(
+                  posProfile: posProfile,
+                  fromDate: fromDateStr,
+                  toDate: toDateStr,
+                  status: apiStatus,
+                  pageLength: effectivePageLimit,
+                  start: 0,
+                ));
             _refreshFuture = future;
             final response = await future;
             if (_refreshFuture != future || !mounted) return;
@@ -797,15 +1161,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final defaultTable = snapshot.data;
-                print('${defaultTable}');
-
                 return HomeScreen(
                   tableNumber: defaultTable != null
-                      ? defaultTable['name'] ??
-                          'adsf 1' // Use the full table name directly
-                      : 'Not Found', // Fallback to string
+                      ? defaultTable['title'] ?? 'Take Away'
+                      : 'Take Away',
                   existingOrder: null,
                   isTier1: true,
+                  isDefaultTable: true, // NEW
                 );
               },
             ),
@@ -877,6 +1239,23 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           ];
         } else {
           return [
+            FutureBuilder(
+              future: _getDefaultTable(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final defaultTable = snapshot.data;
+                return HomeScreen(
+                  tableNumber: defaultTable == null
+                      ? 'Take Away'
+                      : defaultTable['title'] ?? 'Take Away',
+                  existingOrder: null,
+                  isTier1: false,
+                  isDefaultTable: false, // NEW
+                );
+              },
+            ),
             TableScreen(
               tablesWithSubmittedOrders: tablesWithSubmittedOrders,
               onOrderSubmitted: (order) {
@@ -886,7 +1265,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               onOrderPaid: markOrderAsPaid,
               activeOrders: activeOrders,
             ),
-            DeliveryScreen(),
             OrdersScreen(
                 orders: activeOrders,
                 isLoading: _isOrdersLoading,
@@ -957,27 +1335,26 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         if (!_isLoggingOut) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                      title: const Text('Session Timeout'),
-                      content: const Text(
-                          'Your session has expired. Please login again.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop(); // Close the dialog
-                            // Navigate to LoginScreen and remove all previous routes
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => LoginPage()),
-                              (Route<dynamic> route) => false,
-                            );
-                          },
-                          child: const Text('OK'),
-                        ),
-                      ],
-                    ));
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Session Timeout'),
+                content:
+                    const Text('Your session has expired. Please login again.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (context) => LoginPage()),
+                        (Route<dynamic> route) => false,
+                      );
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
           });
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -1012,9 +1389,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             children: [
               const SizedBox(height: 16),
               GestureDetector(
-                onTap: () {
+                onTap: () async {
                   setState(() {
-                    _selectedTabIndex = 0; // Go to Home/Table screen
+                    _selectedTabIndex = 0;
                   });
                 },
                 child: Container(
@@ -1026,18 +1403,33 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   ),
                 ),
               ),
-              if (tier.toLowerCase() == 'tier2') ...[
-                _buildNavItem(0, 'assets/img-sidebar-table.png', 'Tables'),
-                _buildNavItem(1, 'assets/img-sidebar-delivery.png', 'Delivery'),
+              // Only show TableScreen for tier 3 users
+              if (tier.toLowerCase() == 'tier 3') ...[
+                _buildNavItem(1, 'assets/img-sidebar-table.png', 'Tables'),
               ],
-              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 1 : 2,
-                  'assets/img-sidebar-orders.png', 'Orders'),
-              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 2 : 3,
-                  'assets/img-sidebar-dashboard.png', 'Dashboard'),
-              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 3 : 4,
-                  'assets/img-sidebar-kitchen.png', 'Fulfilment'),
-              _buildNavItem(tier.toLowerCase() != 'tier 3' ? 4 : 5,
-                  'assets/img-sidebar-settings.png', 'Settings'),
+              // Orders screen index depends on tier
+              _buildNavItem(
+                tier.toLowerCase() != 'tier 3' ? 1 : 2,
+                'assets/img-sidebar-orders.png',
+                'Orders',
+              ),
+              _buildNavItem(
+                tier.toLowerCase() != 'tier 3' ? 2 : 3,
+                'assets/img-sidebar-dashboard.png',
+                'Dashboard',
+              ),
+              _buildNavItem(
+                tier.toLowerCase() != 'tier 3' ? 3 : 4,
+                'assets/img-sidebar-kitchen.png',
+                'Fulfilment',
+                null, // No custom action
+                _pendingGrabOrdersCount, // Show badge with pending Grab orders count
+              ),
+              _buildNavItem(
+                tier.toLowerCase() != 'tier 3' ? 4 : 5,
+                'assets/img-sidebar-settings.png',
+                'Settings',
+              ),
               const Spacer(),
               _buildNavItem(
                   -1, 'assets/img-sidebar-logout.png', 'Logout', _logout),
@@ -1049,7 +1441,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Widget _buildNavItem(int index, String imagePath, String label,
-      [VoidCallback? action]) {
+      [VoidCallback? action, int badgeCount = 0] // Add badge count parameter
+      ) {
     final bool isSelected = index == _selectedTabIndex;
     return GestureDetector(
       onTap: action ??
@@ -1112,20 +1505,65 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: isSelected
-                    ? const Border(
-                        left: BorderSide(color: Colors.pink, width: 3))
-                    : null,
-              ),
-              child: Image.asset(
-                imagePath,
-                color: isSelected ? Colors.pink : const Color(0xFF555555),
-                width: index == 1 ? 50 : 40,
-                height: index == 1 ? 50 : 40,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: isSelected
+                        ? const Border(
+                            left: BorderSide(color: Colors.pink, width: 3))
+                        : null,
+                  ),
+                  child: Image.asset(
+                    imagePath,
+                    color: isSelected ? Colors.pink : const Color(0xFF555555),
+                    width: index == 1 ? 50 : 40,
+                    height: index == 1 ? 50 : 40,
+                  ),
+                ),
+                // Badge for pending orders
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -4,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.3),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 20,
+                        minHeight: 20,
+                      ),
+                      child: Center(
+                        child: Text(
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 10),
             Text(label,
@@ -1375,7 +1813,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final branch = prefs.getString('branch');
       if (branch == null) return null;
 
-      final response = await PosService().getFloorsAndTables(branch);
+      final response = await safeExecuteAPICall(
+          () => PosService().getFloorsAndTables(branch));
       if (response['success'] == true) {
         final floorsData = response['message'];
 
@@ -1384,34 +1823,45 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           for (var floor in floorsData) {
             final tables = floor['tables'];
 
-            // Case 1: Single-table in a Map
-            if (tables is Map<String, dynamic>) {
+            // Handle both list and map cases
+            if (tables is List) {
+              for (var table in tables) {
+                if (table['is_default'] == 1) {
+                  return table; // Found default table
+                }
+              }
+            } else if (tables is Map<String, dynamic>) {
               if (tables['is_default'] == 1) {
-                return tables;
+                return tables; // Found default table
               }
             }
-            // Case 2: Multi-table List
-            else if (tables is List) {
+          }
+
+          // If no default table found but we need one, take the first takeaway table
+          for (var floor in floorsData) {
+            final tables = floor['tables'];
+
+            if (tables is List) {
               for (var table in tables) {
-                // Check if table has is_default property and it's set to 1
-                if (table['is_default'] == 1) {
+                if (table['title']
+                        ?.toString()
+                        .toLowerCase()
+                        .contains('take away') ??
+                    false) {
                   return table;
                 }
               }
             }
           }
 
-          // If no default table found, take the first available table
+          // Last resort: return first table found
           for (var floor in floorsData) {
             final tables = floor['tables'];
 
-            // Case 1: Single-table in a Map
-            if (tables is Map<String, dynamic>) {
-              return tables; // Return the single table
-            }
-            // Case 2: Multi-table List
-            else if (tables is List && tables.isNotEmpty) {
-              return tables[0]; // Return first table from the list
+            if (tables is List && tables.isNotEmpty) {
+              return tables[0];
+            } else if (tables is Map<String, dynamic>) {
+              return tables;
             }
           }
         }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -210,10 +211,10 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
         });
       }
 
-      final response = await PosService().submitClosingVoucher(
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitClosingVoucher(
         name: _closingData['message']['name'],
         paymentReconciliation: paymentReconciliation,
-      );
+      ));
 
       if (response['message']["status"] == "Submitted") {
         ref.read(authProvider.notifier).markOpeningClosed();

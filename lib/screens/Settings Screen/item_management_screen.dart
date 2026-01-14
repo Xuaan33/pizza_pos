@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
@@ -82,10 +83,10 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
         throw Exception('Not authenticated or posProfile not available');
       }
 
-      final [itemsRes, groupsRes, variantsRes] = await Future.wait([
-        PosService().getAllItems(posProfile), // Only this one needs posProfile
-        PosService().getItemGroups(), // No posProfile needed
-        PosService().getVariantGroups(), // No posProfile needed
+      final [itemsRes, groupsRes, variantsRes] = await  Future.wait([
+        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getAllItems(posProfile)), // Only this one needs posProfile
+        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroups()), // No posProfile needed
+        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups()), // No posProfile needed
       ]);
 
       setState(() {
@@ -155,7 +156,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
   Future<void> _loadItemDetails(String itemCode) async {
     setState(() => _isLoading = true);
     try {
-      final response = await PosService().getItem(itemCode);
+      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(itemCode));
       final data = response['message'];
 
       // Verify if itemCode exists in _items
@@ -215,7 +216,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
     try {
       if (_selectedItem == null) {
         // Create new
-        await PosService().createItem(
+        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createItem(
           itemCode: _codeController.text,
           itemName: _nameController.text,
           itemGroup: _selectedItemGroup ?? '',
@@ -226,11 +227,11 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
           imageUrl: _imageUrlController.text.isEmpty
               ? null
               : _imageUrlController.text,
-        );
+        ));
         _showSuccess('Item created successfully');
       } else {
         // Update existing
-        await PosService().updateItem(
+        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItem(
           itemCode: _codeController.text,
           itemName: _nameController.text,
           itemGroup: _selectedItemGroup,
@@ -243,7 +244,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
           imageUrl: _imageUrlController.text.isEmpty
               ? null
               : _imageUrlController.text,
-        );
+        ));
         _showSuccess('Item updated successfully');
       }
       _loadInitialData();
