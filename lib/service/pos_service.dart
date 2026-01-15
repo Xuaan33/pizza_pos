@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
@@ -961,6 +962,7 @@ class PosService {
     };
 
     final queryString = Uri(queryParameters: params).query;
+    debugPrint('Fetching kitchen orders with params: $params');
     return makeRequest(
       endpoint: 'shiok_pos.api.get_kitchen_orders?$queryString',
     );

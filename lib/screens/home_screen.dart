@@ -2408,46 +2408,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
 
         // Now proceed to checkout with updated order
-        final result = await Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CheckoutScreen(
-              order: {
-                'tableNumber': widget.tableNumber,
-                'tableFullName': tableFullName,
-                'items': List<Map<String, dynamic>>.from(currentOrderItems),
-                'entryTime': hasExistingOrder
-                    ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
-                    : DateTime.now(),
-                'invoiceNumber': orderName ??
-                    (hasExistingOrder ? widget.existingOrder!['orderId'] : ''),
-                'orderId': orderName ?? widget.existingOrder?['orderId'],
-              },
-              tablesWithSubmittedOrders:
-                  MainLayout.of(context)?.tablesWithSubmittedOrders ?? {},
-              onOrderSubmitted: (order) =>
-                  MainLayout.of(context)?.addNewOrder(order),
-              onOrderPaid: (tableNumber) =>
-                  MainLayout.of(context)?.markOrderAsPaid(tableNumber),
-              activeOrders: MainLayout.of(context)?.activeOrders ?? [],
-            ),
-          ),
-          (route) => route
-              .isFirst, // This will keep only the first route (usually the main layout)
-        );
+        // final result = await Navigator.pushAndRemoveUntil(
+        //   context,
+        //   MaterialPageRoute(
+        //     builder: (context) => CheckoutScreen(
+        //       order: {
+        //         'tableNumber': widget.tableNumber,
+        //         'tableFullName': tableFullName,
+        //         'items': List<Map<String, dynamic>>.from(currentOrderItems),
+        //         'entryTime': hasExistingOrder
+        //             ? (widget.existingOrder!['entryTime'] ?? DateTime.now())
+        //             : DateTime.now(),
+        //         'invoiceNumber': orderName ??
+        //             (hasExistingOrder ? widget.existingOrder!['orderId'] : ''),
+        //         'orderId': orderName ?? widget.existingOrder?['orderId'],
+        //       },
+        //       tablesWithSubmittedOrders:
+        //           MainLayout.of(context)?.tablesWithSubmittedOrders ?? {},
+        //       onOrderSubmitted: (order) =>
+        //           MainLayout.of(context)?.addNewOrder(order),
+        //       onOrderPaid: (tableNumber) =>
+        //           MainLayout.of(context)?.markOrderAsPaid(tableNumber),
+        //       activeOrders: MainLayout.of(context)?.activeOrders ?? [],
+        //     ),
+        //   ),
+        //   (route) => route
+        //       .isFirst, // This will keep only the first route (usually the main layout)
+        // );
 
-        if (result != null && result['action'] == 'edit') {
-          // Navigate back to HomeScreen with the existing order data
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(
-                tableNumber: result['tableNumber'],
-                existingOrder: result['order'],
-              ),
-            ),
-          );
-        }
+        // if (result != null && result['action'] == 'edit') {
+        //   // Navigate back to HomeScreen with the existing order data
+        //   Navigator.push(
+        //     context,
+        //     MaterialPageRoute(
+        //       builder: (context) => HomeScreen(
+        //         tableNumber: result['tableNumber'],
+        //         existingOrder: result['order'],
+        //       ),
+        //     ),
+        //   );
+        // }
       });
     } catch (e) {
       if (mounted) {
@@ -2634,43 +2634,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final orderName = response['message']['name'];
 
           // Now proceed to checkout with the new order
-          final result = await Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CheckoutScreen(
-                order: {
-                  'tableNumber': widget.tableNumber,
-                  'tableFullName': tableFullName,
-                  'items': List<Map<String, dynamic>>.from(currentOrderItems),
-                  'entryTime': DateTime.now(),
-                  'invoiceNumber': orderName,
-                  'orderId': orderName,
-                  'remarks': 'Exchange from order: $_originalOrderId',
-                },
-                tablesWithSubmittedOrders:
-                    MainLayout.of(context)?.tablesWithSubmittedOrders ?? {},
-                onOrderSubmitted: (order) =>
-                    MainLayout.of(context)?.addNewOrder(order),
-                onOrderPaid: (tableNumber) =>
-                    MainLayout.of(context)?.markOrderAsPaid(tableNumber),
-                activeOrders: MainLayout.of(context)?.activeOrders ?? [],
-              ),
-            ),
-            (route) => route.isFirst,
-          );
+          // final result = await Navigator.pushAndRemoveUntil(
+          //   context,
+          //   MaterialPageRoute(
+          //     builder: (context) => CheckoutScreen(
+          //       order: {
+          //         'tableNumber': widget.tableNumber,
+          //         'tableFullName': tableFullName,
+          //         'items': List<Map<String, dynamic>>.from(currentOrderItems),
+          //         'entryTime': DateTime.now(),
+          //         'invoiceNumber': orderName,
+          //         'orderId': orderName,
+          //         'remarks': 'Exchange from order: $_originalOrderId',
+          //       },
+          //       tablesWithSubmittedOrders:
+          //           MainLayout.of(context)?.tablesWithSubmittedOrders ?? {},
+          //       onOrderSubmitted: (order) =>
+          //           MainLayout.of(context)?.addNewOrder(order),
+          //       onOrderPaid: (tableNumber) =>
+          //           MainLayout.of(context)?.markOrderAsPaid(tableNumber),
+          //       activeOrders: MainLayout.of(context)?.activeOrders ?? [],
+          //     ),
+          //   ),
+          //   (route) => route.isFirst,
+          // );
 
-          if (result != null && result['action'] == 'edit') {
-            // Navigate back to HomeScreen with the existing order data
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeScreen(
-                  tableNumber: result['tableNumber'],
-                  existingOrder: result['order'],
-                ),
-              ),
-            );
-          }
+          // if (result != null && result['action'] == 'edit') {
+          //   // Navigate back to HomeScreen with the existing order data
+          //   Navigator.push(
+          //     context,
+          //     MaterialPageRoute(
+          //       builder: (context) => HomeScreen(
+          //         tableNumber: result['tableNumber'],
+          //         existingOrder: result['order'],
+          //       ),
+          //     ),
+          //   );
+          // }
         }
       });
     } catch (e) {
@@ -3384,15 +3384,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Navigator.pop(dialogContext); // Close the dialog
               // Use the original context (not dialogContext) to find MainLayout
               final mainLayout = MainLayout.of(context);
-              if (mainLayout != null) {
-                mainLayout.setSelectedTabIndex(4);
-                if (mainLayout.settingsScreenKey.currentState != null &&
-                    mainLayout.settingsScreenKey.currentState!.mounted) {
-                  mainLayout.settingsScreenKey.currentState!.showSection(0);
-                }
-              } else {
-                print('MainLayout.of(context) returned null');
-              }
+              // if (mainLayout != null) {
+              //   mainLayout.setSelectedTabIndex(4);
+              //   if (mainLayout.settingsScreenKey.currentState != null &&
+              //       mainLayout.settingsScreenKey.currentState!.mounted) {
+              //     mainLayout.settingsScreenKey.currentState!.showSection(0);
+              //   }
+              // } else {
+              //   print('MainLayout.of(context) returned null');
+              // }
             },
             style: TextButton.styleFrom(
               backgroundColor: const Color(0xFFE732A0),

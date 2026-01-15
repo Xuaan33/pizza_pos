@@ -117,7 +117,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Try to use MainLayout's queue if available
       final mainLayout = MainLayout.of(context);
       if (mainLayout != null) {
-        return await mainLayout.executeProtectedAPICall(apiCall);
+        // return await mainLayout.executeProtectedAPICall(apiCall);
       }
     } catch (e) {
       // MainLayout not found or error accessing it

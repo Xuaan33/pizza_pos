@@ -484,8 +484,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                           return false;
                         },
                         child: ListView.builder(
-                          controller:
-                              MainLayout.of(context)?.ordersScrollController,
+                          // controller:
+                          //     MainLayout.of(context)?.ordersScrollController,
                           itemCount:
                               orders.length + 1, // +1 for loading indicator
                           itemBuilder: (context, index) {
@@ -506,11 +506,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
   Widget _buildLoadingIndicator() {
     final mainLayout = MainLayout.of(context);
-    if (mainLayout == null ||
-        !mainLayout.hasMoreOrders ||
-        mainLayout.isLoadingMore == false) {
-      return SizedBox.shrink();
-    }
+    // if (mainLayout == null ||
+    //     !mainLayout.hasMoreOrders ||
+    //     mainLayout.isLoadingMore == false) {
+    //   return SizedBox.shrink();
+    // }
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 16),

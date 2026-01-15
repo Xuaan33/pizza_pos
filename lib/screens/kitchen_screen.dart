@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +10,12 @@ import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
 class KitchenScreen extends ConsumerStatefulWidget {
-  const KitchenScreen({Key? key}) : super(key: key);
+  final bool autoRefresh; // ✅ Add this parameter
+
+  const KitchenScreen({
+    Key? key,
+    this.autoRefresh = false, // Default to false for backward compatibility
+  }) : super(key: key);
 
   @override
   ConsumerState<KitchenScreen> createState() => _KitchenScreenState();
@@ -25,17 +31,40 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   DateTime _selectedDate = DateTime.now();
   int _selectedTabIndex = 0; // 0: Pending, 1: Done
   bool _showGrabStation = true; // Show GRAB as first station
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadKitchenStations();
+    if (widget.autoRefresh) {
+      _startAutoRefresh();
+    }
   }
 
   @override
   void dispose() {
-    // Clear any potential pending operations
+    _stopAutoRefresh(); // ✅ Stop timer
     super.dispose();
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (mounted) {
+        print('🔄 Auto-refreshing kitchen orders...');
+        if (_selectedKitchenStation == 'GRAB') {
+          _loadGrabOrders();
+        } else {
+          _loadKitchenOrders();
+        }
+      }
+    });
+  }
+
+  void _stopAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = null;
   }
 
   Future<void> _loadKitchenStations() async {
@@ -533,6 +562,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                         } else {
                           _loadKitchenOrders();
                         }
+
+                        if (widget.autoRefresh) {
+                          _startAutoRefresh();
+                        }
                       }
                     },
                     icon: Icon(Icons.calendar_today, size: 20),
@@ -602,6 +635,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                         _selectedKitchenStation = 'GRAB';
                                       });
                                       _loadGrabOrders();
+
+                                      if (widget.autoRefresh) {
+                                        _startAutoRefresh();
+                                      }
                                     },
                                     selectedColor:
                                         Color(0xFF00B14F), // Grab green
@@ -695,6 +732,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                                   _selectedKitchenStation = station['name'];
                                 });
                                 _loadKitchenOrders();
+
+                                if (widget.autoRefresh) {
+                                  _startAutoRefresh();
+                                }
                               },
                               selectedColor: Color(0xFFE732A0),
                               backgroundColor: Colors.white,

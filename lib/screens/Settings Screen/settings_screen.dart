@@ -1702,7 +1702,7 @@ Future<void> _discoverUsbDevices() async {
       // Navigate to the actual public Documents folder
       // This path should be: /storage/emulated/0/Documents/
       final String publicDocumentsPath = externalDir.path.replaceAll(
-          '/Android/data/com.nicholas.shiok_pos_android_app/files', '');
+          '/Android/data/com.nicholas.shiok_pos_android_app_kitchen/files', '');
 
       final Directory publicDocumentsDir =
           Directory('$publicDocumentsPath/Documents');

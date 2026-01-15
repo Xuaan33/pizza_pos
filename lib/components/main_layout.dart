@@ -1,183 +1,150 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/grab_notifications_provider.dart';
 import 'package:shiok_pos_android_app/providers/grab_orders_provider.dart';
-import 'package:shiok_pos_android_app/screens/Settings%20Screen/settings_screen.dart';
-import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/kitchen_screen.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
-import 'package:shiok_pos_android_app/screens/table_screen.dart';
-import 'package:shiok_pos_android_app/screens/orders_screen.dart';
-import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
-import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/components/kitchen_notification_overlay.dart';
+import 'package:intl/intl.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
-import 'package:shiok_pos_android_app/components/grab_notification_overlay.dart';
+
+// KITCHEN-ONLY VERSION - CORRECTED
+// Fetches ALL orders from ALL stations (including GRAB from all stations)
 
 class MainLayout extends ConsumerStatefulWidget {
   static MainLayoutState? of(BuildContext context) =>
       context.findAncestorStateOfType<MainLayoutState>();
+  
   @override
   ConsumerState<MainLayout> createState() => MainLayoutState();
 }
 
 class MainLayoutState extends ConsumerState<MainLayout> {
-  int _selectedTabIndex = 0;
-  List<Map<String, dynamic>> activeOrders = [];
-  Set<int> tablesWithSubmittedOrders = {};
-  bool _isOrdersLoading = false;
   bool _isLoggingOut = false;
-  Future<void>? _refreshFuture;
-  DateTime _selectedDate = DateTime.now();
-  String _filterStatus = 'All';
-  String _filterOrderType = 'All';
-  DateTime? _fromDate;
-  DateTime? _toDate;
-  bool _useDateRange = false;
-  int _currentPage = 0;
-  bool _hasMoreOrders = true;
-  bool _isLoadingMore = false;
-  final ScrollController _ordersScrollController = ScrollController();
-  ScrollController get ordersScrollController => _ordersScrollController;
-  bool get hasMoreOrders => _hasMoreOrders;
-  bool get isLoadingMore => _isLoadingMore;
-  bool _customerDisplayInitialized = false;
 
-  // ============ IMPROVED GRAB REFRESH SYSTEM ============
-  Timer? _globalGrabRefreshTimer;
-  List<Map<String, dynamic>> _cachedGrabOrders = []; // Cache for comparison
-  bool _isLoadingGlobalGrab = false;
-  DateTime? _lastGlobalGrabLoad;
+  // ============ ORDER TRACKING ============
+  final Set<String> _notifiedOrders = {}; // Track all notified orders
+  
+  // Separate caching for GRAB and regular orders per station
+  final Map<String, List<Map<String, dynamic>>> _cachedStationOrders = {};
+  final Map<String, List<Map<String, dynamic>>> _cachedStationGrabOrders = {};
+  
+  // ============ REFRESH SYSTEM ============
+  Timer? _allOrdersRefreshTimer;
+  bool _isLoadingAllOrders = false;
+  List<String> _kitchenStations = [];
 
   // API Queue System
   final List<Future<void> Function()> _apiQueue = [];
   bool _isProcessingQueue = false;
-  Completer<void>? _currentApiCall;
-
-  final GlobalKey<SettingsScreenState> settingsScreenKey =
-      GlobalKey<SettingsScreenState>();
-  late FlutterLocalNotificationsPlugin _localNotifications;
-
-  // ============ GRAB ORDERS BADGE COUNT ============
-  /// Get the count of pending Grab orders for navigation badge
-  int get _pendingGrabOrdersCount {
-    final grabOrders = ref.read(grabOrdersProvider);
-    return grabOrders.where((order) {
-      return order['custom_fulfilled'] != 1; // Count unfulfilled orders
-    }).length;
-  }
 
   @override
   void initState() {
     super.initState();
-    _ordersScrollController.addListener(_onOrdersScroll);
-
-    _initializeLocalNotifications();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _initializeCustomerDisplay();
       ref.read(authProvider.notifier).loadFromSharedPreferences();
       await ref.read(grabNotificationsProvider.notifier).loadNotifiedOrders();
-      await GrabNotificationOverlay.initialize();
 
-      _startGlobalGrabTimer();
-      _refreshGlobalGrabOrders(); // Initial load
+      // Initialize notification overlay
+      await KitchenNotificationOverlay.initialize();
+
+      // Load kitchen stations first
+      await _loadKitchenStations();
+
+      // Start refresh timer
+      _startAllOrdersTimer();
+
+      // Initial load
+      _refreshAllOrders();
     });
   }
 
-  Future<void> _initializeLocalNotifications() async {
-    _localNotifications = FlutterLocalNotificationsPlugin();
+  @override
+  void dispose() {
+    _stopAllOrdersTimer();
+    KitchenNotificationOverlay.dispose();
+    super.dispose();
+  }
 
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+  // ============ LOAD KITCHEN STATIONS ============
+  Future<void> _loadKitchenStations() async {
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
+        cashDrawerPinNeeded,
+        cashDrawerPin,
+      ) async {
+        try {
+          final response = await PosService().getKitchenStations(
+            posProfile: posProfile,
+          );
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
-    );
-
-    await _localNotifications.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        _handleNotificationTap(response);
+          if (response['success'] == true) {
+            final stations = (response['message'] as List?) ?? [];
+            _kitchenStations = stations
+                .map((s) => s['name']?.toString() ?? '')
+                .where((name) => name.isNotEmpty)
+                .toList();
+            print('✅ Loaded ${_kitchenStations.length} kitchen stations: $_kitchenStations');
+          }
+        } catch (e) {
+          print('❌ Error loading kitchen stations: $e');
+        }
       },
     );
   }
 
-  void _handleNotificationTap(NotificationResponse response) {
-    if (mounted) {
-      final authState = ref.read(authProvider);
-      authState.whenOrNull(
-        authenticated: (
-          sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,
-          itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
-          cashDrawerPinNeeded,
-          cashDrawerPin,
-        ) {
-          final ordersTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
-          setState(() {
-            _selectedTabIndex = ordersTabIndex;
-          });
-        },
-      );
-    }
-  }
-
-  // ============ IMPROVED TIMER SYSTEM ============
-  void _startGlobalGrabTimer() {
-    _globalGrabRefreshTimer?.cancel();
-
-    _globalGrabRefreshTimer =
+  // ============ ALL ORDERS TIMER SYSTEM ============
+  void _startAllOrdersTimer() {
+    _allOrdersRefreshTimer?.cancel();
+    _allOrdersRefreshTimer =
         Timer.periodic(const Duration(seconds: 15), (timer) {
       if (mounted) {
-        _refreshGlobalGrabOrders();
+        _refreshAllOrders();
       }
     });
   }
 
-  void _stopGlobalGrabTimer() {
-    _globalGrabRefreshTimer?.cancel();
-    _globalGrabRefreshTimer = null;
+  void _stopAllOrdersTimer() {
+    _allOrdersRefreshTimer?.cancel();
+    _allOrdersRefreshTimer = null;
   }
 
-  // ============ BACKGROUND REFRESH WITHOUT FLICKERING ============
-  Future<void> _refreshGlobalGrabOrders() async {
-    // Don't start a new refresh if one is already in progress
-    if (_isLoadingGlobalGrab || !mounted) {
-      print('⏸️  Skipping GRAB refresh - already loading or not mounted');
+  // ============ BACKGROUND REFRESH FOR ALL ORDERS ============
+  Future<void> _refreshAllOrders() async {
+    if (_isLoadingAllOrders || !mounted || _kitchenStations.isEmpty) {
+      print('⏸️  Skipping refresh - loading: $_isLoadingAllOrders, mounted: $mounted, stations: ${_kitchenStations.length}');
       return;
     }
 
-    // Add to queue instead of executing immediately
-    _addToApiQueue(() => _performGrabRefresh());
+    _addToApiQueue(() => _performAllOrdersRefresh());
   }
 
-  Future<void> _performGrabRefresh() async {
-    _isLoadingGlobalGrab = true;
+  Future<void> _performAllOrdersRefresh() async {
+    _isLoadingAllOrders = true;
 
     try {
       final authState = ref.read(authProvider);
@@ -209,82 +176,186 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             final fromDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
             final toDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-            // Get first kitchen station
-            final stationsResponse = await PosService().getKitchenStations(
-              posProfile: posProfile,
-            );
+            print('🔄 Checking all ${_kitchenStations.length} kitchen stations for new orders...');
 
-            String firstStation = '';
-            if (stationsResponse['success'] == true) {
-              final stations = (stationsResponse['message'] as List?) ?? [];
-              if (stations.isNotEmpty) {
-                firstStation = stations[0]['name']?.toString() ?? '';
-              }
-            }
+            // Check each kitchen station for BOTH regular AND GRAB orders
+            for (var station in _kitchenStations) {
+              try {
+                // ============ 1. FETCH REGULAR ORDERS FOR THIS STATION ============
+                final regularResponse = await PosService().getKitchenOrders(
+                  posProfile: posProfile,
+                  kitchenStation: station,
+                  fromDate: fromDate,
+                  toDate: toDate,
+                  // No orderSource parameter = regular orders
+                );
 
-            if (firstStation.isNotEmpty) {
-              final response = await PosService().getKitchenOrders(
-                posProfile: posProfile,
-                kitchenStation: firstStation,
-                fromDate: fromDate,
-                toDate: toDate,
-                orderSource: 'grab',
-              );
+                if (regularResponse['success'] == true && mounted) {
+                  final newOrders = (regularResponse['message'] as List?)
+                          ?.cast<Map<String, dynamic>>() ?? [];
 
-              if (response['success'] == true && mounted) {
-                final newOrders = (response['message'] as List?)
-                        ?.cast<Map<String, dynamic>>() ??
-                    [];
+                  final cachedOrders = _cachedStationOrders[station] ?? [];
 
-                // Only update if there are actual changes
-                if (_hasOrdersChanged(newOrders)) {
-                  print('✅ GRAB orders changed, updating...');
+                  if (_hasOrdersChanged(cachedOrders, newOrders)) {
+                    print('✅ Regular orders changed for station: $station (${newOrders.length} orders)');
 
-                  // Update cached orders
-                  _cachedGrabOrders = List.from(newOrders);
-                  _lastGlobalGrabLoad = DateTime.now();
+                    // Find new orders
+                    final newOrdersList = _findNewOrders(cachedOrders, newOrders);
+                    
+                    _cachedStationOrders[station] = List.from(newOrders);
 
-                  // Update provider (this won't cause flickering)
-                  ref.read(grabOrdersProvider.notifier).updateOrders(newOrders);
-
-                  // Check for new orders and notify
-                  await _checkAndNotifyNewOrders(newOrders);
-                } else {
-                  print('ℹ️  No changes in GRAB orders');
+                    // Notify for each new order
+                    for (var order in newOrdersList) {
+                      await _showOrderNotification(
+                        order, 
+                        isGrab: false,
+                        stationName: station,
+                      );
+                    }
+                  }
                 }
+
+                // Small delay before next API call
+                await Future.delayed(const Duration(milliseconds: 300));
+
+                // ============ 2. FETCH GRAB ORDERS FOR THIS STATION ============
+                final grabResponse = await PosService().getKitchenOrders(
+                  posProfile: posProfile,
+                  kitchenStation: station,
+                  fromDate: fromDate,
+                  toDate: toDate,
+                  orderSource: 'grab', // GRAB orders for this station
+                );
+
+                if (grabResponse['success'] == true && mounted) {
+                  final newGrabOrders = (grabResponse['message'] as List?)
+                          ?.cast<Map<String, dynamic>>() ?? [];
+
+                  final cachedGrabOrders = _cachedStationGrabOrders[station] ?? [];
+
+                  if (_hasOrdersChanged(cachedGrabOrders, newGrabOrders)) {
+                    print('✅ GRAB orders changed for station: $station (${newGrabOrders.length} orders)');
+
+                    // Find new orders
+                    final newGrabOrdersList = _findNewOrders(cachedGrabOrders, newGrabOrders);
+                    
+                    _cachedStationGrabOrders[station] = List.from(newGrabOrders);
+
+                    // Update provider with all GRAB orders (combined from all stations)
+                    final allGrabOrders = _cachedStationGrabOrders.values
+                        .expand((orders) => orders)
+                        .toList();
+                    ref.read(grabOrdersProvider.notifier).updateOrders(allGrabOrders);
+
+                    // Notify for each new GRAB order
+                    for (var order in newGrabOrdersList) {
+                      await _showOrderNotification(
+                        order, 
+                        isGrab: true,
+                        stationName: station,
+                      );
+                    }
+                  }
+                }
+
+                // Small delay before checking next station
+                await Future.delayed(const Duration(milliseconds: 300));
+
+              } catch (e) {
+                print('❌ Error loading orders for station $station: $e');
               }
             }
+
+            print('✅ Completed refresh cycle for all ${_kitchenStations.length} stations');
+
           } catch (e) {
-            print('❌ Error loading GRAB orders: $e');
+            print('❌ Error in all orders refresh: $e');
           }
         },
       );
     } finally {
-      _isLoadingGlobalGrab = false;
+      _isLoadingAllOrders = false;
     }
   }
 
-  // ============ DETECT CHANGES WITHOUT REBUILDING UI ============
-  bool _hasOrdersChanged(List<Map<String, dynamic>> newOrders) {
-    if (_cachedGrabOrders.length != newOrders.length) {
+  // ============ DETECT CHANGES ============
+  bool _hasOrdersChanged(
+    List<Map<String, dynamic>> cached, 
+    List<Map<String, dynamic>> newOrders
+  ) {
+    if (cached.length != newOrders.length) {
       return true;
     }
 
-    // Compare order IDs and fulfillment status
-    final cachedIds = _cachedGrabOrders
+    final cachedIds = cached
         .map((o) => '${o['name']}_${o['custom_fulfilled']}')
         .toSet();
-    final newIds =
-        newOrders.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
+    final newIds = newOrders
+        .map((o) => '${o['name']}_${o['custom_fulfilled']}')
+        .toSet();
 
     return !cachedIds.containsAll(newIds) || !newIds.containsAll(cachedIds);
+  }
+
+  // ============ FIND NEW ORDERS ============
+  List<Map<String, dynamic>> _findNewOrders(
+    List<Map<String, dynamic>> cached,
+    List<Map<String, dynamic>> newOrders,
+  ) {
+    final cachedIds = cached.map((o) => o['name']?.toString() ?? '').toSet();
+    
+    return newOrders.where((order) {
+      final orderId = order['name']?.toString() ?? '';
+      final isUnfulfilled = order['custom_fulfilled'] != 1;
+      final isNotNotified = !_notifiedOrders.contains(orderId);
+      final isNew = !cachedIds.contains(orderId);
+      
+      return orderId.isNotEmpty && isUnfulfilled && isNotNotified && isNew;
+    }).toList();
+  }
+
+  // ============ SHOW NOTIFICATION ============
+  Future<void> _showOrderNotification(
+    Map<String, dynamic> order, {
+    required bool isGrab,
+    String? stationName,
+  }) async {
+    try {
+      final orderId = order['name']?.toString() ?? 'Unknown';
+      final customerName = order['customer_name']?.toString() ?? 'Customer';
+      final tableName = order['table']?.toString() ?? 'N/A';
+
+      // Mark as notified
+      _notifiedOrders.add(orderId);
+
+      if (mounted && context.mounted) {
+        // Play system sound
+        await SystemSound.play(SystemSoundType.alert);
+
+        // Show notification overlay
+        await KitchenNotificationOverlay.show(
+          context,
+          orderId: orderId,
+          customerName: customerName,
+          tableName: tableName,
+          isGrab: isGrab,
+          stationName: stationName,
+          onTap: () {
+            print('Notification tapped - already on kitchen screen');
+          },
+        );
+
+        print('🔔 New order notification: $orderId (${isGrab ? "GRAB" : stationName}) - Table: $tableName');
+      }
+    } catch (e) {
+      print('❌ Error showing notification: $e');
+    }
   }
 
   // ============ API QUEUE SYSTEM ============
   Future<void> _addToApiQueue(Future<void> Function() apiCall) async {
     _apiQueue.add(apiCall);
 
-    // Start processing if not already processing
     if (!_isProcessingQueue) {
       await _processApiQueue();
     }
@@ -302,10 +373,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final apiCall = _apiQueue.removeAt(0);
 
       try {
-        // Execute the API call
         await apiCall();
-
-        // Small delay between API calls to prevent overwhelming the server
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (e) {
         print('❌ Error in API queue: $e');
@@ -315,82 +383,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     _isProcessingQueue = false;
   }
 
-  // ============ NOTIFICATION SYSTEM ============
-  Future<void> _checkAndNotifyNewOrders(
-      List<Map<String, dynamic>> orders) async {
-    final notificationProvider = ref.read(grabNotificationsProvider.notifier);
-    final newOrders = notificationProvider.filterNewOrders(orders);
-
-    if (newOrders.isNotEmpty) {
-      print('🔔 Found ${newOrders.length} new GRAB order(s)');
-
-      for (var order in newOrders) {
-        final orderId = order['name']?.toString() ?? '';
-        if (orderId.isNotEmpty) {
-          await _showGrabNotification(order);
-          await notificationProvider.markAsNotified(orderId);
-        }
-      }
-    }
-  }
-
-  Future<void> _showGrabNotification(Map<String, dynamic> order) async {
-    try {
-      final orderId = order['name']?.toString() ?? 'Unknown';
-      final customerName = order['customer_name']?.toString() ?? 'Customer';
-
-      // Show custom in-app notification overlay
-      if (mounted && context.mounted) {
-        await GrabNotificationOverlay.show(
-          context,
-          orderId: orderId,
-          customerName: customerName,
-          onTap: () {
-            // Navigate to Kitchen screen with GRAB station selected
-            final authState = ref.read(authProvider);
-            authState.whenOrNull(
-              authenticated: (
-                sid,
-                apiKey,
-                apiSecret,
-                username,
-                email,
-                fullName,
-                posProfile,
-                branch,
-                paymentMethods,
-                taxes,
-                hasOpening,
-                tier,
-                printKitchenOrder,
-                openingDate,
-                itemsGroups,
-                baseUrl,
-                merchantId,
-                printMerchantReceiptCopy,
-                enableFiuu,
-                cashDrawerPinNeeded,
-                cashDrawerPin,
-              ) {
-                final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
-                if (mounted) {
-                  setState(() {
-                    _selectedTabIndex = kitchenTabIndex;
-                  });
-                }
-              },
-            );
-          },
-        );
-      }
-    } catch (e) {
-      print('❌ Error showing notification: $e');
-    }
-  }
-
-  // ============ PUBLIC API WRAPPER ============
-  /// Wrap other API calls with this method to prevent conflicts with GRAB refresh
-  Future<T> executeProtectedAPICall<T>(Future<T> Function() apiCall) async {
+  // ============ PUBLIC API ============
+  Future<T> safeExecuteAPICall<T>(Future<T> Function() apiCall) async {
     final completer = Completer<T>();
 
     _addToApiQueue(() async {
@@ -409,1268 +403,29 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     return completer.future;
   }
 
-  Future<T> safeExecuteAPICall<T>(Future<T> Function() apiCall) async {
-    try {
-      final mainLayout = MainLayout.of(context);
-      if (mainLayout != null) {
-        return await mainLayout.executeProtectedAPICall(apiCall);
-      }
-    } catch (e) {
-      debugPrint('MainLayout not available, executing API call directly: $e');
-    }
-    return await apiCall(); // Fallback to direct call
-  }
-
-  Future<void> _initializeCustomerDisplay() async {
-    if (!_customerDisplayInitialized) {
-      try {
-        await CustomerDisplayController.showCustomerScreen();
-        setState(() {
-          _customerDisplayInitialized = true;
-        });
-      } catch (e) {
-        print('Error initializing customer display: $e');
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _stopGlobalGrabTimer();
-    _ordersScrollController.dispose();
-    GrabNotificationOverlay.dispose(); // Clean up audio player (async)
-    super.dispose();
-  }
-
-  void _onOrdersScroll() {
-    if (_ordersScrollController.position.pixels >=
-            _ordersScrollController.position.maxScrollExtent - 100 &&
-        !_isLoadingMore &&
-        _hasMoreOrders &&
-        _selectedTabIndex == (_getOrdersTabIndex())) {
-      _loadMoreOrders();
-    }
-  }
-
-  int _getOrdersTabIndex() {
-    final authState = ref.read(authProvider);
-    return authState.whenOrNull(
-          authenticated: (
-            sid,
-            apiKey,
-            apiSecret,
-            username,
-            email,
-            fullName,
-            posProfile,
-            branch,
-            paymentMethods,
-            taxes,
-            hasOpening,
-            tier,
-            printKitchenOrder,
-            openingDate,
-            itemsGroups,
-            baseUrl,
-            merchantId,
-            printMerchantReceiptCopy,
-            enableFiuu,
-            cashDrawerPinNeeded,
-            cashDrawerPin,
-          ) {
-            return tier.toLowerCase() != 'tier 3' ? 1 : 2;
-          },
-        ) ??
-        2;
-  }
-
-  Future<void> _loadMoreOrders() async {
-    if (!mounted || _isLoadingMore || !_hasMoreOrders) return;
-
-    setState(() => _isLoadingMore = true);
-
-    try {
-      final authState = ref.read(authProvider);
-
-      await authState.whenOrNull(
-        authenticated: (
-          sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,
-          itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
-          cashDrawerPinNeeded,
-          cashDrawerPin,
-        ) async {
-          try {
-            String? fromDateStr;
-            String? toDateStr;
-            if (_useDateRange && _fromDate != null && _toDate != null) {
-              fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
-              toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
-            } else {
-              fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-              toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-            }
-
-            String? apiStatus;
-            if (_filterStatus == 'Pay Later') {
-              apiStatus = 'Draft';
-            } else if (_filterStatus == 'Paid') {
-              apiStatus = null;
-            } else if (_filterStatus == 'Cancelled') {
-              apiStatus = 'Cancelled';
-            }
-
-            final effectivePageLimit = 30;
-            final nextStart = (_currentPage + 1) * effectivePageLimit;
-
-            final response =
-                await safeExecuteAPICall(() => PosService().getOrders(
-                      posProfile: posProfile,
-                      fromDate: fromDateStr,
-                      toDate: toDateStr,
-                      status: apiStatus,
-                      pageLength: effectivePageLimit,
-                      start: nextStart,
-                    ));
-
-            if (!mounted) return;
-
-            if (response['message']?['success'] == true) {
-              final List<dynamic> invoices =
-                  (response['message']?['message'] as List?) ?? [];
-
-              if (invoices.isEmpty) {
-                setState(() {
-                  _hasMoreOrders = false;
-                });
-              } else {
-                List<Map<String, dynamic>> newOrders = invoices
-                    .map((invoice) {
-                      try {
-                        final items =
-                            (invoice['items'] as List? ?? []).map((item) {
-                          return {
-                            'name':
-                                item['item_name']?.toString() ?? 'Unknown Item',
-                            'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                            'quantity':
-                                (item['qty'] as num?)?.toDouble() ?? 1.0,
-                            'item_code': item['item_code']?.toString() ?? '',
-                            'options': item['options'] ?? {},
-                            'option_text': item['option_text'] ?? '',
-                            'custom_serve_later': item['custom_serve_later'],
-                            'custom_item_remarks':
-                                item['custom_item_remarks']?.toString() ?? '',
-                            'custom_variant_info':
-                                item['custom_variant_info']?.toString() ?? '',
-                            'discount_amount':
-                                (item['discount_amount'] as num?)?.toDouble() ??
-                                    0.0,
-                            'image': (item['image'])
-                          };
-                        }).toList();
-
-                        Map<String, dynamic>? taxBreakdown;
-                        final taxes = invoice['taxes'] as List?;
-                        if (taxes != null && taxes.isNotEmpty) {
-                          taxBreakdown = {
-                            'rate':
-                                (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                            'amount':
-                                (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                            'description':
-                                taxes[0]['account_head']?.toString() ?? 'Tax',
-                          };
-                        }
-
-                        DateTime? parseDate(String? dateString) {
-                          try {
-                            return dateString != null
-                                ? DateTime.parse(dateString)
-                                : null;
-                          } catch (_) {
-                            return null;
-                          }
-                        }
-
-                        final payments = invoice['payments'] as List? ?? [];
-                        String? m1Value;
-                        if (payments.isNotEmpty) {
-                          m1Value =
-                              payments[0]['custom_fiuu_m1_value']?.toString();
-                        }
-
-                        return {
-                          'orderId': invoice['name']?.toString() ?? 'Unknown',
-                          'invoiceNumber':
-                              invoice['name']?.toString() ?? 'Unknown',
-                          'status': invoice['status']?.toString() ?? 'Draft',
-                          'orderType':
-                              invoice['custom_order_channel']?.toString() ?? '',
-                          'tableNumber': (invoice['custom_table'] ?? ''),
-                          'items': items,
-                          'subtotal':
-                              (invoice['rounded_total'] as num?)?.toDouble() ??
-                                  0.0,
-                          'tax': taxBreakdown?['amount'] ?? 0.0,
-                          'total':
-                              (invoice['rounded_total'] as num?)?.toDouble() ??
-                                  0.0,
-                          'entryTime':
-                              parseDate(invoice['modified']?.toString()) ??
-                                  DateTime.now(),
-                          'paidTime': invoice['status']?.toString() == 'Paid'
-                              ? parseDate(invoice['modified']?.toString())
-                              : null,
-                          'isPaid': invoice['status']?.toString() == 'Paid' ||
-                              invoice['status']?.toString() == 'Consolidated',
-                          'paymentMethod': payments.isNotEmpty == true
-                              ? payments[0]['mode_of_payment']?.toString() ??
-                                  'Cash'
-                              : 'Cash',
-                          'm1value': m1Value,
-                          'customerName':
-                              invoice['customer_name']?.toString() ?? 'Guest',
-                          'remarks': invoice['remarks']?.toString() ?? '',
-                          'custom_item_remarks':
-                              invoice['custom_item_remarks']?.toString() ??
-                                  'N/A',
-                          'taxBreakdown': taxBreakdown,
-                          'paidAmount':
-                              (invoice['paid_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'changeAmount':
-                              (invoice['change_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'base_rounding_adjustment':
-                              (invoice['base_rounding_adjustment'] as num?)
-                                      ?.toDouble() ??
-                                  0.0,
-                          "pos_invoice_number":
-                              invoice['custom_fiuu_invoice_number']
-                                      ?.toString() ??
-                                  '000000',
-                          'total_taxes_and_charges':
-                              (invoice['total_taxes_and_charges'] as num?)
-                                      ?.toDouble() ??
-                                  0.0,
-                          'discount_amount':
-                              (invoice['discount_amount'] as num?)?.toDouble(),
-                          'user_voucher_code': (invoice['user_voucher_code']),
-                          'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
-                        };
-                      } catch (e) {
-                        print(
-                            'Error processing invoice ${invoice['name']}: $e');
-                        return null;
-                      }
-                    })
-                    .where((order) => order != null)
-                    .cast<Map<String, dynamic>>()
-                    .toList();
-
-                // Sort new orders
-                newOrders.sort((a, b) {
-                  final isPayLaterA =
-                      a['status']?.toString().toLowerCase() == 'draft';
-                  final isPayLaterB =
-                      b['status']?.toString().toLowerCase() == 'draft';
-
-                  if (isPayLaterA && isPayLaterB) {
-                    final timeA = a['entryTime'] as DateTime;
-                    final timeB = b['entryTime'] as DateTime;
-                    return timeB.compareTo(timeA);
-                  } else if (isPayLaterA) {
-                    return -1;
-                  } else if (isPayLaterB) {
-                    return 1;
-                  } else {
-                    final idA = a['orderId']?.toString() ?? '';
-                    final idB = b['orderId']?.toString() ?? '';
-                    return idB.compareTo(idA);
-                  }
-                });
-
-                setState(() {
-                  activeOrders.addAll(newOrders);
-                  _currentPage++;
-                });
-              }
-            }
-          } on SessionTimeoutException {
-            await ref.read(authProvider.notifier).logout();
-          }
-        },
-      );
-    } catch (e) {
-      print('Error loading more orders: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingMore = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-
-    return authState.when(
-      initial: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      unauthenticated: () {
-        if (!_isLoggingOut) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                      title: const Text('Session Timeout'),
-                      content: const Text(
-                          'Your session has expired. Please login again.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => LoginPage()),
-                              (Route<dynamic> route) => false,
-                            );
-                          },
-                          child: const Text('OK'),
-                        ),
-                      ],
-                    ));
-          });
-        }
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      },
-      authenticated: (
-        sid,
-        apiKey,
-        apiSecret,
-        username,
-        email,
-        fullName,
-        posProfile,
-        branch,
-        paymentMethods,
-        taxes,
-        hasOpening,
-        tier,
-        printKitchenOrder,
-        openingDate,
-        itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
-        cashDrawerPinNeeded,
-        cashDrawerPin,
-      ) {
-        return Scaffold(
-          body: Row(
-            children: [
-              _buildNavigationSidebar(),
-              Expanded(
-                child: IndexedStack(
-                  index: _selectedTabIndex,
-                  children: _getScreensWithOrders(),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _refreshOrders({bool forceAllForPayLater = false}) async {
-    if (!mounted) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      setState(() {
-        _isOrdersLoading = true;
-        _currentPage = 0;
-        _hasMoreOrders = true;
-        _isLoadingMore = false;
-      });
-      _loadOrdersData(forceAllForPayLater);
-    });
-  }
-
-  Future<void> _loadOrdersData(bool forceAllForPayLater) async {
-    try {
-      final authState = ref.read(authProvider);
-
-      await authState.whenOrNull(
-        authenticated: (
-          sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,
-          itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
-          cashDrawerPinNeeded,
-          cashDrawerPin,
-        ) async {
-          try {
-            String? fromDateStr;
-            String? toDateStr;
-
-            if (_useDateRange && _fromDate != null && _toDate != null) {
-              fromDateStr = DateFormat('yyyy-MM-dd').format(_fromDate!);
-              toDateStr = DateFormat('yyyy-MM-dd').format(_toDate!);
-            } else {
-              fromDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-              toDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-            }
-
-            String? apiStatus;
-            if (_filterStatus == 'Pay Later') {
-              apiStatus = 'Draft';
-            } else if (_filterStatus == 'Paid') {
-              apiStatus = null;
-            } else if (_filterStatus == 'Cancelled') {
-              apiStatus = 'Cancelled';
-            }
-
-            final effectivePageLimit = 30;
-
-            final future = safeExecuteAPICall(() => PosService().getOrders(
-                  posProfile: posProfile,
-                  fromDate: fromDateStr,
-                  toDate: toDateStr,
-                  status: apiStatus,
-                  pageLength: effectivePageLimit,
-                  start: 0,
-                ));
-            _refreshFuture = future;
-            final response = await future;
-            if (_refreshFuture != future || !mounted) return;
-
-            if (response['message']?['success'] == true) {
-              final List<dynamic> invoices =
-                  (response['message']?['message'] as List?) ?? [];
-
-              // Check if we have more orders
-              if (invoices.length < effectivePageLimit) {
-                _hasMoreOrders = false;
-              }
-
-              List<Map<String, dynamic>> processedOrders = invoices
-                  .map((invoice) {
-                    try {
-                      final items =
-                          (invoice['items'] as List? ?? []).map((item) {
-                        return {
-                          'name':
-                              item['item_name']?.toString() ?? 'Unknown Item',
-                          'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                          'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-                          'item_code': item['item_code']?.toString() ?? '',
-                          'options': item['options'] ?? {},
-                          'option_text': item['option_text'] ?? '',
-                          'custom_serve_later': item['custom_serve_later'],
-                          'custom_item_remarks':
-                              item['custom_item_remarks']?.toString() ?? '',
-                          'custom_variant_info':
-                              item['custom_variant_info']?.toString() ?? '',
-                          'discount_amount':
-                              (item['discount_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'image': (item['image'])
-                        };
-                      }).toList();
-
-                      Map<String, dynamic>? taxBreakdown;
-                      final taxes = invoice['taxes'] as List?;
-                      if (taxes != null && taxes.isNotEmpty) {
-                        taxBreakdown = {
-                          'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                          'amount':
-                              (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                          'description':
-                              taxes[0]['account_head']?.toString() ?? 'Tax',
-                        };
-                      }
-
-                      DateTime? parseDate(String? dateString) {
-                        try {
-                          return dateString != null
-                              ? DateTime.parse(dateString)
-                              : null;
-                        } catch (_) {
-                          return null;
-                        }
-                      }
-
-                      // Extract payment method info
-                      final payments = invoice['payments'] as List? ?? [];
-                      String? m1Value;
-                      if (payments.isNotEmpty) {
-                        m1Value =
-                            payments[0]['custom_fiuu_m1_value']?.toString();
-                      }
-
-                      return {
-                        'orderId': invoice['name']?.toString() ?? 'Unknown',
-                        'invoiceNumber':
-                            invoice['name']?.toString() ?? 'Unknown',
-                        'status': invoice['status']?.toString() ?? 'Draft',
-                        'orderType':
-                            invoice['custom_order_channel']?.toString() ?? '',
-                        'tableNumber': (invoice['custom_table'] ?? ''),
-                        'items': items,
-                        'subtotal':
-                            (invoice['rounded_total'] as num?)?.toDouble() ??
-                                0.0,
-                        'tax': taxBreakdown?['amount'] ?? 0.0,
-                        'total':
-                            (invoice['rounded_total'] as num?)?.toDouble() ??
-                                0.0,
-                        'entryTime':
-                            parseDate(invoice['modified']?.toString()) ??
-                                DateTime.now(),
-                        'paidTime': invoice['status']?.toString() == 'Paid'
-                            ? parseDate(invoice['modified']?.toString())
-                            : null,
-                        'isPaid': invoice['status']?.toString() == 'Paid' ||
-                            invoice['status']?.toString() == 'Consolidated',
-                        'paymentMethod': payments.isNotEmpty == true
-                            ? payments[0]['mode_of_payment']?.toString() ??
-                                'Cash'
-                            : 'Cash',
-                        'm1value': m1Value,
-                        'customerName':
-                            invoice['customer_name']?.toString() ?? 'Guest',
-                        'remarks': invoice['remarks']?.toString() ?? '',
-                        'custom_item_remarks':
-                            invoice['custom_item_remarks']?.toString() ?? 'N/A',
-                        'taxBreakdown': taxBreakdown,
-                        'paidAmount':
-                            (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
-                        'changeAmount':
-                            (invoice['change_amount'] as num?)?.toDouble() ??
-                                0.0,
-                        'base_rounding_adjustment':
-                            (invoice['base_rounding_adjustment'] as num?)
-                                    ?.toDouble() ??
-                                0.0,
-                        "pos_invoice_number":
-                            invoice['custom_fiuu_invoice_number']?.toString() ??
-                                '000000',
-                        'total_taxes_and_charges':
-                            (invoice['total_taxes_and_charges'] as num?)
-                                    ?.toDouble() ??
-                                0.0,
-                        'discount_amount':
-                            (invoice['discount_amount'] as num?)?.toDouble(),
-                        'user_voucher_code': (invoice['user_voucher_code']),
-                        'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
-                      };
-                    } catch (e) {
-                      print('Error processing invoice ${invoice['name']}: $e');
-                      return null;
-                    }
-                  })
-                  .where((order) => order != null)
-                  .cast<Map<String, dynamic>>()
-                  .toList();
-
-              // Sort orders: All orders by timestamp
-              processedOrders.sort((a, b) {
-                final idA = a['entryTime'] as DateTime;
-                final idB = b['entryTime'] as DateTime;
-                return idB.compareTo(idA); // Descending order
-              });
-
-              setState(() {
-                activeOrders = processedOrders;
-                _currentPage = 0;
-              });
-
-              print('Successfully mapped ${activeOrders.length} orders');
-            }
-          } on SessionTimeoutException {
-            await ref.read(authProvider.notifier).logout();
-          }
-        },
-      );
-    } catch (e) {
-      print('Error refreshing orders: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isOrdersLoading = false);
-      }
-    }
-  }
-
-  Future<void> _selectDateRange() async {
-    final DateTimeRange? picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(Duration(days: 0)),
-      currentDate: DateTime.now(),
-      initialDateRange: _fromDate != null && _toDate != null
-          ? DateTimeRange(start: _fromDate!, end: _toDate!)
-          : null,
-      initialEntryMode: DatePickerEntryMode.calendar,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Color(0xFFE732A0),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-            dialogBackgroundColor: Colors.white,
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        _fromDate = picked.start;
-        _toDate = picked.end;
-        _useDateRange = true;
-      });
-
-      Future.delayed(Duration(milliseconds: 100), () {
-        _refreshOrders();
-      });
-    }
-  }
-
-  void _clearDateRange() {
-    setState(() {
-      _fromDate = null;
-      _toDate = null;
-      _useDateRange = false;
-      _selectedDate = DateTime.now(); // Reset to today
-    });
-
-    // Refresh orders to show Pay Later with all dates
-    Future.delayed(Duration(milliseconds: 100), () {
-      _refreshOrders();
-    });
-  }
-
-  List<Widget> _getScreensWithOrders() {
-    final authState = ref.read(authProvider);
-
-    return authState.when(
-      initial: () => [
-        const Center(child: CircularProgressIndicator()),
-      ],
-      unauthenticated: () {
-        if (!_isLoggingOut) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                      title: const Text('Session Timeout'),
-                      content: const Text(
-                          'Your session has expired. Please login again.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop(); // Close the dialog
-                            // Navigate to LoginScreen and remove all previous routes
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => LoginPage()),
-                              (Route<dynamic> route) => false,
-                            );
-                          },
-                          child: const Text('OK'),
-                        ),
-                      ],
-                    ));
-          });
-        }
-        return [
-          const Scaffold(body: Center(child: CircularProgressIndicator()))
-        ];
-      },
-      authenticated: (
-        sid,
-        apiKey,
-        apiSecret,
-        username,
-        email,
-        fullName,
-        posProfile,
-        branch,
-        paymentMethods,
-        taxes,
-        hasOpening,
-        tier,
-        printKitchenOrder,
-        openingDate,
-        itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
-        cashDrawerPinNeeded,
-        cashDrawerPin,
-      ) {
-        if (tier.toLowerCase() != 'tier 3') {
-          return [
-            FutureBuilder(
-              future: _getDefaultTable(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final defaultTable = snapshot.data;
-                return HomeScreen(
-                  tableNumber: defaultTable != null
-                      ? defaultTable['title'] ?? 'Take Away'
-                      : 'Take Away',
-                  existingOrder: null,
-                  isTier1: true,
-                  isDefaultTable: true, // NEW
-                );
-              },
-            ),
-            OrdersScreen(
-              orders: activeOrders,
-              isLoading: _isOrdersLoading,
-              onOrderPaid: (order) {
-                handleOrderPaid(order);
-                setState(() => _isOrdersLoading = true);
-                Future.delayed(Duration(seconds: 1), () {
-                  if (mounted) {
-                    setState(() => _isOrdersLoading = false);
-                  }
-                });
-              },
-              onEditOrder: _handleEditOrder,
-              onRefresh: () async {
-                await _refreshOrders();
-              },
-              selectedDate: _selectedDate,
-              pageLimit: 30,
-              onDateChanged: (newDate) {
-                setState(() {
-                  _selectedDate = newDate;
-                  _useDateRange = false;
-                  _currentPage = 0;
-                  _hasMoreOrders = true;
-                });
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              // Pass filter callbacks to OrdersScreen
-              onFilterStatusChanged: (newStatus) {
-                setState(() {
-                  _filterStatus = newStatus;
-                  _currentPage = 0; // Reset pagination when filter changes
-                  _hasMoreOrders = true;
-                });
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              onFilterOrderTypeChanged: (newOrderType) {
-                setState(() {
-                  _filterOrderType = newOrderType;
-                  _currentPage = 0; // Reset pagination when filter changes
-                  _hasMoreOrders = true;
-                });
-                Future.delayed(Duration(milliseconds: 100), () {
-                  _refreshOrders();
-                });
-              },
-              // Pass current filter values
-              currentFilterStatus: _filterStatus,
-              currentFilterOrderType: _filterOrderType,
-              onDateRangeSelected: _selectDateRange,
-              onDateRangeCleared: _clearDateRange,
-              useDateRange: _useDateRange,
-              fromDate: _fromDate,
-              toDate: _toDate,
-            ),
-            DashboardScreen(),
-            KitchenScreen(
-              key: ValueKey(
-                  'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
-            ),
-            SettingsScreen(key: settingsScreenKey),
-          ];
-        } else {
-          return [
-            FutureBuilder(
-              future: _getDefaultTable(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final defaultTable = snapshot.data;
-                return HomeScreen(
-                  tableNumber: defaultTable == null
-                      ? 'Take Away'
-                      : defaultTable['title'] ?? 'Take Away',
-                  existingOrder: null,
-                  isTier1: false,
-                  isDefaultTable: false, // NEW
-                );
-              },
-            ),
-            TableScreen(
-              tablesWithSubmittedOrders: tablesWithSubmittedOrders,
-              onOrderSubmitted: (order) {
-                addNewOrder(order);
-                _refreshOrders();
-              },
-              onOrderPaid: markOrderAsPaid,
-              activeOrders: activeOrders,
-            ),
-            OrdersScreen(
-                orders: activeOrders,
-                isLoading: _isOrdersLoading,
-                onOrderPaid: (order) {
-                  handleOrderPaid(order);
-                  setState(() => _isOrdersLoading = true);
-                  Future.delayed(Duration(seconds: 1), () {
-                    if (mounted) {
-                      setState(() => _isOrdersLoading = false);
-                    }
-                  });
-                },
-                onEditOrder: _handleEditOrder,
-                onRefresh: () async {
-                  await _refreshOrders();
-                },
-                selectedDate: _selectedDate,
-                pageLimit: 30,
-                onDateChanged: (newDate) {
-                  setState(() {
-                    _selectedDate = newDate;
-                    _useDateRange = false; // Switch to single date mode
-                  });
-                  Future.delayed(Duration(milliseconds: 100), () {
-                    _refreshOrders();
-                  });
-                },
-                // Pass filter callbacks to OrdersScreen
-                onFilterStatusChanged: (newStatus) {
-                  setState(() => _filterStatus = newStatus);
-                  Future.delayed(Duration(milliseconds: 100), () {
-                    _refreshOrders();
-                  });
-                },
-                onFilterOrderTypeChanged: (newOrderType) {
-                  setState(() => _filterOrderType = newOrderType);
-                  Future.delayed(Duration(milliseconds: 100), () {
-                    _refreshOrders();
-                  });
-                },
-                // Pass current filter values
-                currentFilterStatus: _filterStatus,
-                currentFilterOrderType: _filterOrderType,
-                // Pass date range methods
-                onDateRangeSelected: _selectDateRange,
-                onDateRangeCleared: _clearDateRange,
-                useDateRange: _useDateRange,
-                fromDate: _fromDate,
-                toDate: _toDate),
-            DashboardScreen(),
-            KitchenScreen(
-              key: ValueKey(
-                  'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
-            ),
-            SettingsScreen(key: settingsScreenKey),
-          ];
-        }
-      },
-    );
-  }
-
-  Widget _buildNavigationSidebar() {
-    final authState = ref.read(authProvider);
-
-    return authState.when(
-      initial: () => const Center(child: CircularProgressIndicator()),
-      unauthenticated: () {
-        if (!_isLoggingOut) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Session Timeout'),
-                content:
-                    const Text('Your session has expired. Please login again.'),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(builder: (context) => LoginPage()),
-                        (Route<dynamic> route) => false,
-                      );
-                    },
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
-          });
-        }
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      },
-      authenticated: (
-        sid,
-        apiKey,
-        apiSecret,
-        username,
-        email,
-        fullName,
-        posProfile,
-        branch,
-        paymentMethods,
-        taxes,
-        hasOpening,
-        tier,
-        printKitchenOrder,
-        openingDate,
-        itemsGroups,
-        baseUrl,
-        merchantId,
-        printMerchantReceiptCopy,
-        enableFiuu,
-        cashDrawerPinNeeded,
-        cashDrawerPin,
-      ) {
-        return Container(
-          width: 100,
-          color: Colors.white,
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () async {
-                  setState(() {
-                    _selectedTabIndex = 0;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  child: Image.asset(
-                    'assets/logo-shiokpos.png',
-                    width: 60,
-                    height: 60,
-                  ),
-                ),
-              ),
-              // Only show TableScreen for tier 3 users
-              if (tier.toLowerCase() == 'tier 3') ...[
-                _buildNavItem(1, 'assets/img-sidebar-table.png', 'Tables'),
-              ],
-              // Orders screen index depends on tier
-              _buildNavItem(
-                tier.toLowerCase() != 'tier 3' ? 1 : 2,
-                'assets/img-sidebar-orders.png',
-                'Orders',
-              ),
-              _buildNavItem(
-                tier.toLowerCase() != 'tier 3' ? 2 : 3,
-                'assets/img-sidebar-dashboard.png',
-                'Dashboard',
-              ),
-              _buildNavItem(
-                tier.toLowerCase() != 'tier 3' ? 3 : 4,
-                'assets/img-sidebar-kitchen.png',
-                'Fulfilment',
-                null, // No custom action
-                _pendingGrabOrdersCount, // Show badge with pending Grab orders count
-              ),
-              _buildNavItem(
-                tier.toLowerCase() != 'tier 3' ? 4 : 5,
-                'assets/img-sidebar-settings.png',
-                'Settings',
-              ),
-              const Spacer(),
-              _buildNavItem(
-                  -1, 'assets/img-sidebar-logout.png', 'Logout', _logout),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNavItem(int index, String imagePath, String label,
-      [VoidCallback? action, int badgeCount = 0] // Add badge count parameter
-      ) {
-    final bool isSelected = index == _selectedTabIndex;
-    return GestureDetector(
-      onTap: action ??
-          () async {
-            if (index == -1) {
-              // Logout
-              ref.read(authProvider.notifier).logout();
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-            } else {
-              // Check if this is the Orders screen (index 2 for tier2, index 1 for tier1)
-              final authState = ref.read(authProvider);
-              bool isOrdersScreen = false;
-
-              authState.whenOrNull(
-                authenticated: (
-                  sid,
-                  apiKey,
-                  apiSecret,
-                  username,
-                  email,
-                  fullName,
-                  posProfile,
-                  branch,
-                  paymentMethods,
-                  taxes,
-                  hasOpening,
-                  tier,
-                  printKitchenOrder,
-                  openingDate,
-                  itemsGroups,
-                  baseUrl,
-                  mechantId,
-                  printMerchantReceiptCopy,
-                  enableFiuu,
-                  cashDrawerPinNeeded,
-                  cashDrawerPin,
-                ) {
-                  if (tier.toLowerCase() != 'tier 3') {
-                    isOrdersScreen = index == 1; // Orders is index 1 for tier1
-                  } else {
-                    isOrdersScreen = index == 2; // Orders is index 2 for tier2
-                  }
-                },
-              );
-
-              if (isOrdersScreen) {
-                setState(() {
-                  _filterStatus = 'All';
-                });
-                // Refresh orders with the new filters
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _refreshOrders();
-                });
-              }
-
-              setState(() => _selectedTabIndex = index);
-            }
-          },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    border: isSelected
-                        ? const Border(
-                            left: BorderSide(color: Colors.pink, width: 3))
-                        : null,
-                  ),
-                  child: Image.asset(
-                    imagePath,
-                    color: isSelected ? Colors.pink : const Color(0xFF555555),
-                    width: index == 1 ? 50 : 40,
-                    height: index == 1 ? 50 : 40,
-                  ),
-                ),
-                // Badge for pending orders
-                if (badgeCount > 0)
-                  Positioned(
-                    top: -4,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.red.withOpacity(0.3),
-                            blurRadius: 4,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 2,
-                        ),
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 20,
-                        minHeight: 20,
-                      ),
-                      child: Center(
-                        child: Text(
-                          badgeCount > 99 ? '99+' : badgeCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(label,
-                style: TextStyle(
-                    color: isSelected ? Colors.pink : const Color(0xFF555555),
-                    fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void handleOrderPaid(Map<String, dynamic> paidOrder) {
-    print('Handling paid order: ${jsonEncode({
-          ...paidOrder,
-          'paidTime': paidOrder['paidTime'] is DateTime
-              ? paidOrder['paidTime'].toIso8601String()
-              : paidOrder['paidTime']?.toString(),
-          'entryTime': paidOrder['entryTime'] is DateTime
-              ? paidOrder['entryTime'].toIso8601String()
-              : paidOrder['entryTime']?.toString(),
-        })}');
-
-    setState(() {
-      final index = activeOrders.indexWhere((o) =>
-          o['orderId'] == paidOrder['orderId'] ||
-          o['invoiceNumber'] == paidOrder['invoiceNumber']);
-
-      if (index != -1) {
-        activeOrders[index] = {
-          ...activeOrders[index],
-          ...paidOrder,
-          'isPaid': true,
-          'status': 'Paid',
-          'paidTime': paidOrder['paidTime'] is DateTime
-              ? paidOrder['paidTime'].toIso8601String()
-              : paidOrder['paidTime']?.toString(),
-          // Preserve change amount if it exists
-          if (paidOrder['changeAmount'] != null)
-            'changeAmount': paidOrder['changeAmount'],
-          // Use actual paid amount for cash payments
-          if (paidOrder['paymentMethod'] == 'Cash' &&
-              paidOrder['paidAmount'] != null)
-            'paidAmount': paidOrder['paidAmount'],
-        };
-        tablesWithSubmittedOrders.remove(paidOrder['tableNumber']);
-      } else {
-        activeOrders.add({
-          ...paidOrder,
-          'isPaid': true,
-          'status': 'Paid',
-          'paidTime': paidOrder['paidTime'] is DateTime
-              ? paidOrder['paidTime'].toIso8601String()
-              : paidOrder['paidTime']?.toString(),
-          // Preserve change amount if it exists
-          if (paidOrder['changeAmount'] != null)
-            'changeAmount': paidOrder['changeAmount'],
-          // Use actual paid amount for cash payments
-          if (paidOrder['paymentMethod'] == 'Cash')
-            'paidAmount': paidOrder['paidAmount'],
-        });
-      }
-    });
-
-    if (_selectedTabIndex == 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _refreshOrders();
-      });
-    }
-  }
-
-  void _handleEditOrder(Map<String, dynamic> order) {
-    setState(() {
-      final index = activeOrders
-          .indexWhere((o) => o['tableNumber'] == order['tableNumber']);
-      if (index != -1) {
-        activeOrders[index] = order;
-      }
-    });
-    setState(() {
-      _selectedTabIndex = 0;
-    });
-  }
-
-  void _logout() async {
-    // Show confirmation dialog first
+  // ============ LOGOUT ============
+  Future<void> _logout() async {
     final shouldLogout = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12.0),
-            ),
             title: const Text(
-              'Confirm Logout',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+              'Logout',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
             content: const Text(
               'Are you sure you want to logout?',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
             actions: [
               TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.grey[200],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 8.0),
+                ),
                 child: const Text(
                   'Cancel',
                   style: TextStyle(
@@ -1713,7 +468,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       await ref.read(authProvider.notifier).logout();
 
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => LoginPage()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1727,185 +486,118 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-  void addNewOrder(Map<String, dynamic> order) {
-    try {
-      setState(() {
-        activeOrders.removeWhere((o) =>
-            o['tableNumber'] == order['tableNumber'] &&
-            !(o['isPaid'] ?? false));
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
 
-        final items = order['items'] is List ? List.from(order['items']) : [];
-
-        final newOrder = {
-          'orderId': order['invoice']?['name'] ?? 'Unknown',
-          'invoiceNumber': order['invoice']?['name'] ?? 'Unknown',
-          'tableNumber': order['tableNumber'],
-          'items': items,
-          'status': order['invoice']?['status'] ?? 'Draft',
-          'orderType': order['invoice']?['custom_order_channel'] ?? 'Dine in',
-          'subtotal': order['invoice']?['net_total']?.toDouble() ?? 0.0,
-          'tax':
-              order['invoice']?['total_taxes_and_charges']?.toDouble() ?? 0.0,
-          'total': order['invoice']?['grand_total']?.toDouble() ?? 0.0,
-          'entryTime': DateTime.now(),
-          'isPaid': false,
-        };
-
-        activeOrders.add(newOrder);
-        tablesWithSubmittedOrders.add(order['tableNumber']);
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding order: $e')),
-      );
-    }
-  }
-
-  void updateOrder(Map<String, dynamic> updatedOrder) {
-    setState(() {
-      final index = activeOrders.indexWhere((o) =>
-          o['tableNumber'] == updatedOrder['tableNumber'] && !o['isPaid']);
-
-      if (index != -1) {
-        activeOrders[index] = {
-          ...activeOrders[index],
-          'items': List<Map<String, dynamic>>.from(updatedOrder['items'] ?? []),
-          'subtotal': updatedOrder['invoice']?['net_total']?.toDouble() ?? 0.0,
-          'tax':
-              updatedOrder['invoice']?['total_taxes_and_charges']?.toDouble() ??
-                  0.0,
-          'total': updatedOrder['invoice']?['grand_total']?.toDouble() ?? 0.0,
-          'status': updatedOrder['invoice']?['status'] ?? 'Draft',
-        };
-      }
-    });
-  }
-
-  void markOrderAsPaid(int tableNumber) {
-    setState(() {
-      // Mark as paid
-      final index = activeOrders
-          .indexWhere((order) => order['tableNumber'] == tableNumber);
-      if (index != -1) {
-        activeOrders[index]['isPaid'] = true;
-        activeOrders[index]['status'] = 'Paid';
-      }
-      // Update table status
-      tablesWithSubmittedOrders.remove(tableNumber);
-    });
-  }
-
-  void selectOrdersTab() {
-    setState(() {
-      _selectedTabIndex = 2; // Orders screen index
-    });
-  }
-
-  void setSelectedTabIndex(int index) {
-    setState(() {
-      _selectedTabIndex = index;
-    });
-  }
-
-  Future<Map<String, dynamic>?> _getDefaultTable() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final branch = prefs.getString('branch');
-      if (branch == null) return null;
-
-      final response = await safeExecuteAPICall(
-          () => PosService().getFloorsAndTables(branch));
-      if (response['success'] == true) {
-        final floorsData = response['message'];
-
-        if (floorsData is List) {
-          // First, try to find a table with is_default = 1
-          for (var floor in floorsData) {
-            final tables = floor['tables'];
-
-            // Handle both list and map cases
-            if (tables is List) {
-              for (var table in tables) {
-                if (table['is_default'] == 1) {
-                  return table; // Found default table
-                }
-              }
-            } else if (tables is Map<String, dynamic>) {
-              if (tables['is_default'] == 1) {
-                return tables; // Found default table
-              }
-            }
-          }
-
-          // If no default table found but we need one, take the first takeaway table
-          for (var floor in floorsData) {
-            final tables = floor['tables'];
-
-            if (tables is List) {
-              for (var table in tables) {
-                if (table['title']
-                        ?.toString()
-                        .toLowerCase()
-                        .contains('take away') ??
-                    false) {
-                  return table;
-                }
-              }
-            }
-          }
-
-          // Last resort: return first table found
-          for (var floor in floorsData) {
-            final tables = floor['tables'];
-
-            if (tables is List && tables.isNotEmpty) {
-              return tables[0];
-            } else if (tables is Map<String, dynamic>) {
-              return tables;
-            }
-          }
+    return authState.when(
+      initial: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      unauthenticated: () {
+        if (!_isLoggingOut) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => LoginPage()),
+              (route) => false,
+            );
+          });
         }
-      }
-
-      return null; // No tables found at all
-    } catch (e, stackTrace) {
-      print('Error getting default table: $e\n$stackTrace');
-      return null;
-    }
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      },
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
+        cashDrawerPinNeeded,
+        cashDrawerPin,
+      ) {
+        return Scaffold(
+          body: Row(
+            children: [
+              _buildNavigationSidebar(),
+              Expanded(
+                child: KitchenScreen(
+                  autoRefresh: true,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  Future<bool> showOrderDiscardConfirmationDialog(BuildContext context) async {
-    return await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-                  title: const Text('Discard Order?'),
-                  content: const Text(
-                      'You have items in your current order. Navigating away will delete it. Do you want to continue?'),
-                  actions: [
-                    TextButton(
-                      child: const Text('Cancel'),
-                      onPressed: () => Navigator.of(context).pop(false),
-                    ),
-                    ElevatedButton(
-                      child: const Text('Yes, Discard'),
-                      onPressed: () => Navigator.of(context).pop(true),
-                    ),
-                  ],
-                )) ??
-        false;
+  Widget _buildNavigationSidebar() {
+    return Container(
+      width: 100,
+      color: Colors.white,
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              child: Image.asset(
+                'assets/logo-shiokpos.png',
+                width: 60,
+                height: 60,
+              ),
+            ),
+          ),
+          const Spacer(),
+          _buildNavItem(-1, 'assets/img-sidebar-logout.png', 'Logout', _logout),
+        ],
+      ),
+    );
   }
 
-  double calculateOrderSubtotal(Map<String, dynamic> order) {
-    return (order['items'] as List).fold(0.0, (sum, item) {
-      return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
-    });
-  }
-
-  double calculateOrderTax(Map<String, dynamic> order) {
-    return calculateOrderSubtotal(order) * 0.06; // 6% GST
-  }
-
-  double calculateOrderTotal(Map<String, dynamic> order) {
-    return calculateOrderSubtotal(order) + calculateOrderTax(order);
+  Widget _buildNavItem(
+    int index,
+    String imagePath,
+    String label, [
+    VoidCallback? action,
+  ]) {
+    return GestureDetector(
+      onTap: action,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          children: [
+            Image.asset(
+              imagePath,
+              color: const Color(0xFF555555),
+              width: 40,
+              height: 40,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF555555),
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -1,4 +1,4 @@
-package com.nicholas.shiok_pos_android_app
+package com.nicholas.shiok_pos_android_app_kitchen
 
 import android.view.View
 import android.widget.ImageView

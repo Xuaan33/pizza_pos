@@ -23,7 +23,7 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Shiok POS Android App',
+      title: 'Shiok POS Android App - Kitchen Display',
       theme: ThemeData(primarySwatch: Colors.blue, fontFamily: 'Raleway'),
       home: appInitState.when(
         initial: () => const WelcomeScreen(),

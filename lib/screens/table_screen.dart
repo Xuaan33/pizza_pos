@@ -253,7 +253,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
               // Use the original context (not dialogContext) to find MainLayout
               final mainLayout = MainLayout.of(context);
               if (mainLayout != null) {
-                mainLayout.setSelectedTabIndex(3);
+                // mainLayout.setSelectedTabIndex(3);
               } else {
                 print('MainLayout.of(context) returned null');
               }
