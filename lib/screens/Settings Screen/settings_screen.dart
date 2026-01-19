@@ -54,6 +54,22 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
   UsbDevice? _selectedUsbDevice;
   String _selectedConnectionType = 'TCP/IP'; // 'TCP/IP' or 'Wired'
 
+  // Printer Configuration
+  String _selectedPrinterType = 'network'; // 'network' or 'usb'
+  List<Map<String, dynamic>> _networkPrinters = [];
+  bool _isLoadingPrinters = false;
+  bool _isTestingPrinter = false;
+  String? _testingPrinterId;
+
+// Add/Edit Printer Dialog Controllers
+  final TextEditingController _printerNameController = TextEditingController();
+  final TextEditingController _printerIpController = TextEditingController();
+  final TextEditingController _printerPortController =
+      TextEditingController(text: '9100');
+  bool _printReceipt = true;
+  bool _printOrder = false;
+  String? _editingPrinterId;
+
   // Employee Management
   List<Map<String, dynamic>> _employees = [];
   bool _isEmployeeLoading = false;
@@ -63,6 +79,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
     final sections = [
       'POS Opening & Closing',
       'POS Card Terminal',
+      'Printer Configuration',
       'Item Group',
       'Item',
       'Variant',
@@ -81,9 +98,11 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _employeeSearchController = TextEditingController();
-    _loadSavedConfig(); // Load saved config when widget initializes
-    _loadEmployees(); // Load employees when screen initializes
+    _loadSavedConfig();
+    _loadEmployees();
     _loadConfiguration();
+    _loadPrinterConfiguration();
+    _loadNetworkPrinters();
   }
 
   @override
@@ -91,6 +110,9 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
     _ipController.dispose();
     _portController.dispose();
     _employeeSearchController.dispose();
+    _printerNameController.dispose();
+    _printerIpController.dispose();
+    _printerPortController.dispose();
     super.dispose();
   }
 
@@ -124,6 +146,455 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
   //     await _discoverUsbDevices();
   //   }
   // }
+
+  // ============== Printer Configuration Methods ==============
+
+  Future<void> _loadPrinterConfiguration() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedPrinterType =
+          prefs.getString('printer_connection_type') ?? 'network';
+    });
+  }
+
+  Future<void> _loadNetworkPrinters() async {
+    setState(() => _isLoadingPrinters = true);
+
+    try {
+      final printers = await ReceiptPrinter.getConfiguredPrinters();
+      setState(() {
+        _networkPrinters = printers
+            .map((p) => <String, dynamic>{
+                  'id': p.id,
+                  'name': p.name,
+                  'ip': p.ip,
+                  'port': p.port,
+                  'isEnabled': p.isEnabled,
+                  'printReceipt': p.printReceipt,
+                  'printOrder': p.printOrder,
+                })
+            .toList();
+      });
+    } catch (e) {
+      debugPrint('Error loading printers: $e');
+    } finally {
+      setState(() => _isLoadingPrinters = false);
+    }
+  }
+
+  Future<void> _savePrinterConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('printer_connection_type', _selectedPrinterType);
+
+      Fluttertoast.showToast(
+        msg: "Printer configuration saved successfully",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save printer configuration: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _saveNetworkPrinters() async {
+    try {
+      final printers = _networkPrinters
+          .map((p) => PrinterConfig(
+                id: p['id'],
+                name: p['name'],
+                ip: p['ip'],
+                port: p['port'],
+                isEnabled: p['isEnabled'],
+                printReceipt: p['printReceipt'],
+                printOrder: p['printOrder'],
+              ))
+          .toList();
+
+      await ReceiptPrinter.saveConfiguredPrinters(printers);
+
+      Fluttertoast.showToast(
+        msg: "Printers saved successfully",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save printers: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _testPrinter(String printerId) async {
+    setState(() {
+      _isTestingPrinter = true;
+      _testingPrinterId = printerId;
+    });
+
+    try {
+      final printer = _networkPrinters.firstWhere((p) => p['id'] == printerId);
+      final printerConfig = PrinterConfig(
+        id: printer['id'],
+        name: printer['name'],
+        ip: printer['ip'],
+        port: printer['port'],
+        isEnabled: printer['isEnabled'],
+        printReceipt: printer['printReceipt'],
+        printOrder: printer['printOrder'],
+      );
+
+      final result =
+          await ReceiptPrinter.testNetworkPrinterConnection(printerConfig);
+
+      Fluttertoast.showToast(
+        msg: result
+            ? '${printer['name']}: Connection successful!'
+            : '${printer['name']}: Connection failed',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: result ? Colors.green : Colors.red,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Test failed: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() {
+        _isTestingPrinter = false;
+        _testingPrinterId = null;
+      });
+    }
+  }
+
+  Future<void> _testAllPrinters() async {
+    setState(() => _isTestingPrinter = true);
+
+    try {
+      final results = await ReceiptPrinter.testAllPrinters();
+
+      final successful = results.values.where((v) => v).length;
+      final total = results.length;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Test Results'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tested $total printer(s)'),
+              Text('✅ Successful: $successful'),
+              Text('❌ Failed: ${total - successful}'),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              ...results.entries.map((entry) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          entry.value ? Icons.check_circle : Icons.cancel,
+                          color: entry.value ? Colors.green : Colors.red,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(entry.key)),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'Test failed: $e',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    } finally {
+      setState(() => _isTestingPrinter = false);
+    }
+  }
+
+  void _showAddEditPrinterDialog({Map<String, dynamic>? printer}) {
+    final isEditing = printer != null;
+
+    if (isEditing) {
+      _editingPrinterId = printer['id'];
+      _printerNameController.text = printer['name'];
+      _printerIpController.text = printer['ip'];
+      _printerPortController.text = printer['port'].toString();
+      _printReceipt = printer['printReceipt'];
+      _printOrder = printer['printOrder'];
+    } else {
+      _editingPrinterId = null;
+      _printerNameController.clear();
+      _printerIpController.clear();
+      _printerPortController.text = '9100';
+
+      // Default behavior based on number of existing printers
+      if (_networkPrinters.isEmpty) {
+        // First printer: default to both
+        _printReceipt = true;
+        _printOrder = true;
+      } else {
+        // Additional printers: default to receipt only
+        _printReceipt = true;
+        _printOrder = false;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(
+            isEditing ? 'Edit Printer' : 'Add Printer',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.white,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _printerNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Printer Name',
+                    hintText: 'e.g., Kitchen Printer',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _printerIpController,
+                  decoration: const InputDecoration(
+                    labelText: 'IP Address',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _printerPortController,
+                  decoration: const InputDecoration(
+                    labelText: 'Port',
+                    hintText: '9100',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'What should this printer print?',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  title: const Text(
+                    'Print Receipt',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Customer receipts'),
+                  value: _printReceipt,
+                  onChanged: (value) {
+                    setState(() {
+                      _printReceipt = value ?? true;
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                CheckboxListTile(
+                  title: const Text(
+                    'Print Order',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Kitchen orders'),
+                  value: _printOrder,
+                  onChanged: (value) {
+                    setState(() {
+                      _printOrder = value ?? false;
+                    });
+                  },
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (!_printReceipt && !_printOrder)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning,
+                            color: Colors.orange[700], size: 20),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'At least one option must be selected',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: (!_printReceipt && !_printOrder)
+                  ? null
+                  : () {
+                      _savePrinter(isEditing);
+                      Navigator.pop(context);
+                    },
+              child: Text(
+                isEditing ? 'Save' : 'Add',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _savePrinter(bool isEditing) {
+    final name = _printerNameController.text.trim();
+    final ip = _printerIpController.text.trim();
+    final port = int.tryParse(_printerPortController.text.trim()) ?? 9100;
+
+    if (name.isEmpty || ip.isEmpty) {
+      Fluttertoast.showToast(
+        msg: "Please fill in all fields",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    if (!_printReceipt && !_printOrder) {
+      Fluttertoast.showToast(
+        msg: "Please select at least one print option",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    if (isEditing) {
+      // Update existing printer
+      final index =
+          _networkPrinters.indexWhere((p) => p['id'] == _editingPrinterId);
+      if (index != -1) {
+        setState(() {
+          _networkPrinters[index] = <String, dynamic>{
+            'id': _editingPrinterId!,
+            'name': name,
+            'ip': ip,
+            'port': port,
+            'isEnabled': _networkPrinters[index]['isEnabled'],
+            'printReceipt': _printReceipt,
+            'printOrder': _printOrder,
+          };
+        });
+      }
+    } else {
+      // Add new printer
+      final id = DateTime.now().millisecondsSinceEpoch.toString();
+      setState(() {
+        _networkPrinters.add(<String, dynamic>{
+          'id': id,
+          'name': name,
+          'ip': ip,
+          'port': port,
+          'isEnabled': true,
+          'printReceipt': _printReceipt,
+          'printOrder': _printOrder,
+        });
+      });
+    }
+
+    _saveNetworkPrinters();
+  }
+
+  void _deletePrinter(String printerId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Printer'),
+        content: const Text('Are you sure you want to delete this printer?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              setState(() {
+                _networkPrinters.removeWhere((p) => p['id'] == printerId);
+              });
+              _saveNetworkPrinters();
+              Navigator.pop(context);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _togglePrinterEnabled(String printerId, bool enabled) {
+    final index = _networkPrinters.indexWhere((p) => p['id'] == printerId);
+    if (index != -1) {
+      setState(() {
+        _networkPrinters[index]['isEnabled'] = enabled;
+      });
+      _saveNetworkPrinters();
+    }
+  }
 
   Future<void> _discoverUsbDevices() async {
     try {
@@ -638,7 +1109,8 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getEmployees());
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getEmployees());
           if (response['success'] == true) {
             if (mounted) {
               setState(() {
@@ -675,10 +1147,11 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _employeeCheckIn(String employeeId, String branch) async {
     try {
       setState(() => _isEmployeeLoading = true);
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().employeeCheckIn(
-        employee: employeeId,
-        branch: branch,
-      ));
+      final response = await MainLayout.of(context)!
+          .safeExecuteAPICall(() => PosService().employeeCheckIn(
+                employee: employeeId,
+                branch: branch,
+              ));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -706,10 +1179,11 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _employeeCheckOut(String employeeId, String branch) async {
     try {
       setState(() => _isEmployeeLoading = true);
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().employeeCheckOut(
-        employee: employeeId,
-        branch: branch,
-      ));
+      final response = await MainLayout.of(context)!
+          .safeExecuteAPICall(() => PosService().employeeCheckOut(
+                employee: employeeId,
+                branch: branch,
+              ));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -817,6 +1291,8 @@ Future<void> _discoverUsbDevices() async {
         return _buildPosOpeningClosingSection(hasOpening);
       case 'POS Card Terminal':
         return _buildPosTerminalSection();
+      case 'Printer Configuration':
+        return _buildPrinterConfigurationSection();
       case 'Item Group':
         return _buildItemGroupSection();
       case 'Item':
@@ -983,6 +1459,412 @@ Future<void> _discoverUsbDevices() async {
     );
   }
 
+  Widget _buildPrinterConfigurationSection() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Printer Configuration',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              if (_selectedPrinterType == 'network' &&
+                  _networkPrinters.isNotEmpty)
+                ElevatedButton.icon(
+                  onPressed: _isTestingPrinter ? null : _testAllPrinters,
+                  icon: _isTestingPrinter
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.playlist_add_check, size: 20),
+                  label: const Text('Test All'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildPrinterTypeSelector(),
+          const SizedBox(height: 20),
+          if (_selectedPrinterType == 'network')
+            _buildNetworkPrintersManagement()
+          else
+            _buildUsbPrinterInfo(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrinterTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Printer Connection Type',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: ListTile(
+                title: const Text('Network (Wireless)'),
+                subtitle: const Text('Multiple printers via WiFi/LAN'),
+                leading: Radio<String>(
+                  value: 'network',
+                  groupValue: _selectedPrinterType,
+                  onChanged: (value) {
+                    setState(() => _selectedPrinterType = value!);
+                    _savePrinterConfig();
+                  },
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListTile(
+                title: const Text('USB (Wired)'),
+                subtitle: const Text('Direct USB connection'),
+                leading: Radio<String>(
+                  value: 'usb',
+                  groupValue: _selectedPrinterType,
+                  onChanged: (value) {
+                    setState(() => _selectedPrinterType = value!);
+                    _savePrinterConfig();
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNetworkPrintersManagement() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Network Printers',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => _showAddEditPrinterDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Printer', style: TextStyle(fontWeight: FontWeight.bold),),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2196F3),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_isLoadingPrinters)
+          const Center(child: CircularProgressIndicator())
+        else if (_networkPrinters.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.print_disabled, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No printers configured',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Add Printer" to configure your first printer',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _networkPrinters.length,
+            itemBuilder: (context, index) {
+              final printer = _networkPrinters[index];
+              return _buildPrinterCard(printer);
+            },
+          ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue[700]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Printer Configuration Tips',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildTipItem(
+                  'If you have only 1 printer, check both Receipt and Order'),
+              _buildTipItem(
+                  'For multiple printers, configure each one\'s purpose'),
+              _buildTipItem('Receipt printers: Print customer receipts'),
+              _buildTipItem('Order printers: Print kitchen orders'),
+              _buildTipItem(
+                  'Multiple printers with same purpose will print simultaneously'),
+              _buildTipItem(
+                  'Default port is usually 9100 for ESC/POS printers'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPrinterCard(Map<String, dynamic> printer) {
+    final isEnabled = printer['isEnabled'] as bool;
+    final isTesting = _isTestingPrinter && _testingPrinterId == printer['id'];
+    final printReceipt = printer['printReceipt'] as bool;
+    final printOrder = printer['printOrder'] as bool;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12, left: 5, right: 5),
+      elevation: isEnabled ? 2 : 0,
+      color: isEnabled
+          ? const Color.fromARGB(255, 253, 252, 239)
+          : Colors.grey[100],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.print, color: Colors.blue[700]),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        printer['name'],
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isEnabled ? Colors.black : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${printer['ip']}:${printer['port']}',
+                        style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: isEnabled,
+                  onChanged: (value) =>
+                      _togglePrinterEnabled(printer['id'], value),
+                  activeColor: Colors.green,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Print capabilities chips
+            Wrap(
+              spacing: 8,
+              children: [
+                if (printReceipt)
+                  Chip(
+                    label: const Text('Receipt'),
+                    avatar: const Icon(Icons.receipt_long, size: 16),
+                    backgroundColor: Colors.green[50],
+                    labelStyle: TextStyle(
+                        color: Colors.green[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
+                if (printOrder)
+                  Chip(
+                    label: const Text('Order'),
+                    avatar: const Icon(Icons.restaurant, size: 16),
+                    backgroundColor: Colors.orange[50],
+                    labelStyle: TextStyle(
+                        color: Colors.orange[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        isTesting ? null : () => _testPrinter(printer['id']),
+                    icon: isTesting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.wifi_find, size: 16),
+                    label: Text(
+                      isTesting ? 'Testing...' : 'Test',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _showAddEditPrinterDialog(printer: printer),
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text(
+                      'Edit',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _deletePrinter(printer['id']),
+                    icon: const Icon(Icons.delete, size: 16),
+                    label: const Text(
+                      'Delete',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUsbPrinterInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'USB Printer Settings',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.usb, color: Colors.grey[700], size: 32),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'USB Printer Mode',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildTipItem('Connect your thermal printer via USB cable'),
+              _buildTipItem(
+                  'The app will automatically detect the USB printer'),
+              _buildTipItem('USB printer will print both receipts and orders'),
+              _buildTipItem('For multiple printers, use Network mode'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTipItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontSize: 16)),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemGroupSection() {
     return ScrollConfiguration(
       behavior: NoStretchScrollBehavior(),
@@ -1086,22 +1968,24 @@ Future<void> _discoverUsbDevices() async {
                         itemBuilder: (context, index) {
                           final employee = _employees[index];
                           debugPrint("EMPLOYEE TEST: $employee");
-                          
+
                           final status = employee['status'] ?? 'Unknown';
                           final isCheckedIn = status == 'Checked In';
                           final checkedInOutAt = employee['checked_in_out_at'];
-                          
+
                           // Format the timestamp
                           String formattedTime = '';
                           if (checkedInOutAt != null) {
                             try {
-                              final dateTime = DateTime.parse(checkedInOutAt.toString());
-                              formattedTime = DateFormat('hh:mm a MM/dd/yy').format(dateTime);
+                              final dateTime =
+                                  DateTime.parse(checkedInOutAt.toString());
+                              formattedTime = DateFormat('hh:mm a MM/dd/yy')
+                                  .format(dateTime);
                             } catch (e) {
                               formattedTime = checkedInOutAt.toString();
                             }
                           }
-                          
+
                           return Card(
                             margin: const EdgeInsets.symmetric(vertical: 8),
                             child: ListTile(
@@ -1111,15 +1995,20 @@ Future<void> _discoverUsbDevices() async {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (employee['designation'] != null && employee['designation'].toString().isNotEmpty)
+                                  if (employee['designation'] != null &&
+                                      employee['designation']
+                                          .toString()
+                                          .isNotEmpty)
                                     Text(employee['designation']),
                                   if (formattedTime.isNotEmpty)
                                     Text(
-                                      isCheckedIn 
+                                      isCheckedIn
                                           ? 'Clocked in: $formattedTime'
                                           : 'Clocked out: $formattedTime',
                                       style: TextStyle(
-                                        color: isCheckedIn ? Colors.green : Colors.grey,
+                                        color: isCheckedIn
+                                            ? Colors.green
+                                            : Colors.grey,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
                                       ),
@@ -1317,9 +2206,10 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().requestClosingVoucher(
-            posProfile: posProfile,
-          ));
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().requestClosingVoucher(
+                    posProfile: posProfile,
+                  ));
 
           if (mounted) {
             showDialog(
