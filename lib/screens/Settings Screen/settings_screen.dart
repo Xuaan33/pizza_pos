@@ -74,6 +74,11 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _printOrder = false;
   String? _editingPrinterId;
 
+  // Kitchen stations
+  List<String> _availableKitchenStations = [];
+  bool _isLoadingKitchenStations = false;
+  List<String> _selectedKitchenStations = [];
+
   // Employee Management
   List<Map<String, dynamic>> _employees = [];
   bool _isEmployeeLoading = false;
@@ -106,6 +111,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadEmployees();
     _loadConfiguration();
     _loadPrinterConfiguration();
+    _loadAvailableKitchenStations();
     _loadNetworkPrinters();
     _loadUsbPrinterConfiguration();
   }
@@ -151,6 +157,62 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
   //     await _discoverUsbDevices();
   //   }
   // }
+
+  Future<void> _loadAvailableKitchenStations() async {
+    setState(() => _isLoadingKitchenStations = true);
+
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
+        cashDrawerPinNeeded,
+        cashDrawerPin,
+      ) async {
+        try {
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getKitchenStations(
+                    posProfile: posProfile,
+                  ));
+
+          if (response['success'] == true && mounted) {
+            final stations = (response['message'] as List?) ?? [];
+            setState(() {
+              _availableKitchenStations = stations
+                  .map((s) => s['name'] as String)
+                  .where((name) => name != 'GRAB') // Exclude GRAB
+                  .toList();
+            });
+            debugPrint(
+                '✅ Loaded ${_availableKitchenStations.length} kitchen stations');
+          }
+        } catch (e) {
+          debugPrint('Error loading kitchen stations: $e');
+        }
+      },
+    );
+
+    if (mounted) {
+      setState(() => _isLoadingKitchenStations = false);
+    }
+  }
 
   // ============== Printer Configuration Methods ==============
 
@@ -215,6 +277,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
                   'isEnabled': p.isEnabled,
                   'printReceipt': p.printReceipt,
                   'printOrder': p.printOrder,
+                  'kitchenStations': p.kitchenStations,
                 })
             .toList();
       });
@@ -257,6 +320,9 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
                 isEnabled: p['isEnabled'],
                 printReceipt: p['printReceipt'],
                 printOrder: p['printOrder'],
+                kitchenStations: p['kitchenStations'] != null
+                    ? List<String>.from(p['kitchenStations'])
+                    : [],
               ))
           .toList();
 
@@ -391,6 +457,11 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
       _printerPortController.text = printer['port'].toString();
       _printReceipt = printer['printReceipt'];
       _printOrder = printer['printOrder'];
+
+      // Load kitchen stations from printer config
+      _selectedKitchenStations = printer['kitchenStations'] != null
+          ? List<String>.from(printer['kitchenStations'])
+          : [];
     } else {
       _editingPrinterId = null;
       _printerNameController.clear();
@@ -407,6 +478,9 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
         _printReceipt = true;
         _printOrder = false;
       }
+
+      // Clear selected stations for new printer
+      _selectedKitchenStations = [];
     }
 
     showDialog(
@@ -415,7 +489,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
         builder: (context, setState) => AlertDialog(
           title: Text(
             isEditing ? 'Edit Printer' : 'Add Printer',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           backgroundColor: Colors.white,
           content: SingleChildScrollView(
@@ -484,11 +558,210 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onChanged: (value) {
                     setState(() {
                       _printOrder = value ?? false;
+                      // Clear stations if print order is disabled
+                      if (!_printOrder) {
+                        _selectedKitchenStations = [];
+                      }
                     });
                   },
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
                 ),
+
+                // ============ NEW: Kitchen Stations Section ============
+                if (_printOrder) ...[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[100],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(Icons.restaurant,
+                            size: 18, color: Colors.orange[700]),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Kitchen Stations',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  Text(
+                    'Select which stations this printer will handle:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // All Stations Option
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _selectedKitchenStations.isEmpty
+                          ? Colors.blue[50]
+                          : Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _selectedKitchenStations.isEmpty
+                            ? Colors.blue[300]!
+                            : Colors.grey[300]!,
+                      ),
+                    ),
+                    child: CheckboxListTile(
+                      title: const Text(
+                        'All Stations',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text(
+                        'Print orders from all kitchen stations',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      value: _selectedKitchenStations.isEmpty,
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      onChanged: (value) {
+                        setState(() {
+                          if (value == true) {
+                            _selectedKitchenStations = [];
+                          }
+                        });
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Text(
+                    'Or select specific stations:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Individual Station Checkboxes
+                  if (_isLoadingKitchenStations)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_availableKitchenStations.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.orange[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              size: 16, color: Colors.orange[700]),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'No kitchen stations configured in your system',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: _availableKitchenStations.map((station) {
+                            final isSelected =
+                                _selectedKitchenStations.contains(station);
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: isSelected ? Colors.orange[50] : null,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.grey[200]!,
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                              child: CheckboxListTile(
+                                title: Text(
+                                  station,
+                                  style: TextStyle(
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                                value: isSelected,
+                                dense: true,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                onChanged: (value) {
+                                  setState(() {
+                                    if (value == true) {
+                                      _selectedKitchenStations.add(station);
+                                    } else {
+                                      _selectedKitchenStations.remove(station);
+                                    }
+                                  });
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+
+                  // Show selected count
+                  if (_selectedKitchenStations.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.green[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              size: 16, color: Colors.green[700]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${_selectedKitchenStations.length} station(s) selected: ${_selectedKitchenStations.join(", ")}',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+
+                // Warning if nothing selected
                 if (!_printReceipt && !_printOrder)
                   Container(
                     padding: const EdgeInsets.all(8),
@@ -532,7 +805,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
                     },
               child: Text(
                 isEditing ? 'Save' : 'Add',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -580,6 +853,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
             'isEnabled': _networkPrinters[index]['isEnabled'],
             'printReceipt': _printReceipt,
             'printOrder': _printOrder,
+            'kitchenStations': _selectedKitchenStations,
           };
         });
       }
@@ -595,6 +869,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
           'isEnabled': true,
           'printReceipt': _printReceipt,
           'printOrder': _printOrder,
+          'kitchenStations': _selectedKitchenStations,
         });
       });
     }
@@ -1715,6 +1990,11 @@ Future<void> _discoverUsbDevices() async {
     final printReceipt = printer['printReceipt'] as bool;
     final printOrder = printer['printOrder'] as bool;
 
+    // NEW: Get kitchen stations
+    final kitchenStations = printer['kitchenStations'] != null
+        ? List<String>.from(printer['kitchenStations'])
+        : <String>[];
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12, left: 5, right: 5),
       elevation: isEnabled ? 2 : 0,
@@ -1773,6 +2053,7 @@ Future<void> _discoverUsbDevices() async {
             // Print capabilities chips
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
                 if (printReceipt)
                   Chip(
@@ -1784,7 +2065,7 @@ Future<void> _discoverUsbDevices() async {
                         fontSize: 12,
                         fontWeight: FontWeight.bold),
                   ),
-                if (printOrder)
+                if (printOrder) ...[
                   Chip(
                     label: const Text('Order'),
                     avatar: const Icon(Icons.restaurant, size: 16),
@@ -1794,6 +2075,32 @@ Future<void> _discoverUsbDevices() async {
                         fontSize: 12,
                         fontWeight: FontWeight.bold),
                   ),
+
+                  // ============ NEW: Kitchen Stations Chips ============
+                  if (kitchenStations.isEmpty)
+                    // Show "All Stations" if no specific stations selected
+                    Chip(
+                      label: const Text('All Stations'),
+                      avatar: const Icon(Icons.done_all, size: 16),
+                      backgroundColor: Colors.blue[50],
+                      labelStyle: TextStyle(
+                          color: Colors.blue[700],
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
+                    )
+                  else
+                    // Show individual station chips
+                    ...kitchenStations.map((station) => Chip(
+                          label: Text(station),
+                          avatar: const Icon(Icons.location_on, size: 14),
+                          backgroundColor: Colors.purple[50],
+                          labelStyle: TextStyle(
+                              color: Colors.purple[700],
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        )),
+                ],
               ],
             ),
 
@@ -1813,7 +2120,7 @@ Future<void> _discoverUsbDevices() async {
                         : const Icon(Icons.wifi_find, size: 16),
                     label: Text(
                       isTesting ? 'Testing...' : 'Test',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.orange,

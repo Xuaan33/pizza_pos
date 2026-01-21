@@ -86,6 +86,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool _isLoadingAllOrders = false;
   List<String> _kitchenStations = [];
 
+  // ============ NEW: Dashboard refresh callback ============
+  VoidCallback? _dashboardRefreshCallback;
+
   @override
   void initState() {
     super.initState();
@@ -179,9 +182,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
     _globalGrabRefreshTimer =
         Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (mounted) {
-        _refreshGlobalGrabOrders();
+      if (!mounted) {
+        timer.cancel();
+        return;
       }
+      _refreshGlobalGrabOrders();
     });
   }
 
@@ -195,9 +200,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     _allOrdersRefreshTimer?.cancel();
     _allOrdersRefreshTimer =
         Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (mounted) {
-        _refreshAllOrders();
+      if (!mounted) {
+        timer.cancel();
+        return;
       }
+      _refreshAllOrders();
     });
   }
 
@@ -219,6 +226,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _performGrabRefresh() async {
+    if (!mounted) return; // Early return if not mounted
     _isLoadingGlobalGrab = true;
 
     try {
@@ -248,6 +256,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           cashDrawerPin,
         ) async {
           try {
+            if (!mounted) return; // Early return if not mounted
             final fromDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
             final toDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
@@ -302,7 +311,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         },
       );
     } finally {
-      _isLoadingGlobalGrab = false;
+      if (mounted) {
+        _isLoadingGlobalGrab = false;
+      }
     }
   }
 
@@ -365,6 +376,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _performAllOrdersRefresh() async {
+    if (!mounted) return; // Early return if not mounted
+
     _isLoadingAllOrders = true;
 
     try {
@@ -394,6 +407,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           cashDrawerPin,
         ) async {
           try {
+            if (!mounted) return; // Early return if not mounted
             final fromDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
             final toDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
@@ -505,7 +519,29 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         },
       );
     } finally {
-      _isLoadingAllOrders = false;
+      if (mounted) {
+        _isLoadingAllOrders = false;
+      }
+    }
+  }
+
+  /// Register dashboard refresh callback
+  void registerDashboardRefreshCallback(VoidCallback callback) {
+    _dashboardRefreshCallback = callback;
+    debugPrint('✅ Dashboard refresh callback registered');
+  }
+
+  /// Unregister dashboard refresh callback
+  void unregisterDashboardRefreshCallback() {
+    _dashboardRefreshCallback = null;
+    debugPrint('🛑 Dashboard refresh callback unregistered');
+  }
+
+  /// Trigger dashboard refresh
+  void _triggerDashboardRefresh() {
+    if (_dashboardRefreshCallback != null) {
+      debugPrint('🔄 Triggering dashboard refresh from notification...');
+      _dashboardRefreshCallback!();
     }
   }
 
@@ -571,22 +607,23 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Future<void> _processApiQueue() async {
-    if (_apiQueue.isEmpty) {
+    if (_apiQueue.isEmpty || !mounted) {
       _isProcessingQueue = false;
       return;
     }
 
     _isProcessingQueue = true;
 
-    while (_apiQueue.isNotEmpty) {
+    while (_apiQueue.isNotEmpty && mounted) {
       final apiCall = _apiQueue.removeAt(0);
 
       try {
-        // Execute the API call
         await apiCall();
 
         // Small delay between API calls to prevent overwhelming the server
-        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
       } catch (e) {
         print('❌ Error in API queue: $e');
       }
@@ -618,6 +655,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     try {
       final orderId = order['name']?.toString() ?? 'Unknown';
       final customerName = order['customer_name']?.toString() ?? 'Customer';
+
+      // ============ Trigger dashboard refresh ============
+      _triggerDashboardRefresh();
 
       // Show custom in-app notification overlay
       if (mounted && context.mounted) {
@@ -685,6 +725,9 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             .read(kitchenNotificationsProvider.notifier)
             .markAsNotified(orderId);
       }
+
+      // ============ Trigger dashboard refresh ============
+      _triggerDashboardRefresh();
 
       if (mounted && context.mounted) {
         // Show notification overlay
@@ -792,9 +835,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     _ordersScrollController.removeListener(_onOrdersScroll);
     _ordersScrollController.dispose();
     _globalGrabRefreshTimer?.cancel();
-    _allOrdersRefreshTimer?.cancel(); // Add this line
+    _allOrdersRefreshTimer?.cancel();
+
+    // Clear the API queue
+    _apiQueue.clear();
+    _isProcessingQueue = false;
+
     GrabNotificationOverlay.dispose();
-    KitchenNotificationOverlay.dispose(); // Add this line
+    KitchenNotificationOverlay.dispose();
     super.dispose();
   }
 

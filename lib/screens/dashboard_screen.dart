@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
@@ -18,24 +20,71 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  late Future<Map<String, dynamic>> _dashboardData;
+  Map<String, dynamic>? _dashboardData;
+  double _payLaterAmount = 0.0;
+  bool _isInitialLoading = true;
+  bool _isBackgroundRefreshing = false;
+
   late String _posProfile;
   String baseImageUrl = '';
-  String _selectedTimeRange = 'Daily'; // 'Daily', 'Weekly', 'Monthly', 'Custom'
+  String _selectedTimeRange = 'Daily';
   DateTimeRange? _customDateRange;
   DateTime _selectedDate = DateTime.now();
   String _selectedPopularItemsLimit = '10';
-  // String _selectedVouchersLimit = '10';
-  // int _customVouchersLimit = 10;
   int _customLimit = 10;
-  late Future<double> _payLaterData;
+
+  // Real-time refresh
+  Timer? _dashboardRefreshTimer;
+  Timer? _payLaterRefreshTimer;
+  bool _isRefreshing = false;
+  MainLayoutState? _mainLayout; // Add this to store MainLayout reference
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Store MainLayout reference when dependencies change
+    _mainLayout = MainLayout.of(context);
+  }
 
   @override
   void initState() {
     super.initState();
     _loadBaseUrl();
+
+    // Initial load
     _loadData();
     _loadPayLaterData();
+
+    // Start timers after initial load completes (prevent overlap)
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _startDashboardRefreshTimer();
+        _startPayLaterRefreshTimer();
+      }
+    });
+
+    // Register for notification-triggered refresh
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Use the stored reference from didChangeDependencies
+      if (_mainLayout != null && mounted) {
+        _mainLayout!.registerDashboardRefreshCallback(_onNotificationRefresh);
+        debugPrint('✅ Dashboard registered for notification refresh');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop timers
+    _stopDashboardRefreshTimer();
+    _stopPayLaterRefreshTimer();
+
+    // ============ FIXED: Use stored reference instead of MainLayout.of(context) ============
+    if (_mainLayout != null) {
+      _mainLayout!.unregisterDashboardRefreshCallback();
+    }
+
+    super.dispose();
   }
 
   Future<void> _loadBaseUrl() async {
@@ -43,16 +92,55 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     setState(() {}); // Refresh UI
   }
 
-  void _loadData() {
-    setState(() {
-      _dashboardData = _loadDashboardData();
-    });
+  /// Load dashboard data smoothly in background (no flicker)
+  Future<void> _loadData() async {
+    try {
+      // Don't clear existing data - prevents flicker
+      if (_dashboardData == null) {
+        _isInitialLoading = true;
+      } else {
+        _isBackgroundRefreshing = true;
+      }
+
+      // Load new data in background
+      final newData = await _loadDashboardData();
+
+      // Update data smoothly (only if widget is still mounted)
+      if (mounted) {
+        setState(() {
+          _dashboardData = newData;
+          _isInitialLoading = false;
+          _isBackgroundRefreshing = false;
+        });
+        debugPrint('✅ Dashboard data updated smoothly');
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading dashboard data: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
+          _isBackgroundRefreshing = false;
+        });
+      }
+    }
   }
 
-  void _loadPayLaterData() {
-    setState(() {
-      _payLaterData = _loadPayLaterAmount();
-    });
+  Future<void> _loadPayLaterData() async {
+    try {
+      // Load new data in background
+      final newAmount = await _loadPayLaterAmount();
+
+      // Update data smoothly (only if widget is still mounted)
+      if (mounted) {
+        setState(() {
+          _payLaterAmount = newAmount;
+        });
+        debugPrint(
+            '✅ Pay Later amount updated smoothly: \$${newAmount.toStringAsFixed(2)}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading pay later data: $e');
+    }
   }
 
   Future<double> _loadPayLaterAmount() async {
@@ -82,11 +170,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getOrders(
-            posProfile: posProfile,
-            status: 'Draft',
-            pageLength: 1000,
-          ));
+          final response = await MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getOrders(
+                    posProfile: posProfile,
+                    status: 'Draft',
+                    pageLength: 1000,
+                  ));
           // Check if message exists and what it contains
           if (response['message'] == null) {
             print('ERROR: message field is null');
@@ -225,35 +314,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         // Fetch all data concurrently - UPDATED: Now 7 futures
         final results = await Future.wait([
           // 0: Total sales
-          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
-            endpoint:
-                'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-          )),
+          MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().makeRequest(
+                    endpoint:
+                        'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
+                  )),
           // 1: Peak time
-          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
-            endpoint:
-                'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-          )),
+          MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().makeRequest(
+                    endpoint:
+                        'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
+                  )),
           // 2: Today info
-          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getTodayInfo()),
+          MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().getTodayInfo()),
           // 3: Revenue data
-          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
-            endpoint: 'shiok_pos.api.get_revenue?'
-                'pos_profile=$posProfile&'
-                'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
-                'xaxis=$xaxisParam',
-          )),
+          MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().makeRequest(
+                    endpoint: 'shiok_pos.api.get_revenue?'
+                        'pos_profile=$posProfile&'
+                        'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
+                        'xaxis=$xaxisParam',
+                  )),
           // 4: Popular items
-          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().makeRequest(
-            endpoint:
-                'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
-          )),
+          MainLayout.of(context)!
+              .safeExecuteAPICall(() => PosService().makeRequest(
+                    endpoint:
+                        'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
+                  )),
           // 5: Payment methods
-          MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getPaymentMethodDistribution(
-            posProfile: posProfile,
-            fromDate: dateFormat.format(fromDate),
-            toDate: dateFormat.format(toDate),
-          )),
+          MainLayout.of(context)!.safeExecuteAPICall(
+              () => PosService().getPaymentMethodDistribution(
+                    posProfile: posProfile,
+                    fromDate: dateFormat.format(fromDate),
+                    toDate: dateFormat.format(toDate),
+                  )),
           // 6: Applied vouchers
           // PosService().getAppliedUserVouchers(
           //   posProfile: posProfile,
@@ -296,6 +391,107 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       },
       orElse: () => Future.value(<String, dynamic>{}),
     );
+  }
+
+  // ============ DASHBOARD AUTO-REFRESH TIMER ============
+  void _startDashboardRefreshTimer() {
+    _dashboardRefreshTimer?.cancel();
+    _dashboardRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (timer) {
+        if (mounted && !_isRefreshing) {
+          _refreshDashboardData();
+        }
+      },
+    );
+    debugPrint('✅ Dashboard auto-refresh timer started (30s interval)');
+  }
+
+  void _stopDashboardRefreshTimer() {
+    _dashboardRefreshTimer?.cancel();
+    _dashboardRefreshTimer = null;
+    debugPrint('🛑 Dashboard auto-refresh timer stopped');
+  }
+
+  // ============ PAY LATER AUTO-REFRESH TIMER ============
+  void _startPayLaterRefreshTimer() {
+    _payLaterRefreshTimer?.cancel();
+    _payLaterRefreshTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (timer) {
+        if (mounted && !_isRefreshing) {
+          _refreshPayLaterData();
+        }
+      },
+    );
+    debugPrint('✅ Pay Later auto-refresh timer started (15s interval)');
+  }
+
+  void _stopPayLaterRefreshTimer() {
+    _payLaterRefreshTimer?.cancel();
+    _payLaterRefreshTimer = null;
+    debugPrint('🛑 Pay Later auto-refresh timer stopped');
+  }
+
+  // ============ BACKGROUND REFRESH METHODS ============
+  Future<void> _refreshDashboardData() async {
+    if (_isRefreshing || !mounted || _isInitialLoading) return;
+
+    _isRefreshing = true;
+    try {
+      debugPrint('🔄 Silently refreshing dashboard data...');
+      await _loadData(); // Wait for it to complete
+      debugPrint('✅ Dashboard data refreshed (smooth)');
+    } catch (e) {
+      debugPrint('❌ Error auto-refreshing dashboard: $e');
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  Future<void> _refreshPayLaterData() async {
+    if (_isRefreshing || !mounted || _isInitialLoading) return;
+
+    _isRefreshing = true;
+    try {
+      debugPrint('🔄 Silently refreshing pay later data...');
+      await _loadPayLaterData(); // Wait for it to complete
+      debugPrint('✅ Pay Later data refreshed (smooth)');
+    } catch (e) {
+      debugPrint('❌ Error auto-refreshing pay later: $e');
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  // ============ NEW: NOTIFICATION-TRIGGERED REFRESH ============
+  /// Called when a new order notification is triggered (smooth, no flicker)
+  void _onNotificationRefresh() {
+    if (!mounted || _isInitialLoading) return;
+
+    debugPrint('📲 Dashboard refresh triggered by notification (smooth)');
+
+    // Prevent multiple simultaneous refreshes
+    if (_isRefreshing) {
+      debugPrint('⏭️ Refresh already in progress, skipping...');
+      return;
+    }
+
+    _isRefreshing = true;
+
+    // Refresh both in background (no flicker)
+    Future.wait([
+      _loadData(),
+      _loadPayLaterData(),
+    ]).then((_) {
+      debugPrint('✅ Dashboard refreshed from notification (smooth)');
+    }).catchError((e) {
+      debugPrint('❌ Error refreshing dashboard from notification: $e');
+    }).whenComplete(() {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _isRefreshing = false;
+      });
+    });
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -455,80 +651,87 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
-        return FutureBuilder<Map<String, dynamic>>(
-          future: _dashboardData,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        // ============ NO FutureBuilder - Direct data access ============
 
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
+        // Show loading only on initial load
+        if (_isInitialLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-            final data = snapshot.data ?? <String, dynamic>{};
-            final totalSales = data['totalSales'] as double? ?? 0.0;
-            final totalOrders = data['totalOrders'] as int? ?? 0;
-            final todayInfo = data['todayInfo'] as Map<String, dynamic>? ??
-                <String, dynamic>{};
-            final revenueData =
-                data['revenueData'] as List<Map<String, dynamic>>? ??
-                    <Map<String, dynamic>>[];
-            final peakTimes =
-                data['peakTimes'] as List<Map<String, dynamic>>? ??
-                    <Map<String, dynamic>>[];
-            final topItems = data['topItems'] as List<Map<String, dynamic>>? ??
+        // If no data after initial load, show error
+        if (_dashboardData == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Text(
+                'No data available',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          );
+        }
+
+        // Direct data access - no flicker!
+        final data = _dashboardData!;
+        final totalSales = data['totalSales'] as double? ?? 0.0;
+        final totalOrders = data['totalOrders'] as int? ?? 0;
+        final todayInfo =
+            data['todayInfo'] as Map<String, dynamic>? ?? <String, dynamic>{};
+        final revenueData =
+            data['revenueData'] as List<Map<String, dynamic>>? ??
                 <Map<String, dynamic>>[];
-            final paymentMethods =
-                data['paymentMethods'] as List<Map<String, dynamic>>? ??
-                    <Map<String, dynamic>>[];
-            final appliedVouchers =
-                data['appliedVouchers'] as List<Map<String, dynamic>>? ??
-                    <Map<String, dynamic>>[];
-            // final totalVoucherRedemption =
-            //     data['totalVoucherRedemption'] as double? ?? 0.0; // NEW
+        final peakTimes = data['peakTimes'] as List<Map<String, dynamic>>? ??
+            <Map<String, dynamic>>[];
+        final topItems = data['topItems'] as List<Map<String, dynamic>>? ??
+            <Map<String, dynamic>>[];
+        final paymentMethodsData =
+            data['paymentMethods'] as List<Map<String, dynamic>>? ??
+                <Map<String, dynamic>>[];
+        final appliedVouchers =
+            data['appliedVouchers'] as List<Map<String, dynamic>>? ??
+                <Map<String, dynamic>>[];
+        // final totalVoucherRedemption =
+        //     data['totalVoucherRedemption'] as double? ?? 0.0; // NEW
 
-            final fromDate = data['fromDate'] as DateTime? ?? DateTime.now();
-            final toDate = data['toDate'] as DateTime? ?? DateTime.now();
+        final fromDate = data['fromDate'] as DateTime? ?? DateTime.now();
+        final toDate = data['toDate'] as DateTime? ?? DateTime.now();
 
-            return Container(
-              color: Colors.grey[100],
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        return Container(
+          color: Colors.grey[100],
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 10),
+                _buildTopSection(fromDate, toDate),
+                const SizedBox(height: 20),
+                _buildSummaryCards(totalSales, totalOrders, todayInfo),
+                const SizedBox(height: 30),
+                _buildRevenueChart(revenueData, fromDate, toDate),
+                const SizedBox(height: 30),
+                Row(
                   children: [
-                    const SizedBox(height: 10),
-                    _buildTopSection(fromDate, toDate),
-                    const SizedBox(height: 20),
-                    _buildSummaryCards(totalSales, totalOrders, todayInfo),
-                    const SizedBox(height: 30),
-                    _buildRevenueChart(revenueData, fromDate, toDate),
-                    const SizedBox(height: 30),
-                    Row(
-                      children: [
-                        Expanded(
-                            child: _buildPaymentMethodChart(paymentMethods)),
-                        // const SizedBox(width: 20),
-                        // Expanded(child: _buildAppliedVouchers(appliedVouchers)),
-                      ],
-                    ),
-                    const SizedBox(height: 30),
-                    _buildPayLaterSection(),
-                    const SizedBox(height: 30),
-                    Row(
-                      children: [
-                        Expanded(child: _buildPeakTimeChart(peakTimes)),
-                        const SizedBox(width: 20),
-                        Expanded(child: _buildTopItemsList(topItems)),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+                    Expanded(
+                        child: _buildPaymentMethodChart(paymentMethodsData)),
+                    // const SizedBox(width: 20),
+                    // Expanded(child: _buildAppliedVouchers(appliedVouchers)),
                   ],
                 ),
-              ),
-            );
-          },
+                const SizedBox(height: 30),
+                _buildPayLaterSection(),
+                const SizedBox(height: 30),
+                Row(
+                  children: [
+                    Expanded(child: _buildPeakTimeChart(peakTimes)),
+                    const SizedBox(width: 20),
+                    Expanded(child: _buildTopItemsList(topItems)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -1494,152 +1697,155 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // }
 
   Widget _buildPayLaterSection() {
-    return FutureBuilder<double>(
-      future: _payLaterData,
-      builder: (context, snapshot) {
-        double payLaterAmount = 0.0;
-        bool hasError = false;
-        bool isLoading = false;
+    // Direct data access - no FutureBuilder!
+    final payLaterAmount = _payLaterAmount;
+    final isLoading = _isInitialLoading;
+    final hasError = false; // You can add error tracking if needed
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          isLoading = true;
-        } else if (snapshot.hasError) {
-          payLaterAmount = 0.0;
-          hasError = true;
-          print('Pay Later Error: ${snapshot.error}');
-        } else {
-          payLaterAmount = snapshot.data ?? 0.0;
-          isLoading = false;
-        }
-
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                spreadRadius: 1,
-                blurRadius: 5,
-                offset: const Offset(0, 2),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.payment, size: 20, color: Colors.orange[700]),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Pay Later Summary',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.refresh,
-                      color: isLoading ? Colors.grey : Colors.orange[700],
+                  Icon(Icons.payment, size: 20, color: Colors.orange[700]),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Pay Later Summary',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
                     ),
-                    onPressed: isLoading
-                        ? null
-                        : () {
-                            _loadPayLaterData();
-                          },
-                    tooltip: 'Refresh Pay Later Data',
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Total Outstanding Amount',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (isLoading)
-                const CircularProgressIndicator()
-              else
-                Text(
-                  'RM ${payLaterAmount.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: hasError
-                        ? Colors.red
-                        : (payLaterAmount > 0
-                            ? Colors.orange[700]
-                            : Colors.green),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              if (isLoading)
-                Text(
-                  'Loading pay later data...',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                )
-              else if (hasError)
-                Text(
-                  'Error loading pay later data',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.red,
+              // Optional: Show subtle refresh indicator during background refresh
+              if (_isBackgroundRefreshing)
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Colors.orange[700]!),
                   ),
                 )
               else
-                Text(
-                  'Total amount from all pending Pay Later orders (Draft status)',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
+                Icon(
+                  Icons.check_circle,
+                  size: 20,
+                  color: Colors.green[400],
                 ),
-              if (payLaterAmount > 0 && !isLoading && !hasError) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.orange[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          size: 16, color: Colors.orange[700]),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Collect payments from customers to complete these orders',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange[700],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          Text(
+            'Total Outstanding Amount',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const CircularProgressIndicator()
+          else
+            // Smooth animation for value changes
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: animation,
+                    child: child,
+                  ),
+                );
+              },
+              child: Text(
+                'RM ${payLaterAmount.toStringAsFixed(2)}',
+                key: ValueKey<double>(payLaterAmount),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: hasError
+                      ? Colors.red
+                      : (payLaterAmount > 0
+                          ? Colors.orange[700]
+                          : Colors.green),
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            Text(
+              'Loading pay later data...',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+              ),
+            )
+          else if (hasError)
+            Text(
+              'Error loading pay later data',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.red,
+              ),
+            )
+          else
+            Text(
+              'Total amount from all pending Pay Later orders (Draft status)',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+              ),
+            ),
+          if (payLaterAmount > 0 && !isLoading && !hasError) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.orange[700]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Collect payments from customers to complete these orders',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

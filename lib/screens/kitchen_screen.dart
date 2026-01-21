@@ -79,15 +79,15 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
           if (response['success'] == true) {
             final stations = (response['message'] as List?) ?? [];
-            
+
             // Check if user is Tier 3 - only Tier 3 can see GRAB
             final isTier3 = tier.toLowerCase() == 'tier 3';
-            
+
             setState(() {
               _kitchenStations = stations.cast<Map<String, dynamic>>();
               _userTier = tier; // Store tier for reference
               _showGrabStation = isTier3; // Only show GRAB for Tier 3
-              
+
               if (_kitchenStations.isNotEmpty) {
                 // Default to GRAB station if Tier 3, otherwise first kitchen station
                 if (isTier3) {
@@ -99,7 +99,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                 }
               }
             });
-            
+
             debugPrint('👤 User Tier: $tier');
             debugPrint('🍔 Show GRAB Station: $_showGrabStation');
             debugPrint('📍 Selected Station: $_selectedKitchenStation');
@@ -115,13 +115,15 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   }
 
   Future<void> _loadKitchenOrders() async {
+    if (!mounted) return;
     if (_selectedKitchenStation == null || !mounted) return;
 
     // If GRAB station is selected, use grab orders (Tier 3 only)
     if (_selectedKitchenStation == 'GRAB') {
       if (!_showGrabStation) {
         // Safety check: If not Tier 3, switch to first kitchen station
-        debugPrint('⚠️ GRAB not available for ${_userTier}, switching to first kitchen station');
+        debugPrint(
+            '⚠️ GRAB not available for ${_userTier}, switching to first kitchen station');
         if (_kitchenStations.isNotEmpty) {
           setState(() {
             _selectedKitchenStation = _kitchenStations[0]['name'];
@@ -202,7 +204,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
       debugPrint('⚠️ GRAB orders not available for ${_userTier}');
       return;
     }
-    
+
     if (!mounted) return;
 
     if (mounted && _selectedKitchenStation != 'GRAB') {

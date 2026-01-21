@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'auth_service.dart';
 
 class PosService {
@@ -437,8 +438,7 @@ class PosService {
     }
   }
 
-  // In pos_service.dart
-  Future<List<Uint8List>> printKitchenOrder({
+  Future<List<KitchenOrderPage>> printKitchenOrder({
     required String orderName,
   }) async {
     try {
@@ -450,6 +450,7 @@ class PosService {
         'name': orderName,
         'only_additional_items': '1',
         'multi_pages': '1',
+        'with_station': '1',
       };
 
       final queryString = Uri(queryParameters: params).query;
@@ -464,7 +465,9 @@ class PosService {
 
       final response = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 45)); // Increased timeout
+          .timeout(const Duration(seconds: 45));
+
+      print('API Response received for kitchen order printing: $response');
 
       print('🖨️ API Response Status: ${response.statusCode}');
       print('🖨️ API Response Body Length: ${response.body.length} characters');
@@ -505,59 +508,76 @@ class PosService {
           }
 
           final int pageCount = responseData['length'] ?? message.length;
-          final List<Uint8List> imagePages = [];
+          final List<KitchenOrderPage> pages = [];
 
           print(
               '📄 API reports $pageCount pages, found ${message.length} items in message array');
 
-          // Process each page
+          // Process each page (now includes kitchen_station)
           for (int i = 0; i < message.length; i++) {
-            final imageData = message[i];
+            final pageData = message[i];
 
-            if (imageData is String) {
-              try {
-                // Validate base64 string
-                if (imageData.isEmpty) {
-                  print('⚠️ Page ${i + 1} has empty base64 string');
-                  continue;
-                }
+            try {
+              String? imageData;
+              String? kitchenStation;
 
-                // Check if base64 string looks complete (ends with = or ==)
-                if (!imageData.endsWith('=') && !imageData.endsWith('==')) {
-                  print(
-                      '⚠️ Page ${i + 1} base64 string may be truncated: ${imageData.length} chars');
-                }
-
-                final Uint8List imageBytes = base64.decode(imageData);
-
-                if (imageBytes.isEmpty) {
-                  print('⚠️ Page ${i + 1} decoded to empty bytes');
-                  continue;
-                }
-
-                imagePages.add(imageBytes);
+              // Handle new format: {"kitchen_station": "...", "order": "..."}
+              if (pageData is Map) {
+                kitchenStation = pageData['kitchen_station'] as String?;
+                imageData = pageData['order'] as String?;
                 print(
-                    '✅ Successfully decoded page ${i + 1} (${imageBytes.length} bytes)');
-              } catch (e) {
-                print('❌ Error decoding page ${i + 1}: $e');
+                    '📍 Page ${i + 1} - Kitchen Station: ${kitchenStation ?? "N/A"}');
+              }
+              // Handle old format: just base64 string
+              else if (pageData is String) {
+                imageData = pageData;
+                kitchenStation = 'Unknown'; // Default station for old format
+                print('📄 Page ${i + 1} - No station info (old format)');
+              } else {
                 print(
-                    '❌ Problematic base64 (first 100 chars): ${imageData.substring(0, min(100, imageData.length))}');
-                // Continue with other pages instead of failing completely
+                    '⚠️ Page ${i + 1} - Unknown format: ${pageData.runtimeType}');
                 continue;
               }
-            } else {
+
+              if (imageData == null || imageData.isEmpty) {
+                print('⚠️ Page ${i + 1} has empty base64 string');
+                continue;
+              }
+
+              // Check if base64 string looks complete
+              if (!imageData.endsWith('=') && !imageData.endsWith('==')) {
+                print(
+                    '⚠️ Page ${i + 1} base64 may be truncated: ${imageData.length} chars');
+              }
+
+              final Uint8List imageBytes = base64.decode(imageData);
+
+              if (imageBytes.isEmpty) {
+                print('⚠️ Page ${i + 1} decoded to empty bytes');
+                continue;
+              }
+
+              // Create KitchenOrderPage object instead of just adding bytes
+              pages.add(KitchenOrderPage(
+                imageData: imageBytes,
+                kitchenStation: kitchenStation ?? 'Unknown',
+              ));
+
               print(
-                  '⚠️ Page ${i + 1} is not a string, type: ${imageData.runtimeType}');
+                  '✅ Successfully decoded page ${i + 1} (${imageBytes.length} bytes) for station: ${kitchenStation ?? "N/A"}');
+            } catch (e) {
+              print('❌ Error processing page ${i + 1}: $e');
+              continue;
             }
           }
 
-          if (imagePages.isEmpty) {
+          if (pages.isEmpty) {
             throw Exception('No valid image pages could be decoded');
           }
 
           print(
-              '🎉 Successfully processed ${imagePages.length} kitchen order pages');
-          return imagePages;
+              '🎉 Successfully processed ${pages.length} kitchen order pages');
+          return pages;
         } else {
           final errorMessage = responseData['message'] ?? 'Unknown error';
           throw Exception('API returned error: $errorMessage');
@@ -950,7 +970,7 @@ class PosService {
     required String kitchenStation,
     required String fromDate,
     required String toDate,
-    String? orderSource, // Add this parameter
+    String? orderSource,
   }) async {
     final params = {
       'pos_profile': posProfile,
