@@ -61,6 +61,10 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isTestingPrinter = false;
   String? _testingPrinterId;
 
+  // USB Printer Configuration
+  bool _usbPrintReceipt = true;
+  bool _usbPrintOrder = true;
+
 // Add/Edit Printer Dialog Controllers
   final TextEditingController _printerNameController = TextEditingController();
   final TextEditingController _printerIpController = TextEditingController();
@@ -103,6 +107,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadConfiguration();
     _loadPrinterConfiguration();
     _loadNetworkPrinters();
+    _loadUsbPrinterConfiguration();
   }
 
   @override
@@ -155,6 +160,44 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
       _selectedPrinterType =
           prefs.getString('printer_connection_type') ?? 'network';
     });
+  }
+
+  Future<void> _loadUsbPrinterConfiguration() async {
+    try {
+      final config = await ReceiptPrinter.getUsbPrinterConfig();
+      setState(() {
+        _usbPrintReceipt = config.printReceipt;
+        _usbPrintOrder = config.printOrder;
+      });
+      debugPrint('✅ Loaded USB config: ${config.capabilities}');
+    } catch (e) {
+      debugPrint('Error loading USB printer config: $e');
+    }
+  }
+
+  Future<void> _saveUsbPrinterConfig() async {
+    try {
+      final config = UsbPrinterConfig(
+        printReceipt: _usbPrintReceipt,
+        printOrder: _usbPrintOrder,
+      );
+
+      await ReceiptPrinter.saveUsbPrinterConfig(config);
+
+      Fluttertoast.showToast(
+        msg: "USB printer configuration saved",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Failed to save USB config: $e",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
   }
 
   Future<void> _loadNetworkPrinters() async {
@@ -699,7 +742,6 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // In the _buildConnectionTypeSelector() method, modify the Wired connection radio button:
   Widget _buildConnectionTypeSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1461,6 +1503,7 @@ Future<void> _discoverUsbDevices() async {
 
   Widget _buildPrinterConfigurationSection() {
     return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1471,7 +1514,8 @@ Future<void> _discoverUsbDevices() async {
                 'Printer Configuration',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              if (_selectedPrinterType == 'network' &&
+              if ((_selectedPrinterType == 'network' ||
+                      _selectedPrinterType == 'both') &&
                   _networkPrinters.isNotEmpty)
                 ElevatedButton.icon(
                   onPressed: _isTestingPrinter ? null : _testAllPrinters,
@@ -1491,12 +1535,18 @@ Future<void> _discoverUsbDevices() async {
             ],
           ),
           const SizedBox(height: 20),
+
+          // Printer Type Selection
           _buildPrinterTypeSelector(),
           const SizedBox(height: 20),
+
+          // Show appropriate content based on selection
           if (_selectedPrinterType == 'network')
             _buildNetworkPrintersManagement()
-          else
-            _buildUsbPrinterInfo(),
+          else if (_selectedPrinterType == 'usb')
+            _buildUsbPrinterInfo()
+          else if (_selectedPrinterType == 'both')
+            _buildDualModeConfiguration(),
         ],
       ),
     );
@@ -1511,106 +1561,117 @@ Future<void> _discoverUsbDevices() async {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: ListTile(
-                title: const Text('Network (Wireless)'),
-                subtitle: const Text('Multiple printers via WiFi/LAN'),
-                leading: Radio<String>(
-                  value: 'network',
-                  groupValue: _selectedPrinterType,
-                  onChanged: (value) {
-                    setState(() => _selectedPrinterType = value!);
-                    _savePrinterConfig();
-                  },
-                ),
+
+        // Network Only
+        ListTile(
+          title: const Text('Network Only (Wireless)'),
+          subtitle: const Text('Use network printers only'),
+          leading: Radio<String>(
+            value: 'network',
+            groupValue: _selectedPrinterType,
+            onChanged: (value) {
+              setState(() => _selectedPrinterType = value!);
+              _savePrinterConfig();
+            },
+          ),
+        ),
+
+        // USB Only
+        ListTile(
+          title: const Text('USB Only (Wired)'),
+          subtitle: const Text('Use USB printer only'),
+          leading: Radio<String>(
+            value: 'usb',
+            groupValue: _selectedPrinterType,
+            onChanged: (value) {
+              setState(() => _selectedPrinterType = value!);
+              _savePrinterConfig();
+            },
+          ),
+        ),
+
+        // Both USB and Network
+        ListTile(
+          title: const Text('Both USB + Network'),
+          subtitle: const Text('Use USB and Network printers together'),
+          leading: Radio<String>(
+            value: 'both',
+            groupValue: _selectedPrinterType,
+            onChanged: (value) {
+              setState(() => _selectedPrinterType = value!);
+              _savePrinterConfig();
+            },
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Info box explaining the modes
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    _selectedPrinterType == 'both'
+                        ? 'Dual Mode Active'
+                        : 'Single Mode',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                ],
               ),
-            ),
-            Expanded(
-              child: ListTile(
-                title: const Text('USB (Wired)'),
-                subtitle: const Text('Direct USB connection'),
-                leading: Radio<String>(
-                  value: 'usb',
-                  groupValue: _selectedPrinterType,
-                  onChanged: (value) {
-                    setState(() => _selectedPrinterType = value!);
-                    _savePrinterConfig();
-                  },
-                ),
+              const SizedBox(height: 8),
+              Text(
+                _getPrinterModeDescription(),
+                style: const TextStyle(fontSize: 13),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
+  }
+
+  String _getPrinterModeDescription() {
+    switch (_selectedPrinterType) {
+      case 'network':
+        return 'All print jobs will be sent to network printers only. Configure your network printers below.';
+      case 'usb':
+        return 'All print jobs will be sent to the USB printer only. Make sure your USB printer is connected.';
+      case 'both':
+        return 'Print jobs will be sent to BOTH USB and network printers simultaneously. This provides redundancy and allows printing to multiple locations.';
+      default:
+        return '';
+    }
   }
 
   Widget _buildNetworkPrintersManagement() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Network Printers',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            ElevatedButton.icon(
-              onPressed: () => _showAddEditPrinterDialog(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Printer', style: TextStyle(fontWeight: FontWeight.bold),),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2196F3),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+        const Text(
+          'Network Printers',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        if (_isLoadingPrinters)
-          const Center(child: CircularProgressIndicator())
-        else if (_networkPrinters.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.print_disabled, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No printers configured',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Click "Add Printer" to configure your first printer',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _networkPrinters.length,
-            itemBuilder: (context, index) {
-              final printer = _networkPrinters[index];
-              return _buildPrinterCard(printer);
-            },
-          ),
+
+        _buildNetworkPrintersContent(),
+
         const SizedBox(height: 24),
+
+        // Network Tips
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1626,7 +1687,7 @@ Future<void> _discoverUsbDevices() async {
                   Icon(Icons.info_outline, color: Colors.blue[700]),
                   const SizedBox(width: 8),
                   Text(
-                    'Printer Configuration Tips',
+                    'Network Printer Tips',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.blue[700],
@@ -1636,15 +1697,11 @@ Future<void> _discoverUsbDevices() async {
               ),
               const SizedBox(height: 12),
               _buildTipItem(
-                  'If you have only 1 printer, check both Receipt and Order'),
-              _buildTipItem(
-                  'For multiple printers, configure each one\'s purpose'),
-              _buildTipItem('Receipt printers: Print customer receipts'),
-              _buildTipItem('Order printers: Print kitchen orders'),
-              _buildTipItem(
-                  'Multiple printers with same purpose will print simultaneously'),
+                  'Configure each printer\'s purpose (Receipt/Order)'),
+              _buildTipItem('All enabled printers will print simultaneously'),
               _buildTipItem(
                   'Default port is usually 9100 for ESC/POS printers'),
+              _buildTipItem('Ensure all devices are on the same network'),
             ],
           ),
         ),
@@ -1805,7 +1862,7 @@ Future<void> _discoverUsbDevices() async {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'USB Printer Settings',
+          'USB Printer Configuration',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
@@ -1825,7 +1882,7 @@ Future<void> _discoverUsbDevices() async {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'USB Printer Mode',
+                      'USB Printer Settings',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1838,11 +1895,392 @@ Future<void> _discoverUsbDevices() async {
               _buildTipItem('Connect your thermal printer via USB cable'),
               _buildTipItem(
                   'The app will automatically detect the USB printer'),
-              _buildTipItem('USB printer will print both receipts and orders'),
-              _buildTipItem('For multiple printers, use Network mode'),
+              _buildTipItem(
+                  'You may need to grant USB permissions when printing'),
+
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 16),
+
+              // USB Printer Job Configuration
+              const Text(
+                'What should this USB printer print?',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              CheckboxListTile(
+                title: const Text('Print Receipt'),
+                subtitle: const Text('Customer receipts'),
+                value: _usbPrintReceipt,
+                onChanged: (value) {
+                  setState(() {
+                    _usbPrintReceipt = value ?? true;
+                  });
+                  _saveUsbPrinterConfig();
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+
+              CheckboxListTile(
+                title: const Text('Print Order'),
+                subtitle: const Text('Kitchen orders'),
+                value: _usbPrintOrder,
+                onChanged: (value) {
+                  setState(() {
+                    _usbPrintOrder = value ?? true;
+                  });
+                  _saveUsbPrinterConfig();
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+
+              if (!_usbPrintReceipt && !_usbPrintOrder)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.orange),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.orange[700], size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'At least one option should be selected for the USB printer to be useful',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 16),
+
+              // Current configuration display
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _getUsbConfigDescription(),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  String _getUsbConfigDescription() {
+    if (_usbPrintReceipt && _usbPrintOrder) {
+      return 'USB printer will handle both receipts and orders';
+    } else if (_usbPrintReceipt) {
+      return 'USB printer will only print receipts';
+    } else if (_usbPrintOrder) {
+      return 'USB printer will only print kitchen orders';
+    } else {
+      return 'USB printer is not configured to print anything';
+    }
+  }
+
+  Widget _buildDualModeConfiguration() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // USB Section
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // USB Header Row
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.usb, color: Colors.blue[700]),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'USB Printer',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Active',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // USB Configuration Checkboxes
+              const Text(
+                'What should USB printer print?',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              CheckboxListTile(
+                title: const Text('Print Receipt'),
+                subtitle: const Text('Customer receipts'),
+                value: _usbPrintReceipt,
+                onChanged: (value) {
+                  setState(() {
+                    _usbPrintReceipt = value ?? true;
+                  });
+                  _saveUsbPrinterConfig();
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+
+              CheckboxListTile(
+                title: const Text('Print Order'),
+                subtitle: const Text('Kitchen orders'),
+                value: _usbPrintOrder,
+                onChanged: (value) {
+                  setState(() {
+                    _usbPrintOrder = value ?? true;
+                  });
+                  _saveUsbPrinterConfig();
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+
+              const SizedBox(height: 8),
+
+              // Show capability chips
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (_usbPrintReceipt)
+                    Chip(
+                      label: const Text('Receipt'),
+                      avatar: const Icon(Icons.receipt_long, size: 16),
+                      backgroundColor: Colors.green[50],
+                      labelStyle:
+                          TextStyle(color: Colors.green[700], fontSize: 12),
+                    ),
+                  if (_usbPrintOrder)
+                    Chip(
+                      label: const Text('Order'),
+                      avatar: const Icon(Icons.restaurant, size: 16),
+                      backgroundColor: Colors.orange[50],
+                      labelStyle:
+                          TextStyle(color: Colors.orange[700], fontSize: 12),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 24),
+
+        // Network Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.wifi, color: Colors.orange[700]),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Network Printers',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Active',
+                style: TextStyle(
+                  color: Colors.green[700],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Network printers management (reuse existing)
+        _buildNetworkPrintersContent(),
+
+        const SizedBox(height: 24),
+
+        // Dual mode tips
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.purple[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.purple[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.tips_and_updates, color: Colors.purple[700]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Dual Mode Benefits',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple[700],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildTipItem(
+                  '✓ Redundancy: If one printer fails, others still work'),
+              _buildTipItem(
+                  '✓ Multiple locations: USB at counter + Network in kitchen'),
+              _buildTipItem('✓ Backup: USB as backup if network is down'),
+              _buildTipItem(
+                  '✓ Flexibility: Print to all printers simultaneously'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNetworkPrintersContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const SizedBox.shrink(),
+            ElevatedButton.icon(
+              onPressed: () => _showAddEditPrinterDialog(),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Printer'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2196F3),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_isLoadingPrinters)
+          const Center(child: CircularProgressIndicator())
+        else if (_networkPrinters.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.print_disabled, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No network printers configured',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Add Printer" to configure your first network printer',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _networkPrinters.length,
+            itemBuilder: (context, index) {
+              final printer = _networkPrinters[index];
+              return _buildPrinterCard(printer);
+            },
+          ),
       ],
     );
   }

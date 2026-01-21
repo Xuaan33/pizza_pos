@@ -24,7 +24,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   bool _isLoadingOrders = false;
   DateTime _selectedDate = DateTime.now();
   int _selectedTabIndex = 0; // 0: Pending, 1: Done
-  bool _showGrabStation = true; // Show GRAB as first station
+  bool _showGrabStation = false; // Will be set based on tier - Tier 3 only
+  String _userTier = ''; // Store user tier
 
   @override
   void initState() {
@@ -78,15 +79,30 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
           if (response['success'] == true) {
             final stations = (response['message'] as List?) ?? [];
+            
+            // Check if user is Tier 3 - only Tier 3 can see GRAB
+            final isTier3 = tier.toLowerCase() == 'tier 3';
+            
             setState(() {
               _kitchenStations = stations.cast<Map<String, dynamic>>();
+              _userTier = tier; // Store tier for reference
+              _showGrabStation = isTier3; // Only show GRAB for Tier 3
+              
               if (_kitchenStations.isNotEmpty) {
-                // Default to GRAB station if available
-                _selectedKitchenStation = 'GRAB';
-                _loadKitchenOrders();
-                _loadGrabOrders();
+                // Default to GRAB station if Tier 3, otherwise first kitchen station
+                if (isTier3) {
+                  _selectedKitchenStation = 'GRAB';
+                  _loadGrabOrders();
+                } else {
+                  _selectedKitchenStation = _kitchenStations[0]['name'];
+                  _loadKitchenOrders();
+                }
               }
             });
+            
+            debugPrint('👤 User Tier: $tier');
+            debugPrint('🍔 Show GRAB Station: $_showGrabStation');
+            debugPrint('📍 Selected Station: $_selectedKitchenStation');
           }
         } catch (e) {
           print('Error loading kitchen stations: $e');
@@ -101,8 +117,19 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   Future<void> _loadKitchenOrders() async {
     if (_selectedKitchenStation == null || !mounted) return;
 
-    // If GRAB station is selected, use grab orders
+    // If GRAB station is selected, use grab orders (Tier 3 only)
     if (_selectedKitchenStation == 'GRAB') {
+      if (!_showGrabStation) {
+        // Safety check: If not Tier 3, switch to first kitchen station
+        debugPrint('⚠️ GRAB not available for ${_userTier}, switching to first kitchen station');
+        if (_kitchenStations.isNotEmpty) {
+          setState(() {
+            _selectedKitchenStation = _kitchenStations[0]['name'];
+          });
+          _loadKitchenOrders();
+        }
+        return;
+      }
       _loadGrabOrders();
       return;
     }
@@ -170,6 +197,12 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   }
 
   Future<void> _loadGrabOrders() async {
+    // Only load GRAB orders for Tier 3
+    if (!_showGrabStation) {
+      debugPrint('⚠️ GRAB orders not available for ${_userTier}');
+      return;
+    }
+    
     if (!mounted) return;
 
     if (mounted && _selectedKitchenStation != 'GRAB') {

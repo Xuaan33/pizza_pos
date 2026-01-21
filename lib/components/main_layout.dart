@@ -3,11 +3,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shiok_pos_android_app/components/kitchen_notification_overlay.dart';
 import 'package:shiok_pos_android_app/providers/grab_notifications_provider.dart';
 import 'package:shiok_pos_android_app/providers/grab_orders_provider.dart';
+import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/kitchen_screen.dart';
@@ -74,6 +77,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }).length;
   }
 
+// Separate caching for kitchen orders per station
+  final Map<String, List<Map<String, dynamic>>> _cachedStationOrders = {};
+  final Map<String, List<Map<String, dynamic>>> _cachedStationGrabOrders = {};
+
+// ============ KITCHEN REFRESH SYSTEM ============
+  Timer? _allOrdersRefreshTimer;
+  bool _isLoadingAllOrders = false;
+  List<String> _kitchenStations = [];
+
   @override
   void initState() {
     super.initState();
@@ -85,10 +97,24 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       await _initializeCustomerDisplay();
       ref.read(authProvider.notifier).loadFromSharedPreferences();
       await ref.read(grabNotificationsProvider.notifier).loadNotifiedOrders();
-      await GrabNotificationOverlay.initialize();
+      await ref
+          .read(kitchenNotificationsProvider.notifier)
+          .loadNotifiedOrders();
 
+      // Initialize both notification overlays
+      await GrabNotificationOverlay.initialize();
+      await KitchenNotificationOverlay.initialize();
+
+      // Load kitchen stations
+      await _loadKitchenStations();
+
+      // Start timers
       _startGlobalGrabTimer();
-      _refreshGlobalGrabOrders(); // Initial load
+      _startAllOrdersTimer();
+
+      // Initial loads
+      _refreshGlobalGrabOrders();
+      _refreshAllOrders();
     });
   }
 
@@ -147,7 +173,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-  // ============ IMPROVED TIMER SYSTEM ============
+  // ============ GRAB TIMER SYSTEM ============
   void _startGlobalGrabTimer() {
     _globalGrabRefreshTimer?.cancel();
 
@@ -162,6 +188,22 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   void _stopGlobalGrabTimer() {
     _globalGrabRefreshTimer?.cancel();
     _globalGrabRefreshTimer = null;
+  }
+
+  // ============ ALL ORDERS TIMER SYSTEM ============
+  void _startAllOrdersTimer() {
+    _allOrdersRefreshTimer?.cancel();
+    _allOrdersRefreshTimer =
+        Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (mounted) {
+        _refreshAllOrders();
+      }
+    });
+  }
+
+  void _stopAllOrdersTimer() {
+    _allOrdersRefreshTimer?.cancel();
+    _allOrdersRefreshTimer = null;
   }
 
   // ============ BACKGROUND REFRESH WITHOUT FLICKERING ============
@@ -264,7 +306,245 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
+  // ============ LOAD KITCHEN STATIONS ============
+  Future<void> _loadKitchenStations() async {
+    final authState = ref.read(authProvider);
+    await authState.whenOrNull(
+      authenticated: (
+        sid,
+        apiKey,
+        apiSecret,
+        username,
+        email,
+        fullName,
+        posProfile,
+        branch,
+        paymentMethods,
+        taxes,
+        hasOpening,
+        tier,
+        printKitchenOrder,
+        openingDate,
+        itemsGroups,
+        baseUrl,
+        merchantId,
+        printMerchantReceiptCopy,
+        enableFiuu,
+        cashDrawerPinNeeded,
+        cashDrawerPin,
+      ) async {
+        try {
+          final response = await safeExecuteAPICall(
+              () => PosService().getKitchenStations(posProfile: posProfile));
+
+          if (response['success'] == true) {
+            final stations = (response['message'] as List?) ?? [];
+            _kitchenStations = stations
+                .map((s) => s['name']?.toString() ?? '')
+                .where((name) => name.isNotEmpty)
+                .toList();
+            debugPrint(
+                '✅ Loaded ${_kitchenStations.length} kitchen stations: $_kitchenStations');
+          }
+        } catch (e) {
+          debugPrint('❌ Error loading kitchen stations: $e');
+        }
+      },
+    );
+  }
+
+  // ============ BACKGROUND REFRESH FOR ALL KITCHEN ORDERS ============
+  Future<void> _refreshAllOrders() async {
+    if (_isLoadingAllOrders || !mounted || _kitchenStations.isEmpty) {
+      debugPrint(
+          '⏸️  Skipping kitchen refresh - loading: $_isLoadingAllOrders, mounted: $mounted, stations: ${_kitchenStations.length}');
+      return;
+    }
+
+    _addToApiQueue(() => _performAllOrdersRefresh());
+  }
+
+  Future<void> _performAllOrdersRefresh() async {
+    _isLoadingAllOrders = true;
+
+    try {
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) async {
+          try {
+            final fromDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+            final toDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+            debugPrint(
+                '🔄 Checking all ${_kitchenStations.length} kitchen stations for new orders...');
+
+            // Check each kitchen station for BOTH regular AND GRAB orders
+            for (var station in _kitchenStations) {
+              try {
+                // ============ 1. FETCH REGULAR ORDERS FOR THIS STATION ============
+                final regularResponse = await PosService().getKitchenOrders(
+                  posProfile: posProfile,
+                  kitchenStation: station,
+                  fromDate: fromDate,
+                  toDate: toDate,
+                );
+
+                if (regularResponse['success'] == true && mounted) {
+                  final newOrders = (regularResponse['message'] as List?)
+                          ?.cast<Map<String, dynamic>>() ??
+                      [];
+
+                  final cachedOrders = _cachedStationOrders[station] ?? [];
+
+                  if (_hasKitchenOrdersChanged(cachedOrders, newOrders)) {
+                    debugPrint(
+                        '✅ Regular orders changed for station: $station (${newOrders.length} orders)');
+
+                    // Find new orders
+                    final newOrdersList =
+                        _findNewKitchenOrders(cachedOrders, newOrders);
+
+                    _cachedStationOrders[station] = List.from(newOrders);
+
+                    // Notify for each new order
+                    for (var order in newOrdersList) {
+                      await _showKitchenOrderNotification(
+                        order,
+                        isGrab: false,
+                        stationName: station,
+                      );
+                    }
+                  }
+                }
+
+                // Small delay before next API call
+                await Future.delayed(const Duration(milliseconds: 300));
+
+                // ============ 2. FETCH GRAB ORDERS FOR THIS STATION ============
+                final grabResponse = await PosService().getKitchenOrders(
+                  posProfile: posProfile,
+                  kitchenStation: station,
+                  fromDate: fromDate,
+                  toDate: toDate,
+                  orderSource: 'grab',
+                );
+
+                if (grabResponse['success'] == true && mounted) {
+                  final newGrabOrders = (grabResponse['message'] as List?)
+                          ?.cast<Map<String, dynamic>>() ??
+                      [];
+
+                  final cachedGrabOrders =
+                      _cachedStationGrabOrders[station] ?? [];
+
+                  if (_hasKitchenOrdersChanged(
+                      cachedGrabOrders, newGrabOrders)) {
+                    debugPrint(
+                        '✅ GRAB orders changed for station: $station (${newGrabOrders.length} orders)');
+
+                    // Find new orders
+                    final newGrabOrdersList =
+                        _findNewKitchenOrders(cachedGrabOrders, newGrabOrders);
+
+                    _cachedStationGrabOrders[station] =
+                        List.from(newGrabOrders);
+
+                    // Update provider with all GRAB orders (combined from all stations)
+                    final allGrabOrders = _cachedStationGrabOrders.values
+                        .expand((orders) => orders)
+                        .toList();
+                    ref
+                        .read(grabOrdersProvider.notifier)
+                        .updateOrders(allGrabOrders);
+
+                    // Notify for each new GRAB order
+                    for (var order in newGrabOrdersList) {
+                      await _showKitchenOrderNotification(
+                        order,
+                        isGrab: true,
+                        stationName: station,
+                      );
+                    }
+                  }
+                }
+
+                // Small delay before checking next station
+                await Future.delayed(const Duration(milliseconds: 300));
+              } catch (e) {
+                debugPrint('❌ Error loading orders for station $station: $e');
+              }
+            }
+
+            debugPrint(
+                '✅ Completed kitchen refresh cycle for all ${_kitchenStations.length} stations');
+          } catch (e) {
+            debugPrint('❌ Error in all orders refresh: $e');
+          }
+        },
+      );
+    } finally {
+      _isLoadingAllOrders = false;
+    }
+  }
+
   // ============ DETECT CHANGES WITHOUT REBUILDING UI ============
+
+  // ============ DETECT KITCHEN ORDER CHANGES ============
+  bool _hasKitchenOrdersChanged(
+      List<Map<String, dynamic>> cached, List<Map<String, dynamic>> newOrders) {
+    if (cached.length != newOrders.length) {
+      return true;
+    }
+
+    final cachedIds =
+        cached.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
+    final newIds =
+        newOrders.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
+
+    return !cachedIds.containsAll(newIds) || !newIds.containsAll(cachedIds);
+  }
+
+// ============ FIND NEW KITCHEN ORDERS ============
+  List<Map<String, dynamic>> _findNewKitchenOrders(
+    List<Map<String, dynamic>> cached,
+    List<Map<String, dynamic>> newOrders,
+  ) {
+    final notificationProvider =
+        ref.read(kitchenNotificationsProvider.notifier);
+    final cachedIds = cached.map((o) => o['name']?.toString() ?? '').toSet();
+
+    return newOrders.where((order) {
+      final orderId = order['name']?.toString() ?? '';
+      final isUnfulfilled = order['custom_fulfilled'] != 1;
+      final isNotNotified = !notificationProvider.hasBeenNotified(orderId);
+      final isNew = !cachedIds.contains(orderId);
+
+      return orderId.isNotEmpty && isUnfulfilled && isNotNotified && isNew;
+    }).toList();
+  }
+
   bool _hasOrdersChanged(List<Map<String, dynamic>> newOrders) {
     if (_cachedGrabOrders.length != newOrders.length) {
       return true;
@@ -388,6 +668,79 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
+// ============ SHOW KITCHEN ORDER NOTIFICATION ============
+  Future<void> _showKitchenOrderNotification(
+    Map<String, dynamic> order, {
+    required bool isGrab,
+    String? stationName,
+  }) async {
+    try {
+      final orderId = order['name']?.toString() ?? 'Unknown';
+      final customerName = order['customer_name']?.toString() ?? 'Customer';
+      final tableName = order['table']?.toString() ?? 'N/A';
+
+      // Mark as notified using the persistent provider
+      if (orderId != 'Unknown') {
+        await ref
+            .read(kitchenNotificationsProvider.notifier)
+            .markAsNotified(orderId);
+      }
+
+      if (mounted && context.mounted) {
+        // Show notification overlay
+        await KitchenNotificationOverlay.show(
+          context,
+          orderId: orderId,
+          customerName: customerName,
+          tableName: tableName,
+          isGrab: isGrab,
+          stationName: stationName,
+          onTap: () {
+            // Navigate to Kitchen screen with GRAB station selected
+            final authState = ref.read(authProvider);
+            authState.whenOrNull(
+              authenticated: (
+                sid,
+                apiKey,
+                apiSecret,
+                username,
+                email,
+                fullName,
+                posProfile,
+                branch,
+                paymentMethods,
+                taxes,
+                hasOpening,
+                tier,
+                printKitchenOrder,
+                openingDate,
+                itemsGroups,
+                baseUrl,
+                merchantId,
+                printMerchantReceiptCopy,
+                enableFiuu,
+                cashDrawerPinNeeded,
+                cashDrawerPin,
+              ) {
+                final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
+                if (mounted) {
+                  setState(() {
+                    _selectedTabIndex = kitchenTabIndex;
+                  });
+                }
+              },
+            );
+
+            debugPrint(
+                '🔔 New kitchen order notification: $orderId (${isGrab ? "GRAB" : stationName}) - Table: $tableName');
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error showing kitchen notification: $e');
+    }
+  }
+
   // ============ PUBLIC API WRAPPER ============
   /// Wrap other API calls with this method to prevent conflicts with GRAB refresh
   Future<T> executeProtectedAPICall<T>(Future<T> Function() apiCall) async {
@@ -436,9 +789,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   @override
   void dispose() {
-    _stopGlobalGrabTimer();
+    _ordersScrollController.removeListener(_onOrdersScroll);
     _ordersScrollController.dispose();
-    GrabNotificationOverlay.dispose(); // Clean up audio player (async)
+    _globalGrabRefreshTimer?.cancel();
+    _allOrdersRefreshTimer?.cancel(); // Add this line
+    GrabNotificationOverlay.dispose();
+    KitchenNotificationOverlay.dispose(); // Add this line
     super.dispose();
   }
 

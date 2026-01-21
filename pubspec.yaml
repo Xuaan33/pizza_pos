@@ -104,6 +104,7 @@ flutter:
     - assets/logo_shiokpos_launcher.png
     - assets/icon-grab.png
     - assets/grab_notification.mp3
+    - assets/order.mp3
 
   fonts:
     - family: Raleway

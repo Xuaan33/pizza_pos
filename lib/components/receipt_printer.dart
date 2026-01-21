@@ -13,8 +13,40 @@ import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'dart:convert';
 
 enum PrinterConnectionType {
-  usb,
-  network,
+  usbOnly,
+  networkOnly,
+  both,
+}
+
+class UsbPrinterConfig {
+  final bool printReceipt;
+  final bool printOrder;
+
+  UsbPrinterConfig({
+    this.printReceipt = true,
+    this.printOrder = true,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'printReceipt': printReceipt,
+      'printOrder': printOrder,
+    };
+  }
+
+  factory UsbPrinterConfig.fromJson(Map<String, dynamic> json) {
+    return UsbPrinterConfig(
+      printReceipt: json['printReceipt'] ?? true,
+      printOrder: json['printOrder'] ?? true,
+    );
+  }
+
+  String get capabilities {
+    if (printReceipt && printOrder) return 'Receipt & Order';
+    if (printReceipt) return 'Receipt Only';
+    if (printOrder) return 'Order Only';
+    return 'None';
+  }
 }
 
 class PrinterConfig {
@@ -79,9 +111,76 @@ class ReceiptPrinter {
   static Future<PrinterConnectionType> _getPrinterConnectionType() async {
     final prefs = await SharedPreferences.getInstance();
     final type = prefs.getString('printer_connection_type') ?? 'network';
-    return type == 'usb'
-        ? PrinterConnectionType.usb
-        : PrinterConnectionType.network;
+    
+    switch (type) {
+      case 'usb':
+        return PrinterConnectionType.usbOnly;
+      case 'network':
+        return PrinterConnectionType.networkOnly;
+      case 'both':
+        return PrinterConnectionType.both;
+      default:
+        return PrinterConnectionType.networkOnly;
+    }
+  }
+
+  /// -------------------------------------------
+  /// Get USB printer configuration
+  /// -------------------------------------------
+  static Future<UsbPrinterConfig> getUsbPrinterConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final configJson = prefs.getString('usb_printer_config');
+    
+    if (configJson == null || configJson.isEmpty) {
+      return UsbPrinterConfig(); // Default: both receipt and order
+    }
+
+    try {
+      final configMap = json.decode(configJson);
+      return UsbPrinterConfig.fromJson(configMap);
+    } catch (e) {
+      debugPrint('Error parsing USB printer config: $e');
+      return UsbPrinterConfig();
+    }
+  }
+
+  /// -------------------------------------------
+  /// Save USB printer configuration
+  /// -------------------------------------------
+  static Future<void> saveUsbPrinterConfig(UsbPrinterConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    final configJson = json.encode(config.toJson());
+    await prefs.setString('usb_printer_config', configJson);
+    debugPrint('✅ USB printer config saved: ${config.capabilities}');
+  }
+
+  /// -------------------------------------------
+  /// Check if USB printing is enabled
+  /// -------------------------------------------
+  static Future<bool> isUsbEnabled() async {
+    final connectionType = await _getPrinterConnectionType();
+    return connectionType == PrinterConnectionType.usbOnly || 
+           connectionType == PrinterConnectionType.both;
+  }
+
+  /// -------------------------------------------
+  /// Check if Network printing is enabled
+  /// -------------------------------------------
+  static Future<bool> isNetworkEnabled() async {
+    final connectionType = await _getPrinterConnectionType();
+    return connectionType == PrinterConnectionType.networkOnly || 
+           connectionType == PrinterConnectionType.both;
+  }
+
+  /// -------------------------------------------
+  /// Check if USB should print this job type
+  /// -------------------------------------------
+  static Future<bool> shouldUsbPrint({required bool isReceipt}) async {
+    final usbEnabled = await isUsbEnabled();
+    if (!usbEnabled) return false;
+
+    final config = await getUsbPrinterConfig();
+    return isReceipt ? config.printReceipt : config.printOrder;
   }
 
   /// -------------------------------------------
@@ -122,6 +221,7 @@ class ReceiptPrinter {
     final allPrinters = await getConfiguredPrinters();
     return allPrinters.where((p) {
       if (!p.isEnabled) return false;
+      
       if (forReceipt) return p.printReceipt;
       return p.printOrder;
     }).toList();
@@ -138,7 +238,6 @@ class ReceiptPrinter {
       return _currentPrinter;
     }
 
-    // Clear current printer if force reconnecting
     if (forceReconnect) {
       if (_currentPrinter != null && (_currentPrinter!.isConnected ?? false)) {
         await _plugin.disconnect(_currentPrinter!);
@@ -173,13 +272,11 @@ class ReceiptPrinter {
       return null;
     }
 
-    // Debug: Print all found devices
     for (final device in devices) {
       debugPrint(
           "🔍 Found printer: VID:${device.vendorId} PID:${device.productId} Name:${device.name} Connected:${device.isConnected}");
     }
 
-    // Find your specific printer or use first available
     final printer = devices.firstWhere(
       (p) => p.vendorId == 8137 && p.productId == 8214,
       orElse: () => devices.firstWhere(
@@ -271,13 +368,11 @@ class ReceiptPrinter {
 
       debugPrint("✅ Connected to ${printer.name}");
 
-      // Send data to printer
       socket.add(bytes);
       await socket.flush();
 
       debugPrint("📄 Data sent to ${printer.name} successfully");
 
-      // Wait a bit for the printer to process
       await Future.delayed(Duration(milliseconds: 500));
     } catch (e) {
       debugPrint("❌ Network printer error (${printer.name}): $e");
@@ -298,13 +393,12 @@ class ReceiptPrinter {
     final results = <String, bool>{};
     
     if (printers.isEmpty) {
-      debugPrint("⚠️ No printers available for this print job");
+      debugPrint("⚠️ No network printers available for this print job");
       return results;
     }
 
-    debugPrint("🖨️ Printing to ${printers.length} printer(s): ${printers.map((p) => p.name).join(', ')}");
+    debugPrint("🖨️ Printing to ${printers.length} network printer(s): ${printers.map((p) => p.name).join(', ')}");
     
-    // Print to all printers in parallel
     final printTasks = printers.map((printer) async {
       try {
         await _printViaNetwork(bytes, printer);
@@ -319,9 +413,48 @@ class ReceiptPrinter {
     await Future.wait(printTasks);
     
     final successful = results.values.where((v) => v).length;
-    debugPrint("📊 Print job completed: $successful/${printers.length} printers successful");
+    debugPrint("📊 Network print job completed: $successful/${printers.length} printers successful");
     
     return results;
+  }
+
+  /// -------------------------------------------
+  /// Print to USB printer
+  /// -------------------------------------------
+  static Future<bool> _printViaUsb(List<int> ticket) async {
+    try {
+      final printer = await _ensureUsbPrinter();
+      if (printer == null) {
+        debugPrint("❌ No USB printer found");
+        return false;
+      }
+
+      final chunkSize = _calculateOptimalChunkSize(ticket.length);
+      final totalChunks = (ticket.length / chunkSize).ceil();
+
+      debugPrint("📄 Printing to USB printer in $totalChunks chunks");
+
+      for (int i = 0; i < ticket.length; i += chunkSize) {
+        final chunkNumber = (i / chunkSize).floor() + 1;
+        if (totalChunks > 5) {
+          debugPrint("📄 Sending chunk $chunkNumber/$totalChunks...");
+        }
+
+        final end =
+            i + chunkSize <= ticket.length ? i + chunkSize : ticket.length;
+        await _plugin.printData(
+          printer,
+          Uint8List.fromList(ticket.sublist(i, end)),
+          longData: true,
+        );
+      }
+
+      debugPrint("✅ USB print job completed successfully");
+      return true;
+    } catch (e) {
+      debugPrint("❌ USB print error: $e");
+      return false;
+    }
   }
 
   /// -------------------------------------------
@@ -374,7 +507,6 @@ class ReceiptPrinter {
     try {
       final connectionType = await _getPrinterConnectionType();
 
-      // ESC p m t1 t2
       final List<int> drawerCommand = <int>[
         27,
         112,
@@ -383,29 +515,46 @@ class ReceiptPrinter {
         50,
       ];
 
-      if (connectionType == PrinterConnectionType.usb) {
-        final printer = await _ensureUsbPrinter();
-        if (printer == null) {
-          throw Exception('No USB thermal printer found');
-        }
+      bool usbSuccess = false;
+      bool networkSuccess = false;
 
-        await _plugin.printData(
-          printer,
-          drawerCommand,
-          longData: false,
-        );
-      } else {
-        // Network printer - use receipt printers for cash drawer
-        final printers = await getPrintersByCapability(forReceipt: true);
-        if (printers.isEmpty) {
-          throw Exception('No receipt printers configured');
+      // Try USB if enabled
+      if (connectionType == PrinterConnectionType.usbOnly || 
+          connectionType == PrinterConnectionType.both) {
+        try {
+          final printer = await _ensureUsbPrinter();
+          if (printer != null) {
+            await _plugin.printData(
+              printer,
+              drawerCommand,
+              longData: false,
+            );
+            usbSuccess = true;
+            debugPrint('💰 Cash drawer command sent via USB');
+          }
+        } catch (e) {
+          debugPrint('❌ USB cash drawer error: $e');
         }
-        
-        // Send to first receipt printer only
-        await _printViaNetwork(drawerCommand, printers.first);
       }
 
-      debugPrint('💰 Cash drawer command sent');
+      // Try Network if enabled
+      if (connectionType == PrinterConnectionType.networkOnly || 
+          connectionType == PrinterConnectionType.both) {
+        try {
+          final printers = await getPrintersByCapability(forReceipt: true);
+          if (printers.isNotEmpty) {
+            await _printViaNetwork(drawerCommand, printers.first);
+            networkSuccess = true;
+            debugPrint('💰 Cash drawer command sent via Network');
+          }
+        } catch (e) {
+          debugPrint('❌ Network cash drawer error: $e');
+        }
+      }
+
+      if (!usbSuccess && !networkSuccess) {
+        throw Exception('Failed to open cash drawer on any printer');
+      }
 
       if (showFeedback) {
         Fluttertoast.showToast(
@@ -468,7 +617,6 @@ class ReceiptPrinter {
     }
   }
 
-  /// Optional helper to test pin 0 vs 1
   static Future<void> testCashDrawerPins(BuildContext context) async {
     showDialog(
       context: context,
@@ -508,78 +656,97 @@ class ReceiptPrinter {
 
   /// -------------------------------------------
   /// Core: print image bytes via ESC/POS
+  /// Prints to USB and/or Network based on configuration
   /// -------------------------------------------
   static Future<void> printReceipt(
     Uint8List bytes, {
     bool isPdf = false,
-    bool isReceipt = true, // true for receipt, false for order
+    bool isReceipt = true,
   }) async {
     try {
       final connectionType = await _getPrinterConnectionType();
 
-      // Process receipt image
+      // Process receipt image once
       final List<int> ticket = await _processReceiptImage(bytes);
 
-      if (connectionType == PrinterConnectionType.usb) {
-        // USB Printing
-        final printer = await _ensureUsbPrinter();
-        if (printer == null) throw Exception("No USB printer found");
+      bool usbSuccess = false;
+      bool networkSuccess = false;
+      String errorMessages = '';
 
-        final chunkSize = _calculateOptimalChunkSize(ticket.length);
-        final totalChunks = (ticket.length / chunkSize).ceil();
+      // Check if USB should print this job type
+      final shouldPrintUsb = await shouldUsbPrint(isReceipt: isReceipt);
 
-        for (int i = 0; i < ticket.length; i += chunkSize) {
-          final chunkNumber = (i / chunkSize).floor() + 1;
-          if (totalChunks > 5) {
-            debugPrint("📄 Sending chunk $chunkNumber/$totalChunks...");
-          }
-
-          final end =
-              i + chunkSize <= ticket.length ? i + chunkSize : ticket.length;
-          await _plugin.printData(
-            printer,
-            Uint8List.fromList(ticket.sublist(i, end)),
-            longData: true,
-          );
+      // Print to USB if enabled AND configured for this job type
+      if ((connectionType == PrinterConnectionType.usbOnly || 
+           connectionType == PrinterConnectionType.both) && shouldPrintUsb) {
+        debugPrint("🖨️ Printing to USB printer (${isReceipt ? 'Receipt' : 'Order'})...");
+        try {
+          usbSuccess = await _printViaUsb(ticket);
+        } catch (e) {
+          errorMessages += 'USB: $e\n';
+          debugPrint("❌ USB print failed: $e");
         }
-      } else {
-        // Network Printing - Get printers based on capability
-        final printers = await getPrintersByCapability(forReceipt: isReceipt);
-        
-        if (printers.isEmpty) {
-          final type = isReceipt ? 'receipt' : 'order';
-          throw Exception('No $type printers configured or enabled');
-        }
+      } else if (connectionType == PrinterConnectionType.usbOnly || 
+                 connectionType == PrinterConnectionType.both) {
+        debugPrint("⏭️ Skipping USB printer (not configured for ${isReceipt ? 'receipts' : 'orders'})");
+      }
 
-        final results = await _printViaMultipleNetworkPrinters(ticket, printers);
-        
-        // Log results
-        final successful = results.values.where((v) => v).length;
-        final failed = results.values.where((v) => !v).length;
-        
-        if (failed > 0) {
-          final failedPrinters = results.entries
-              .where((e) => !e.value)
-              .map((e) => e.key)
-              .join(', ');
-          debugPrint("⚠️ Failed printers: $failedPrinters");
+      // Print to Network if enabled
+      if (connectionType == PrinterConnectionType.networkOnly || 
+          connectionType == PrinterConnectionType.both) {
+        debugPrint("🖨️ Printing to Network printer(s) (${isReceipt ? 'Receipt' : 'Order'})...");
+        try {
+          final printers = await getPrintersByCapability(forReceipt: isReceipt);
           
-          // Show warning but don't throw error if at least one succeeded
-          if (successful > 0) {
-            Fluttertoast.showToast(
-              msg: "Printed to $successful/${printers.length} printers. Failed: $failedPrinters",
-              gravity: ToastGravity.BOTTOM,
-              backgroundColor: Colors.orange,
-              textColor: Colors.white,
-              toastLength: Toast.LENGTH_LONG,
-            );
+          if (printers.isNotEmpty) {
+            final results = await _printViaMultipleNetworkPrinters(ticket, printers);
+            
+            final successful = results.values.where((v) => v).length;
+            final failed = results.values.where((v) => !v).length;
+            
+            if (successful > 0) {
+              networkSuccess = true;
+            }
+            
+            if (failed > 0) {
+              final failedPrinters = results.entries
+                  .where((e) => !e.value)
+                  .map((e) => e.key)
+                  .join(', ');
+              errorMessages += 'Network failed: $failedPrinters\n';
+              
+              if (successful > 0) {
+                Fluttertoast.showToast(
+                  msg: "Printed to $successful/${printers.length} network printers. Failed: $failedPrinters",
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Colors.orange,
+                  textColor: Colors.white,
+                  toastLength: Toast.LENGTH_LONG,
+                );
+              }
+            }
           } else {
-            throw Exception('All printers failed: $failedPrinters');
+            final type = isReceipt ? 'receipt' : 'order';
+            debugPrint('⚠️ No network $type printers configured');
           }
+        } catch (e) {
+          errorMessages += 'Network: $e\n';
+          debugPrint("❌ Network print failed: $e");
         }
       }
 
-      debugPrint("🚀 Print job completed");
+      // Check if at least one method succeeded
+      if (!usbSuccess && !networkSuccess) {
+        throw Exception('Print failed on all configured printers:\n$errorMessages');
+      }
+
+      // Show success message
+      List<String> successMethods = [];
+      if (usbSuccess) successMethods.add('USB');
+      if (networkSuccess) successMethods.add('Network');
+      
+      debugPrint("🚀 Print job completed successfully via: ${successMethods.join(' & ')}");
+
     } catch (e) {
       debugPrint("❌ Failed to print: $e");
       throw Exception('Failed to print: $e');
@@ -647,7 +814,7 @@ class ReceiptPrinter {
         await printReceipt(
           kitchenOrderPages[i], 
           isPdf: false, 
-          isReceipt: false, // This is an order
+          isReceipt: false,
         );
         debugPrint(
           '✅ Printed kitchen order page ${i + 1}/${kitchenOrderPages.length}',
