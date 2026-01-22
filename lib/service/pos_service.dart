@@ -36,12 +36,50 @@ class PosService {
               : http.post(uri, headers: headers, body: jsonEncode(body)))
           .timeout(timeout);
 
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        // ============ IMPROVED NULL SAFETY ============
+        final responseBody = response.body;
+        
+        // Check if response body is empty
+        if (responseBody.isEmpty) {
+          print('⚠️ Empty response body');
+          return {'success': false, 'message': 'Empty response from server'};
+        }
+
+        try {
+          final decoded = jsonDecode(responseBody);
+          
+          // Check if decoded is a Map
+          if (decoded is Map<String, dynamic>) {
+            return decoded;
+          } else {
+            print('⚠️ Response is not a Map: ${decoded.runtimeType}');
+            return {
+              'success': false, 
+              'message': 'Invalid response format',
+              'raw_response': decoded?.toString() ?? 'null'
+            };
+          }
+        } catch (e) {
+          print('❌ JSON decode error: $e');
+          return {
+            'success': false,
+            'message': 'Failed to parse response',
+            'error': e.toString(),
+            'raw_response': responseBody
+          };
+        }
       } else {
-        final error = jsonDecode(response.body);
-        throw Exception(error['message'] ??
-            'Request failed with status ${response.statusCode}');
+        try {
+          final error = jsonDecode(response.body);
+          throw Exception(error['message'] ??
+              'Request failed with status ${response.statusCode}');
+        } catch (e) {
+          throw Exception('Request failed with status ${response.statusCode}: ${response.body}');
+        }
       }
     } catch (e) {
       print('API Error: $e');
@@ -50,6 +88,7 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getFloorsAndTables(String branch) async {
+    print("END POINT: shiok_pos.api.get_floor_and_tables?branch=$branch");
     return makeRequest(
       endpoint: 'shiok_pos.api.get_floor_and_tables?branch=$branch',
     );

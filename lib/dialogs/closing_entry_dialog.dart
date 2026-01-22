@@ -41,15 +41,30 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // ============ IMPROVED NULL SAFETY ============
+    final messageData = _closingData['message'];
+    if (messageData == null) {
+      return AlertDialog(
+        title: const Text('Error'),
+        content: const Text('Invalid closing data'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      );
+    }
+
     final paymentReconciliation =
-        (_closingData['message']['payment_reconciliation'] as List?) ?? [];
+        (messageData['payment_reconciliation'] as List?) ?? [];
 
     // Initialize controllers if not done yet
-    if (_amountControllers.isEmpty) {
+    if (_amountControllers.isEmpty && paymentReconciliation.isNotEmpty) {
       _amountControllers.addAll(
         paymentReconciliation.map(
           (payment) => TextEditingController(
-              text: payment['expected_amount'].toString()),
+              text: payment['expected_amount']?.toString() ?? '0'),
         ),
       );
 
@@ -58,8 +73,10 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
           final focusNode = FocusNode();
           focusNode.addListener(() {
             final index = _focusNodes.indexOf(focusNode);
-            if (focusNode.hasFocus && _amountControllers[index].text == '0') {
-              _amountControllers[index].clear();
+            if (index >= 0 && index < _amountControllers.length) {
+              if (focusNode.hasFocus && _amountControllers[index].text == '0') {
+                _amountControllers[index].clear();
+              }
             }
           });
           return focusNode;
@@ -87,7 +104,7 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
             children: [
               const SizedBox(height: 16),
               Text(
-                'POS Profile: ${_closingData['message']['pos_profile']}',
+                'POS Profile: ${messageData['pos_profile'] ?? 'N/A'}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -102,7 +119,7 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        payment['mode_of_payment'],
+                        payment['mode_of_payment']?.toString() ?? 'Unknown',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -110,7 +127,7 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Expected Amount: RM ${payment['expected_amount']}',
+                        'Expected Amount: RM ${payment['expected_amount']?.toString() ?? '0.00'}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -183,19 +200,48 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      // ============ IMPROVED NULL SAFETY ============
+      final messageData = _closingData['message'];
+      if (messageData == null) {
+        throw Exception('Invalid closing data: missing message');
+      }
+
+      final closingName = messageData['name']?.toString();
+      if (closingName == null || closingName.isEmpty) {
+        throw Exception('Invalid closing data: missing name');
+      }
+
+      final originalPayments =
+          (messageData['payment_reconciliation'] as List?)
+              ?.cast<Map<String, dynamic>>() ?? [];
+
+      if (originalPayments.isEmpty) {
+        throw Exception('No payment methods to reconcile');
+      }
+
       // Prepare payment reconciliation details
       final paymentReconciliation = <Map<String, dynamic>>[];
-      final originalPayments =
-          (_closingData['message']['payment_reconciliation'] as List)
-              .cast<Map<String, dynamic>>();
 
       for (int i = 0; i < originalPayments.length; i++) {
         final input = _amountControllers[i].text.trim();
-        final regex = RegExp(r'^\d+(\.\d{1,2})?$');
+        
+        // Handle empty input
+        if (input.isEmpty) {
+          Fluttertoast.showToast(
+            msg: "Please enter amount for ${originalPayments[i]['mode_of_payment'] ?? 'payment method'}",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.orange,
+            textColor: Colors.white,
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
 
+        // Validate format
+        final regex = RegExp(r'^\d+(\.\d{1,2})?$');
         if (!regex.hasMatch(input)) {
           Fluttertoast.showToast(
-            msg: "Invalid amount for ${originalPayments[i]['mode_of_payment']}",
+            msg: "Invalid amount for ${originalPayments[i]['mode_of_payment'] ?? 'payment method'} (max 2 decimal places)",
             gravity: ToastGravity.BOTTOM,
             backgroundColor: Colors.red,
             textColor: Colors.white,
@@ -206,17 +252,79 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
 
         final amount = double.parse(input);
         paymentReconciliation.add({
-          'mode_of_payment': originalPayments[i]['mode_of_payment'],
+          'mode_of_payment': originalPayments[i]['mode_of_payment'] ?? '',
           'closing_amount': amount,
         });
       }
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitClosingVoucher(
-        name: _closingData['message']['name'],
-        paymentReconciliation: paymentReconciliation,
-      ));
+      print('📝 Submitting closing entry: $closingName');
+      print('📝 Payment reconciliation: $paymentReconciliation');
 
-      if (response['message']["status"] == "Submitted") {
+      // ============ FIXED: Handle null MainLayout ============
+      Map<String, dynamic> response;
+      
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        // Use API queue if MainLayout is available
+        print('✅ Using MainLayout API queue');
+        response = await mainLayout.safeExecuteAPICall(() => 
+          PosService().submitClosingVoucher(
+            name: closingName,
+            paymentReconciliation: paymentReconciliation,
+          )
+        );
+      } else {
+        // Direct call if MainLayout is not available
+        print('⚠️ MainLayout not available, calling API directly');
+        response = await PosService().submitClosingVoucher(
+          name: closingName,
+          paymentReconciliation: paymentReconciliation,
+        );
+      }
+
+      print('📥 Closing entry response: $response');
+
+      // ============ IMPROVED NULL SAFETY ============
+      
+      // Check if response is null
+      if (response == null) {
+        throw Exception('No response received from server');
+      }
+
+      // Check for success flag
+      final success = response['success'];
+      if (success == false) {
+        final errorMessage = response['message'];
+        throw Exception(errorMessage ?? 'Failed to submit closing entry');
+      }
+
+      // Check message structure
+      final responseMessage = response['message'];
+      if (responseMessage == null) {
+        throw Exception('Invalid response format: missing message');
+      }
+
+      // Handle different response formats
+      String? status;
+      
+      // Check if responseMessage is a Map
+      if (responseMessage is Map) {
+        status = responseMessage['status']?.toString();
+      } 
+      // Check if responseMessage is a String
+      else if (responseMessage is String) {
+        // Sometimes the API returns just a string message
+        if (responseMessage.toLowerCase().contains('success') || 
+            responseMessage.toLowerCase().contains('submitted')) {
+          status = 'Submitted';
+        }
+      }
+
+      print('📊 Closing entry status: $status');
+
+      // Check if closing was successful
+      if (status == 'Submitted' || status == 'submitted' || success == true) {
+        // Mark opening as closed
         ref.read(authProvider.notifier).markOpeningClosed();
 
         if (mounted) {
@@ -226,19 +334,25 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
             gravity: ToastGravity.BOTTOM,
             backgroundColor: Colors.green,
             textColor: Colors.white,
+            toastLength: Toast.LENGTH_LONG,
           );
         }
       } else {
         throw Exception(
-            response['message'] ?? 'Failed to submit closing entry');
+          'Closing entry submission failed. Status: $status'
+        );
       }
+
     } catch (e) {
+      print('❌ Error submitting closing entry: $e');
+      
       if (mounted) {
         Fluttertoast.showToast(
-          msg: "Error: ${e.toString()}",
+          msg: "Error: ${e.toString().replaceAll('Exception: ', '')}",
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.red,
           textColor: Colors.white,
+          toastLength: Toast.LENGTH_LONG,
         );
       }
     } finally {

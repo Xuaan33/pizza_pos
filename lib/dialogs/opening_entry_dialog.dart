@@ -23,6 +23,9 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
     for (var controller in _amountControllers) {
       controller.dispose();
     }
+    for (var focusNode in _focusNodes) {
+      focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -116,7 +119,7 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            method['name'],
+                            method['name'] ?? 'Unknown Payment Method',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -196,11 +199,25 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
 
       for (int i = 0; i < paymentMethods.length; i++) {
         final input = _amountControllers[i].text.trim();
+        
+        // Handle empty input
+        if (input.isEmpty) {
+          Fluttertoast.showToast(
+            msg: "Please enter amount for ${paymentMethods[i]['name'] ?? 'payment method'}",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.orange,
+            textColor: Colors.white,
+          );
+          setState(() => _isSubmitting = false);
+          return;
+        }
+
+        // Validate format
         final regex = RegExp(r'^\d+(\.\d{1,2})?$');
         if (!regex.hasMatch(input)) {
           Fluttertoast.showToast(
             msg:
-                "Invalid amount for ${paymentMethods[i]['name']} (max 2 decimal places)",
+                "Invalid amount for ${paymentMethods[i]['name'] ?? 'payment method'} (max 2 decimal places)",
             gravity: ToastGravity.BOTTOM,
             backgroundColor: Colors.red,
             textColor: Colors.white,
@@ -211,24 +228,82 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
 
         final amount = double.parse(input);
         balanceDetails.add({
-          'mode_of_payment': paymentMethods[i]['name'],
+          'mode_of_payment': paymentMethods[i]['name'] ?? '',
           'opening_amount': amount,
         });
       }
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createOpeningVoucher(
-        posProfile: posProfile,
-        balanceDetails: balanceDetails,
-      ));
+      print('📝 Creating opening entry with balance details: $balanceDetails');
 
-      print(response);
+      // ============ FIXED: Handle null MainLayout ============
+      Map<String, dynamic> response;
+      
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        // Use API queue if MainLayout is available
+        print('✅ Using MainLayout API queue');
+        response = await mainLayout.safeExecuteAPICall(() => 
+          PosService().createOpeningVoucher(
+            posProfile: posProfile,
+            balanceDetails: balanceDetails,
+          )
+        );
+      } else {
+        // Direct call if MainLayout is not available
+        print('⚠️ MainLayout not available, calling API directly');
+        response = await PosService().createOpeningVoucher(
+          posProfile: posProfile,
+          balanceDetails: balanceDetails,
+        );
+      }
 
-      //to be confirmed
-      if (response['message']["status"] == "Open") {
+      print('📥 Opening entry response: $response');
+
+      // ============ IMPROVED NULL SAFETY ============
+      
+      // Check if response is null
+      if (response == null) {
+        throw Exception('No response received from server');
+      }
+
+      // Check for success flag
+      final success = response['success'];
+      if (success == false) {
+        final errorMessage = response['message'];
+        throw Exception(errorMessage ?? 'Failed to create opening entry');
+      }
+
+      // Check message structure
+      final messageData = response['message'];
+      if (messageData == null) {
+        throw Exception('Invalid response format: missing message');
+      }
+
+      // Handle different response formats
+      String? status;
+      
+      // Check if messageData is a Map
+      if (messageData is Map) {
+        status = messageData['status']?.toString();
+      } 
+      // Check if messageData is a String
+      else if (messageData is String) {
+        // Sometimes the API returns just a string message
+        if (messageData.toLowerCase().contains('success') || 
+            messageData.toLowerCase().contains('created')) {
+          status = 'Open';
+        }
+      }
+
+      print('📊 Opening entry status: $status');
+
+      // Check if opening was successful
+      if (status == 'Open' || status == 'open' || success == true) {
         // Save the opening date when creating opening entry
         ref
             .read(authProvider.notifier)
             .markOpeningCreated(openingDate: DateTime.now());
+        
         if (mounted) {
           Navigator.pop(context);
           Fluttertoast.showToast(
@@ -236,19 +311,25 @@ class _OpeningEntryDialogState extends ConsumerState<OpeningEntryDialog> {
             gravity: ToastGravity.BOTTOM,
             backgroundColor: Colors.green,
             textColor: Colors.white,
+            toastLength: Toast.LENGTH_LONG,
           );
         }
       } else {
         throw Exception(
-            response['message'] ?? 'Failed to create opening entry');
+          'Opening entry creation failed. Status: $status'
+        );
       }
+
     } catch (e) {
+      print('❌ Error creating opening entry: $e');
+      
       if (mounted) {
         Fluttertoast.showToast(
-          msg: "Error: ${e.toString()}",
+          msg: "Error: ${e.toString().replaceAll('Exception: ', '')}",
           gravity: ToastGravity.BOTTOM,
           backgroundColor: Colors.red,
           textColor: Colors.white,
+          toastLength: Toast.LENGTH_LONG,
         );
       }
     } finally {

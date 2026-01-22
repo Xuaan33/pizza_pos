@@ -71,17 +71,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _loadBaseUrl();
     _loadItemGroups();
     _initializeOrderItems();
-    
+
     // Listen to scroll events
     _scrollController.addListener(_updateScrollButtons);
 
     // Initialize scroll buttons and API calls after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScrollButtons();
-      
+
       // Delay API calls until context is available
       _loadAvailableItems();
-      
+
       _getDefaultTable().then((defaultTable) {
         if (defaultTable != null) {
           final defaultTableTitle = defaultTable['title'] ?? '';
@@ -114,7 +114,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final branch = prefs.getString('branch');
       if (branch == null) return null;
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
+      final response = await _safeApiCall(() => PosService().getFloorsAndTables(branch));
       if (response['success'] == true) {
         final floorsData = response['message'];
 
@@ -365,8 +365,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           cashDrawerPin,
         ) async {
           final posService = PosService();
-          final response =
-              await MainLayout.of(context)!.safeExecuteAPICall(() => posService.getItems(posProfile)); // Pass posProfile here
+          final response = await _safeApiCall(
+              () => posService.getItems(posProfile)); // Pass posProfile here
 
           if (response['success'] == true) {
             if (mounted) {
@@ -400,7 +400,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _loadVariantGroupsForItems() async {
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
+      final response = await _safeApiCall(() => PosService().getVariantGroups());
 
       if (response['success'] == true) {
         final variantGroups =
@@ -503,11 +503,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getStockBalanceSummary(
-            posProfile: posProfile,
-            isPosItem: 1,
-            disable: 0,
-          ));
+          final response = await _safeApiCall(() => PosService().getStockBalanceSummary(
+                    posProfile: posProfile,
+                    isPosItem: 1,
+                    disable: 0,
+                  ));
           if (response['success'] == true) {
             final newStockQuantities = <String, int>{};
 
@@ -2150,7 +2150,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         try {
           // 1. Get the full table name from floors and tables API
-          final floorsResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
+          final floorsResponse = await _safeApiCall(
+                  () => PosService().getFloorsAndTables(branch));
           String tableFullName = '${widget.tableNumber}'; // fallback
 
           if (floorsResponse['success'] == true) {
@@ -2181,14 +2182,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }).toList();
 
           // 3. Submit with proper table format and order channel
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
-            posProfile: posProfile,
-            customer: 'Guest',
-            items: items,
-            table: tableFullName, // e.g. "MK-Floor 1-Table 1"
-            orderChannel: 'Dine In', // Hardcoded as requested
-            name: hasExistingOrder ? widget.existingOrder!['orderId'] : null,
-          ));
+          final response = await _safeApiCall(() => PosService().submitOrder(
+                    posProfile: posProfile,
+                    customer: 'Guest',
+                    items: items,
+                    table: tableFullName, // e.g. "MK-Floor 1-Table 1"
+                    orderChannel: 'Dine In', // Hardcoded as requested
+                    name: hasExistingOrder
+                        ? widget.existingOrder!['orderId']
+                        : null,
+                  ));
 
           if (response['success'] == true) {
             Navigator.pop(context, {
@@ -2329,7 +2332,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoSaveAllRemarks();
 
         // Get the full table name from floors and tables API
-        final floorsResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
+        final floorsResponse = await _safeApiCall(() => PosService().getFloorsAndTables(branch));
         String? tableFullName;
 
         for (var floor in floorsResponse['message']) {
@@ -2373,17 +2376,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Submit/Update the order first
         if (hasExistingOrder) {
           // Update existing order
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
-              posProfile: posProfile,
-              customer: 'Guest',
-              items: items,
-              table: tableFullName,
-              orderChannel: 'Dine In',
-              name: widget.existingOrder!['orderId'],
-              couponCode: widget.existingOrder!['coupon_code'],
-              remarks: widget.existingOrder!['remarks'],
-              custom_user_voucher:
-                  widget.existingOrder!['custom_user_voucher']));
+          final response = await _safeApiCall(
+              () => PosService().submitOrder(
+                  posProfile: posProfile,
+                  customer: 'Guest',
+                  items: items,
+                  table: tableFullName,
+                  orderChannel: 'Dine In',
+                  name: widget.existingOrder!['orderId'],
+                  couponCode: widget.existingOrder!['coupon_code'],
+                  remarks: widget.existingOrder!['remarks'],
+                  custom_user_voucher:
+                      widget.existingOrder!['custom_user_voucher']));
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -2392,13 +2396,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         } else {
           // Create new order
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
-            posProfile: posProfile,
-            customer: 'Guest',
-            items: items,
-            table: tableFullName,
-            orderChannel: 'Dine In',
-          ));
+          final response = await _safeApiCall(() => PosService().submitOrder(
+                    posProfile: posProfile,
+                    customer: 'Guest',
+                    items: items,
+                    table: tableFullName,
+                    orderChannel: 'Dine In',
+                  ));
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -2520,10 +2524,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
 
           // Call refund API for return items only
-          final refundResult = await MainLayout.of(context)!.safeExecuteAPICall(() => posService.refundOrder(
-            name: _originalOrderId!,
-            items: returnItems,
-          ));
+          final refundResult = await _safeApiCall(() => posService.refundOrder(
+                    name: _originalOrderId!,
+                    items: returnItems,
+                  ));
 
           if (refundResult['success'] != true) {
             throw Exception(
@@ -2590,7 +2594,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoSaveAllRemarks();
 
         // Get the full table name (use a default for exchange orders)
-        final floorsResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getFloorsAndTables(branch));
+        final floorsResponse = await _safeApiCall(() => PosService().getFloorsAndTables(branch));
         String tableFullName = '${widget.tableNumber}'; // fallback
 
         if (floorsResponse['success'] == true) {
@@ -2621,14 +2625,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }).toList();
 
         // Create new order for exchange items
-        final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
-          posProfile: posProfile,
-          customer: 'Guest',
-          items: items,
-          table: tableFullName,
-          orderChannel: 'Dine In',
-          remarks: 'Exchange from order: $_originalOrderId',
-        ));
+        final response = await _safeApiCall(() => PosService().submitOrder(
+                  posProfile: posProfile,
+                  customer: 'Guest',
+                  items: items,
+                  table: tableFullName,
+                  orderChannel: 'Dine In',
+                  remarks: 'Exchange from order: $_originalOrderId',
+                ));
 
         if (response['success'] == true) {
           final orderName = response['message']['name'];
@@ -3322,7 +3326,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         throw Exception('Order ID not found');
       }
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().deleteOrder(orderName));
+      final response = await _safeApiCall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3834,5 +3838,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           },
         ) ??
         '0';
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }
