@@ -94,7 +94,6 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       tier = prefs.getString('tier') ?? 'tier 1';
-      print('CHECK TIER: $tier');
     }); // Refresh UI
   }
 

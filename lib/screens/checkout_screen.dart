@@ -245,24 +245,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final invoice = invoices.first;
           final List<dynamic> serverItems = invoice['items'] ?? [];
 
-          // debugPrint('=== SERVER ORDER DATA ===');
-          // debugPrint('Grand Total: ${invoice['grand_total']}');
-          // debugPrint('Subtotal (total): ${invoice['total']}');
-          // debugPrint('Discount: ${invoice['discount_amount']}');
-          // debugPrint('Taxes: ${invoice['total_taxes_and_charges']}');
-          // debugPrint('Rounding: ${invoice['base_rounding_adjustment']}');
-
-          // debugPrint('=== SERVER ITEMS ===');
-          // for (final serverItem in serverItems) {
-          //   debugPrint('Item: ${serverItem['item_name']}');
-          //   debugPrint('  - Rate: ${serverItem['rate']}');
-          //   debugPrint('  - Qty: ${serverItem['qty']}');
-          //   debugPrint(
-          //       '  - Amount: ${(serverItem['rate'] as num?)?.toDouble() ?? 0.0 * (serverItem['qty'] as num?)!.toDouble() ?? 1.0}');
-          //   debugPrint(
-          //       '  - Variant Info: ${serverItem['custom_variant_info']}');
-          // }
-
           setState(() {
             // Update order details
             widget.order['grand_total'] =
@@ -1317,13 +1299,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final totalItemPrice = basePrice + variantCost;
       final amount = totalItemPrice * quantity;
 
-      // debugPrint('Item $i: ${item['name']}');
-      // debugPrint('  - Base Price: RM$basePrice');
-      // debugPrint('  - Variant Cost: RM$variantCost');
-      // debugPrint('  - Total Price (base + variant): RM$totalItemPrice');
-      // debugPrint('  - Quantity: $quantity');
-      // debugPrint('  - Amount: RM$amount');
-      // debugPrint('  - Variant Info: $variantInfo');
     }
     // debugPrint('=== END ITEMS DEBUG ===');
     return Table(
@@ -2689,7 +2664,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final adjSS = (totalSeconds % 60).toString().padLeft(2, '0');
 
         final adjustedTime = '$adjHH$adjMM$adjSS'; // HHMMSS adjusted
-        print("SOHAI $yymm$adjustedTime$middleRef");
 
         return '$yymm$adjustedTime$middleRef';
       }
@@ -5289,12 +5263,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           if (currentUniqueKey == splitUniqueKey) {
             final remainingQty = (originalItem['quantity'] as num).toDouble() -
                 (splitItem['split_quantity'] as num).toDouble();
-
-            debugPrint('📊 Updating item: ${originalItem['name']}');
-            debugPrint('   Original quantity: ${originalItem['quantity']}');
-            debugPrint('   Split quantity: ${splitItem['split_quantity']}');
-            debugPrint('   Remaining quantity: $remainingQty');
-            debugPrint('   Original price: ${originalItem['price']}');
 
             if (remainingQty <= 0) {
               updatedItems.removeAt(originalIndex);

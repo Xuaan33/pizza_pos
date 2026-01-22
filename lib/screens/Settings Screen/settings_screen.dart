@@ -187,7 +187,8 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await _safeApiCall(() => PosService().getKitchenStations(
+          final response =
+              await _safeApiCall(() => PosService().getKitchenStations(
                     posProfile: posProfile,
                   ));
 
@@ -229,6 +230,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
       setState(() {
         _usbPrintReceipt = config.printReceipt;
         _usbPrintOrder = config.printOrder;
+        _selectedKitchenStations = config.kitchenStations;
       });
       debugPrint('✅ Loaded USB config: ${config.capabilities}');
     } catch (e) {
@@ -241,6 +243,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
       final config = UsbPrinterConfig(
         printReceipt: _usbPrintReceipt,
         printOrder: _usbPrintOrder,
+        kitchenStations: _selectedKitchenStations,
       );
 
       await ReceiptPrinter.saveUsbPrinterConfig(config);
@@ -1425,7 +1428,8 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-            final response = await _safeApiCall(() => PosService().getEmployees());
+          final response =
+              await _safeApiCall(() => PosService().getEmployees());
           if (response['success'] == true) {
             if (mounted) {
               setState(() {
@@ -1459,13 +1463,152 @@ Future<void> _discoverUsbDevices() async {
     }
   }
 
-  Future<void> _employeeCheckIn(String employeeId, String branch) async {
+  Future<void> _showPinDialog({
+    required String employeeId,
+    required String employeeName,
+    required String branch,
+    required bool isCheckIn,
+  }) async {
+    final TextEditingController pinController = TextEditingController();
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(
+                isCheckIn ? 'Employee Check-In' : 'Employee Check-Out',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Colors.white,
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Enter PIN for $employeeName',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      letterSpacing: 4,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Enter PIN',
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => pinController.clear(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please enter your PIN to ${isCheckIn ? 'check in' : 'check out'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                        },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          final enteredPin = pinController.text.trim();
+
+                          if (enteredPin.isEmpty) {
+                            Fluttertoast.showToast(
+                              msg: 'Please enter PIN',
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Colors.red,
+                              textColor: Colors.white,
+                            );
+                            return;
+                          }
+
+                          setState(() => isLoading = true);
+
+                          try {
+                            if (isCheckIn) {
+                              await _employeeCheckIn(
+                                employeeId: employeeId,
+                                branch: branch,
+                                pin: enteredPin,
+                              );
+                            } else {
+                              await _employeeCheckOut(
+                                employeeId: employeeId,
+                                branch: branch,
+                                pin: enteredPin,
+                              );
+                            }
+
+                            if (mounted) {
+                              Navigator.pop(context);
+                            }
+                          } catch (e) {
+                            setState(() => isLoading = false);
+                            // Error will be shown in the _employeeCheckIn/_employeeCheckOut methods
+                          }
+                        },
+                  child: Text(
+                    isCheckIn ? 'Check In' : 'Check Out',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _employeeCheckIn({
+    required String employeeId,
+    required String branch,
+    required String pin,
+  }) async {
     try {
       setState(() => _isEmployeeLoading = true);
-            final response = await _safeApiCall(() => PosService().employeeCheckIn(
-                employee: employeeId,
-                branch: branch,
-              ));
+      final response = await _safeApiCall(() => PosService().employeeCheckIn(
+            employee: employeeId,
+            branch: branch,
+            pin: pin, // Pass the PIN
+          ));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -1485,18 +1628,26 @@ Future<void> _discoverUsbDevices() async {
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+      rethrow; // Re-throw to handle in dialog
     } finally {
       setState(() => _isEmployeeLoading = false);
     }
   }
 
-  Future<void> _employeeCheckOut(String employeeId, String branch) async {
+// Update the existing _employeeCheckOut method to accept PIN
+  Future<void> _employeeCheckOut({
+    required String employeeId,
+    required String branch,
+    required String pin,
+  }) async {
     try {
       setState(() => _isEmployeeLoading = true);
       final response = await _safeApiCall(() => PosService().employeeCheckOut(
             employee: employeeId,
             branch: branch,
+            pin: pin, // Pass the PIN
           ));
+
       if (response['success'] == true) {
         Fluttertoast.showToast(
           msg: 'Check-out successful',
@@ -1515,6 +1666,7 @@ Future<void> _discoverUsbDevices() async {
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+      rethrow; // Re-throw to handle in dialog
     } finally {
       setState(() => _isEmployeeLoading = false);
     }
@@ -2234,13 +2386,212 @@ Future<void> _discoverUsbDevices() async {
                 value: _usbPrintOrder,
                 onChanged: (value) {
                   setState(() {
-                    _usbPrintOrder = value ?? true;
+                    _usbPrintOrder = value ?? false;
+                    // Clear stations if print order is disabled
+                    if (!_usbPrintOrder) {
+                      _selectedKitchenStations = [];
+                    }
                   });
                   _saveUsbPrinterConfig();
                 },
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
               ),
+
+              // ============ NEW: Kitchen Stations Section for USB ============
+              if (_usbPrintOrder) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[100],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(Icons.restaurant,
+                          size: 18, color: Colors.orange[700]),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Kitchen Stations',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                Text(
+                  'Select which stations this USB printer will handle:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // All Stations Option
+                Container(
+                  decoration: BoxDecoration(
+                    color: _selectedKitchenStations.isEmpty
+                        ? Colors.blue[50]
+                        : Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _selectedKitchenStations.isEmpty
+                          ? Colors.blue[300]!
+                          : Colors.grey[300]!,
+                    ),
+                  ),
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'All Stations',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'Print orders from all kitchen stations',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    value: _selectedKitchenStations.isEmpty,
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    onChanged: (value) {
+                      setState(() {
+                        if (value == true) {
+                          _selectedKitchenStations = [];
+                        }
+                      });
+                      _saveUsbPrinterConfig();
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                Text(
+                  'Or select specific stations:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Individual Station Checkboxes
+                if (_isLoadingKitchenStations)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (_availableKitchenStations.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.orange[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 16, color: Colors.orange[700]),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'No kitchen stations configured in your system',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: _availableKitchenStations.map((station) {
+                          final isSelected =
+                              _selectedKitchenStations.contains(station);
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.orange[50] : null,
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.grey[200]!,
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            child: CheckboxListTile(
+                              title: Text(
+                                station,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              value: isSelected,
+                              dense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    _selectedKitchenStations.add(station);
+                                  } else {
+                                    _selectedKitchenStations.remove(station);
+                                  }
+                                });
+                                _saveUsbPrinterConfig();
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                // Show selected count
+                if (_selectedKitchenStations.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.green[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle,
+                            size: 16, color: Colors.green[700]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${_selectedKitchenStations.length} station(s) selected: ${_selectedKitchenStations.join(", ")}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
 
               if (!_usbPrintReceipt && !_usbPrintOrder)
                 Container(
@@ -2787,8 +3138,14 @@ Future<void> _discoverUsbDevices() async {
                                           cashDrawerPinNeeded,
                                           cashDrawerPin,
                                         ) {
-                                          _employeeCheckIn(
-                                              employee['name'], branch);
+                                          _showPinDialog(
+                                            employeeId: employee['name'],
+                                            employeeName:
+                                                employee['employee_name'] ??
+                                                    'Unknown',
+                                            branch: branch,
+                                            isCheckIn: true,
+                                          );
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -2825,8 +3182,14 @@ Future<void> _discoverUsbDevices() async {
                                           cashDrawerPinNeeded,
                                           cashDrawerPin,
                                         ) {
-                                          _employeeCheckOut(
-                                              employee['name'], branch);
+                                          _showPinDialog(
+                                            employeeId: employee['name'],
+                                            employeeName:
+                                                employee['employee_name'] ??
+                                                    'Unknown',
+                                            branch: branch,
+                                            isCheckIn: false,
+                                          );
                                         },
                                         initial: () {},
                                         unauthenticated: () {},
@@ -2946,9 +3309,10 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await _safeApiCall(() => PosService().requestClosingVoucher( 
-                posProfile: posProfile,
-              ));
+          final response =
+              await _safeApiCall(() => PosService().requestClosingVoucher(
+                    posProfile: posProfile,
+                  ));
 
           if (mounted) {
             showDialog(

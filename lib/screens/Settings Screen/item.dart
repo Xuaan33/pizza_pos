@@ -272,8 +272,6 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         detailedItems.add(
           basicItem.copyWith(isPosItem: 0),
         );
-
-        print('Test here ${basicItem.isPosItem}');
       }
     }
 

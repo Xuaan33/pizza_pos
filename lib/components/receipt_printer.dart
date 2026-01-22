@@ -28,16 +28,19 @@ class KitchenOrderPage {
 class UsbPrinterConfig {
   final bool printReceipt;
   final bool printOrder;
+  final List<String> kitchenStations;
 
   UsbPrinterConfig({
     this.printReceipt = true,
     this.printOrder = true,
+    this.kitchenStations = const [],
   });
 
   Map<String, dynamic> toJson() {
     return {
       'printReceipt': printReceipt,
       'printOrder': printOrder,
+      'kitchenStations': kitchenStations,
     };
   }
 
@@ -45,13 +48,28 @@ class UsbPrinterConfig {
     return UsbPrinterConfig(
       printReceipt: json['printReceipt'] ?? true,
       printOrder: json['printOrder'] ?? true,
+      kitchenStations: json['kitchenStations'] != null
+          ? List<String>.from(json['kitchenStations'])
+          : [],
     );
   }
 
   String get capabilities {
-    if (printReceipt && printOrder) return 'Receipt & Order';
+    if (printReceipt && printOrder) {
+      if (kitchenStations.isEmpty) {
+        return 'Receipt & All Stations';
+      } else {
+        return 'Receipt & Stations: ${kitchenStations.join(", ")}';
+      }
+    }
     if (printReceipt) return 'Receipt Only';
-    if (printOrder) return 'Order Only';
+    if (printOrder) {
+      if (kitchenStations.isEmpty) {
+        return 'All Stations';
+      } else {
+        return 'Stations: ${kitchenStations.join(", ")}';
+      }
+    }
     return 'None';
   }
 }
@@ -205,6 +223,34 @@ class ReceiptPrinter {
   }
 
   /// -------------------------------------------
+  /// Check if USB should print for specific kitchen station
+  /// -------------------------------------------
+  static Future<bool> shouldUsbPrintForStation(
+      {required String kitchenStation}) async {
+    final usbEnabled = await isUsbEnabled();
+    if (!usbEnabled) return false;
+
+    final config = await getUsbPrinterConfig();
+
+    // Check if USB is configured for orders
+    if (!config.printOrder) return false;
+
+    // If no specific stations are configured, USB handles ALL stations
+    if (config.kitchenStations.isEmpty) {
+      debugPrint(
+          '   ✅ USB printer - Prints ALL stations (no specific stations configured)');
+      return true;
+    }
+
+    // Check if USB is configured for this specific station
+    final hasStation = config.kitchenStations.contains(kitchenStation);
+    debugPrint(
+        '   ${hasStation ? '✅' : '❌'} USB printer - Station "$kitchenStation": $hasStation (Configured: ${config.kitchenStations})');
+
+    return hasStation;
+  }
+
+  /// -------------------------------------------
   /// Get all configured network printers
   /// -------------------------------------------
   static Future<List<PrinterConfig>> getConfiguredPrinters() async {
@@ -243,9 +289,6 @@ class ReceiptPrinter {
     String? kitchenStation, // Add this parameter for station filtering
   }) async {
     final allPrinters = await getConfiguredPrinters();
-
-    debugPrint(
-        '🔍 Checking ${allPrinters.length} printers for ${forReceipt ? 'receipt' : 'order'}');
 
     return allPrinters.where((p) {
       if (!p.isEnabled) {
@@ -728,7 +771,7 @@ class ReceiptPrinter {
     Uint8List bytes, {
     bool isPdf = false,
     bool isReceipt = true,
-    String? kitchenStation, // Add this parameter
+    String? kitchenStation,
   }) async {
     try {
       final connectionType = await _getPrinterConnectionType();
@@ -740,25 +783,57 @@ class ReceiptPrinter {
       bool networkSuccess = false;
       String errorMessages = '';
 
-      // Check if USB should print this job type
-      final shouldPrintUsb = await shouldUsbPrint(isReceipt: isReceipt);
-
-      // Print to USB if enabled AND configured for this job type
-      if ((connectionType == PrinterConnectionType.usbOnly ||
-              connectionType == PrinterConnectionType.both) &&
-          shouldPrintUsb) {
-        debugPrint(
-            "🖨️ Printing to USB printer (${isReceipt ? 'Receipt' : 'Order'})...");
-        try {
-          usbSuccess = await _printViaUsb(ticket);
-        } catch (e) {
-          errorMessages += 'USB: $e\n';
-          debugPrint("❌ USB print failed: $e");
-        }
-      } else if (connectionType == PrinterConnectionType.usbOnly ||
+      if (connectionType == PrinterConnectionType.usbOnly ||
           connectionType == PrinterConnectionType.both) {
-        debugPrint(
-            "⏭️ Skipping USB printer (not configured for ${isReceipt ? 'receipts' : 'orders'})");
+        if (isReceipt) {
+          // For receipts, check if USB is configured for receipts
+          final shouldPrintUsb = await shouldUsbPrint(isReceipt: true);
+          if (shouldPrintUsb) {
+            debugPrint("🖨️ Printing receipt to USB printer...");
+            try {
+              usbSuccess = await _printViaUsb(ticket);
+            } catch (e) {
+              errorMessages += 'USB: $e\n';
+              debugPrint("❌ USB print failed: $e");
+            }
+          } else {
+            debugPrint("⏭️ Skipping USB printer (not configured for receipts)");
+          }
+        } else {
+          // For kitchen orders, check if USB is configured for this specific station
+          if (kitchenStation != null) {
+            final shouldPrintUsbForStation = await shouldUsbPrintForStation(
+              kitchenStation: kitchenStation,
+            );
+            if (shouldPrintUsbForStation) {
+              debugPrint(
+                  "🖨️ Printing kitchen order to USB printer for station: $kitchenStation");
+              try {
+                usbSuccess = await _printViaUsb(ticket);
+              } catch (e) {
+                errorMessages += 'USB: $e\n';
+                debugPrint("❌ USB print failed: $e");
+              }
+            } else {
+              debugPrint(
+                  "⏭️ Skipping USB printer (not configured for station: $kitchenStation)");
+            }
+          } else {
+            // No station specified - check general order printing
+            final shouldPrintUsb = await shouldUsbPrint(isReceipt: false);
+            if (shouldPrintUsb) {
+              debugPrint("🖨️ Printing kitchen order to USB printer...");
+              try {
+                usbSuccess = await _printViaUsb(ticket);
+              } catch (e) {
+                errorMessages += 'USB: $e\n';
+                debugPrint("❌ USB print failed: $e");
+              }
+            } else {
+              debugPrint("⏭️ Skipping USB printer (not configured for orders)");
+            }
+          }
+        }
       }
 
       // Print to Network if enabled
@@ -892,14 +967,6 @@ class ReceiptPrinter {
       // Get ALL network printers (not filtered yet) for debugging
       final allPrinters = await getConfiguredPrinters();
       debugPrint('📊 Total configured printers: ${allPrinters.length}');
-      for (final printer in allPrinters) {
-        debugPrint('   Printer: ${printer.name}');
-        debugPrint('     Enabled: ${printer.isEnabled}');
-        debugPrint('     Print Order: ${printer.printOrder}');
-        debugPrint('     Kitchen Stations: ${printer.kitchenStations}');
-        debugPrint(
-            '     Kitchen Stations length: ${printer.kitchenStations.length}');
-      }
 
       // Track printed pages count
       int printedPages = 0;
@@ -912,20 +979,25 @@ class ReceiptPrinter {
         debugPrint(
             '\n📄 Processing page ${i + 1}/$totalPages for station: "$station"');
 
+        // Check if USB should print for this station
+        final usbShouldPrint = await shouldUsbPrintForStation(
+          kitchenStation: station,
+        );
+
+        if (usbShouldPrint) {
+          debugPrint('   Will print to USB printer');
+        }
+
         // Get printers configured for THIS specific station
         final printersForStation = await getPrintersByCapability(
           forReceipt: false,
           kitchenStation: station,
         );
 
-        debugPrint(
-            '   Found ${printersForStation.length} printer(s) for station "$station"');
+        // Combine USB and network printers
+        final hasPrinters = usbShouldPrint || printersForStation.isNotEmpty;
 
-        if (printersForStation.isNotEmpty) {
-          for (final printer in printersForStation) {
-            debugPrint('   Will print to: ${printer.name}');
-          }
-
+        if (hasPrinters) {
           // Print using the filtered printers
           await printReceipt(
             page.imageData,

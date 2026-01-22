@@ -81,7 +81,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
       final posService = PosService();
       final response = await _safeApiCall(() => posService.getFloorsAndTables(branch));
-      print('Floors and Tables Response: $response');
 
       if (response['success'] == true) {
         final floorsData = response['message'];

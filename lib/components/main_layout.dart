@@ -2219,7 +2219,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
       final response = await safeExecuteAPICall(
           () => PosService().getFloorsAndTables(branch));
-          print(" Default Table Response: $response");
       if (response['success'] == true) {
         final floorsData = response['message'];
 

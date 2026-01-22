@@ -114,7 +114,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final branch = prefs.getString('branch');
       if (branch == null) return null;
 
-      final response = await _safeApiCall(() => PosService().getFloorsAndTables(branch));
+      final response =
+          await _safeApiCall(() => PosService().getFloorsAndTables(branch));
       if (response['success'] == true) {
         final floorsData = response['message'];
 
@@ -400,7 +401,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _loadVariantGroupsForItems() async {
     try {
-      final response = await _safeApiCall(() => PosService().getVariantGroups());
+      final response =
+          await _safeApiCall(() => PosService().getVariantGroups());
 
       if (response['success'] == true) {
         final variantGroups =
@@ -503,7 +505,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await _safeApiCall(() => PosService().getStockBalanceSummary(
+          final response =
+              await _safeApiCall(() => PosService().getStockBalanceSummary(
                     posProfile: posProfile,
                     isPosItem: 1,
                     disable: 0,
@@ -515,11 +518,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             final message = response['message'];
 
             if (message == null) {
-              debugPrint('Stock API returned null message');
               _setDefaultStockQuantities(newStockQuantities);
             } else if (message is! List) {
-              debugPrint(
-                  'Stock API message is not a List, type: ${message.runtimeType}');
               _setDefaultStockQuantities(newStockQuantities);
             } else {
               // Message is a List, process it
@@ -2150,8 +2150,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         try {
           // 1. Get the full table name from floors and tables API
-          final floorsResponse = await _safeApiCall(
-                  () => PosService().getFloorsAndTables(branch));
+          final floorsResponse =
+              await _safeApiCall(() => PosService().getFloorsAndTables(branch));
           String tableFullName = '${widget.tableNumber}'; // fallback
 
           if (floorsResponse['success'] == true) {
@@ -2183,15 +2183,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // 3. Submit with proper table format and order channel
           final response = await _safeApiCall(() => PosService().submitOrder(
-                    posProfile: posProfile,
-                    customer: 'Guest',
-                    items: items,
-                    table: tableFullName, // e.g. "MK-Floor 1-Table 1"
-                    orderChannel: 'Dine In', // Hardcoded as requested
-                    name: hasExistingOrder
-                        ? widget.existingOrder!['orderId']
-                        : null,
-                  ));
+                posProfile: posProfile,
+                customer: 'Guest',
+                items: items,
+                table: tableFullName, // e.g. "MK-Floor 1-Table 1"
+                orderChannel: 'Dine In', // Hardcoded as requested
+                name:
+                    hasExistingOrder ? widget.existingOrder!['orderId'] : null,
+              ));
 
           if (response['success'] == true) {
             Navigator.pop(context, {
@@ -2332,7 +2331,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoSaveAllRemarks();
 
         // Get the full table name from floors and tables API
-        final floorsResponse = await _safeApiCall(() => PosService().getFloorsAndTables(branch));
+        final floorsResponse =
+            await _safeApiCall(() => PosService().getFloorsAndTables(branch));
         String? tableFullName;
 
         for (var floor in floorsResponse['message']) {
@@ -2376,18 +2376,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Submit/Update the order first
         if (hasExistingOrder) {
           // Update existing order
-          final response = await _safeApiCall(
-              () => PosService().submitOrder(
-                  posProfile: posProfile,
-                  customer: 'Guest',
-                  items: items,
-                  table: tableFullName,
-                  orderChannel: 'Dine In',
-                  name: widget.existingOrder!['orderId'],
-                  couponCode: widget.existingOrder!['coupon_code'],
-                  remarks: widget.existingOrder!['remarks'],
-                  custom_user_voucher:
-                      widget.existingOrder!['custom_user_voucher']));
+          final response = await _safeApiCall(() => PosService().submitOrder(
+              posProfile: posProfile,
+              customer: 'Guest',
+              items: items,
+              table: tableFullName,
+              orderChannel: 'Dine In',
+              name: widget.existingOrder!['orderId'],
+              couponCode: widget.existingOrder!['coupon_code'],
+              remarks: widget.existingOrder!['remarks'],
+              custom_user_voucher:
+                  widget.existingOrder!['custom_user_voucher']));
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -2397,12 +2396,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         } else {
           // Create new order
           final response = await _safeApiCall(() => PosService().submitOrder(
-                    posProfile: posProfile,
-                    customer: 'Guest',
-                    items: items,
-                    table: tableFullName,
-                    orderChannel: 'Dine In',
-                  ));
+                posProfile: posProfile,
+                customer: 'Guest',
+                items: items,
+                table: tableFullName,
+                orderChannel: 'Dine In',
+              ));
 
           if (response['success'] == true) {
             orderName = response['message']['name'];
@@ -2525,9 +2524,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // Call refund API for return items only
           final refundResult = await _safeApiCall(() => posService.refundOrder(
-                    name: _originalOrderId!,
-                    items: returnItems,
-                  ));
+                name: _originalOrderId!,
+                items: returnItems,
+              ));
 
           if (refundResult['success'] != true) {
             throw Exception(
@@ -2594,7 +2593,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _autoSaveAllRemarks();
 
         // Get the full table name (use a default for exchange orders)
-        final floorsResponse = await _safeApiCall(() => PosService().getFloorsAndTables(branch));
+        final floorsResponse =
+            await _safeApiCall(() => PosService().getFloorsAndTables(branch));
         String tableFullName = '${widget.tableNumber}'; // fallback
 
         if (floorsResponse['success'] == true) {
@@ -2626,13 +2626,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         // Create new order for exchange items
         final response = await _safeApiCall(() => PosService().submitOrder(
-                  posProfile: posProfile,
-                  customer: 'Guest',
-                  items: items,
-                  table: tableFullName,
-                  orderChannel: 'Dine In',
-                  remarks: 'Exchange from order: $_originalOrderId',
-                ));
+              posProfile: posProfile,
+              customer: 'Guest',
+              items: items,
+              table: tableFullName,
+              orderChannel: 'Dine In',
+              remarks: 'Exchange from order: $_originalOrderId',
+            ));
 
         if (response['success'] == true) {
           final orderName = response['message']['name'];
@@ -3326,7 +3326,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         throw Exception('Order ID not found');
       }
 
-      final response = await _safeApiCall(() => PosService().deleteOrder(orderName));
+      final response =
+          await _safeApiCall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3394,9 +3395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     mainLayout.settingsScreenKey.currentState!.mounted) {
                   mainLayout.settingsScreenKey.currentState!.showSection(0);
                 }
-              } else {
-                print('MainLayout.of(context) returned null');
-              }
+              } else {}
             },
             style: TextButton.styleFrom(
               backgroundColor: const Color(0xFFE732A0),

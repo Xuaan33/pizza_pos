@@ -257,9 +257,6 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
         });
       }
 
-      print('📝 Submitting closing entry: $closingName');
-      print('📝 Payment reconciliation: $paymentReconciliation');
-
       // ============ FIXED: Handle null MainLayout ============
       Map<String, dynamic> response;
       
@@ -319,8 +316,6 @@ class _ClosingEntryDialogState extends ConsumerState<ClosingEntryDialog> {
           status = 'Submitted';
         }
       }
-
-      print('📊 Closing entry status: $status');
 
       // Check if closing was successful
       if (status == 'Submitted' || status == 'submitted' || success == true) {

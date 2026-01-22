@@ -171,28 +171,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ) async {
         try {
           final response = await _safeApiCall(() => PosService().getOrders(
-                    posProfile: posProfile,
-                    status: 'Draft',
-                    pageLength: 1000,
-                  ));
+                posProfile: posProfile,
+                status: 'Draft',
+                pageLength: 1000,
+              ));
           // Check if message exists and what it contains
           if (response['message'] == null) {
-            print('ERROR: message field is null');
             return 0.0;
           }
-
-          print('Message type: ${response['message'].runtimeType}');
-          print('Message content: ${response['message']}');
 
           // Fix: The orders are nested at response['message']['message']
           final messageData = response['message'] as Map<String, dynamic>?;
           final orders =
               _convertListToProperType(messageData?['message'] ?? []);
 
-          print('Found ${orders.length} draft orders after conversion');
-
           if (orders.isEmpty) {
-            print('WARNING: No orders found after conversion');
             return 0.0;
           }
 
@@ -209,27 +202,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final status = order['status'] as String? ?? 'Unknown';
             final docstatus = order['docstatus'] as int? ?? 1;
 
-            // print(
-            //     'Order ${i + 1}/${orders.length}: $orderName, Status: $status, DocStatus: $docstatus');
-            // print('  - net_total: $netTotal');
-            // print('  - total: $total');
-            // print('  - grand_total: $grandTotal');
-
             // Only include orders with docstatus = 0 (Draft)
             if (docstatus == 0) {
               totalPayLater += netTotal;
               validOrderCount++;
-              // print(
-              //     '  ✓ Added to total: $netTotal (Running total: $totalPayLater)');
-            } else {
-              // print('  ✗ Skipped (docstatus != 0)');
-            }
+            } else {}
           }
-
-          // print('===========================================');
-          // print('Valid draft orders counted: $validOrderCount');
-          // print('Calculated Total Pay Later Amount: $totalPayLater');
-          // print('===========================================');
 
           return totalPayLater;
         } catch (e, stackTrace) {
@@ -314,35 +292,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         final results = await Future.wait([
           // 0: Total sales
           _safeApiCall(() => PosService().makeRequest(
-                    endpoint:
-                        'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-                  )),
+                endpoint:
+                    'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
+              )),
           // 1: Peak time
           _safeApiCall(() => PosService().makeRequest(
-                    endpoint:
-                        'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
-                  )),
+                endpoint:
+                    'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
+              )),
           // 2: Today info
           _safeApiCall(() => PosService().getTodayInfo()),
           // 3: Revenue data
           _safeApiCall(() => PosService().makeRequest(
-                    endpoint: 'shiok_pos.api.get_revenue?'
-                        'pos_profile=$posProfile&'
-                        'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
-                        'xaxis=$xaxisParam',
-                  )),
+                endpoint: 'shiok_pos.api.get_revenue?'
+                    'pos_profile=$posProfile&'
+                    'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
+                    'xaxis=$xaxisParam',
+              )),
           // 4: Popular items
           _safeApiCall(() => PosService().makeRequest(
-                    endpoint:
-                        'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
-                  )),
+                endpoint:
+                    'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
+              )),
           // 5: Payment methods
-          _safeApiCall(
-              () => PosService().getPaymentMethodDistribution(
-                    posProfile: posProfile,
-                    fromDate: dateFormat.format(fromDate),
-                    toDate: dateFormat.format(toDate),
-                  )),
+          _safeApiCall(() => PosService().getPaymentMethodDistribution(
+                posProfile: posProfile,
+                fromDate: dateFormat.format(fromDate),
+                toDate: dateFormat.format(toDate),
+              )),
           // 6: Applied vouchers
           // PosService().getAppliedUserVouchers(
           //   posProfile: posProfile,

@@ -31,7 +31,6 @@ class _StockManagementSectionState
   @override
   void initState() {
     super.initState();
-    print('StockManagementSection initState called');
     _loadStockItems();
   }
 

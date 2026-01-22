@@ -36,13 +36,13 @@ class PosService {
               : http.post(uri, headers: headers, body: jsonEncode(body)))
           .timeout(timeout);
 
-      print('Response Status: ${response.statusCode}');
-      print('Response Body: ${response.body}');
+      // print('Response Status: ${response.statusCode}');
+      // print('Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         // ============ IMPROVED NULL SAFETY ============
         final responseBody = response.body;
-        
+
         // Check if response body is empty
         if (responseBody.isEmpty) {
           print('⚠️ Empty response body');
@@ -51,14 +51,14 @@ class PosService {
 
         try {
           final decoded = jsonDecode(responseBody);
-          
+
           // Check if decoded is a Map
           if (decoded is Map<String, dynamic>) {
             return decoded;
           } else {
             print('⚠️ Response is not a Map: ${decoded.runtimeType}');
             return {
-              'success': false, 
+              'success': false,
               'message': 'Invalid response format',
               'raw_response': decoded?.toString() ?? 'null'
             };
@@ -78,7 +78,8 @@ class PosService {
           throw Exception(error['message'] ??
               'Request failed with status ${response.statusCode}');
         } catch (e) {
-          throw Exception('Request failed with status ${response.statusCode}: ${response.body}');
+          throw Exception(
+              'Request failed with status ${response.statusCode}: ${response.body}');
         }
       }
     } catch (e) {
@@ -88,7 +89,6 @@ class PosService {
   }
 
   Future<Map<String, dynamic>> getFloorsAndTables(String branch) async {
-    print("END POINT: shiok_pos.api.get_floor_and_tables?branch=$branch");
     return makeRequest(
       endpoint: 'shiok_pos.api.get_floor_and_tables?branch=$branch',
     );
@@ -969,6 +969,7 @@ class PosService {
   Future<Map<String, dynamic>> employeeCheckIn({
     required String employee,
     required String branch,
+    required String pin,
   }) async {
     return makeRequest(
       endpoint: 'shiok_pos.api.employee_check_in',
@@ -976,6 +977,7 @@ class PosService {
       body: {
         'employee': employee,
         'branch': branch,
+        'pin': pin,
       },
     );
   }
@@ -983,6 +985,7 @@ class PosService {
   Future<Map<String, dynamic>> employeeCheckOut({
     required String employee,
     required String branch,
+    required String pin,
   }) async {
     return makeRequest(
       endpoint: 'shiok_pos.api.employee_check_out',
@@ -990,6 +993,7 @@ class PosService {
       body: {
         'employee': employee,
         'branch': branch,
+        'pin': pin,
       },
     );
   }
