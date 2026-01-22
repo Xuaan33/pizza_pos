@@ -39,7 +39,7 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
   Future<void> _loadItemGroups() async {
     try {
       setState(() => isLoading = true);
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroups());
+      final response = await _safeApiCall(() => PosService().getItemGroups());
 
       if (response['success'] == true) {
         final List<dynamic> groupsData = response['message']['item_groups'];
@@ -70,7 +70,8 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
 
   Future<void> _refreshSingleItemGroup(String groupName) async {
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroup(groupName));
+      final response =
+          await _safeApiCall(() => PosService().getItemGroup(groupName));
 
       if (response['success'] == true) {
         final updatedGroup = ItemGroup.fromJson(response['message']);
@@ -167,10 +168,10 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
 
   Future<void> _toggleItemGroupStatus(ItemGroup group, bool isActive) async {
     try {
-      await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().disableItemGroup(
-        itemGroup: group.name,
-        disabled: isActive ? 0 : 1,
-      ));
+      await _safeApiCall(() => PosService().disableItemGroup(
+            itemGroup: group.name,
+            disabled: isActive ? 0 : 1,
+          ));
 
       // Refresh only this item group - no full reload!
       await _refreshSingleItemGroup(group.name);
@@ -500,6 +501,18 @@ class _ItemGroupManagementState extends State<ItemGroupManagement> {
       },
     );
   }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
+  }
 }
 
 class ItemGroupWrapper extends StatefulWidget {
@@ -773,11 +786,11 @@ class _CreateItemGroupDialogState extends State<CreateItemGroupDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createItemGroup(
-        itemGroupName: _nameController.text,
-        parentItemGroup: _selectedParentGroup,
-        isGroup: _isGroup ? 1 : 0,
-      ));
+      final response = await _safeApiCall(() => PosService().createItemGroup(
+            itemGroupName: _nameController.text,
+            parentItemGroup: _selectedParentGroup,
+            isGroup: _isGroup ? 1 : 0,
+          ));
       if (response['success'] == true) {
         widget.onSave();
         Navigator.pop(context);
@@ -967,6 +980,18 @@ class _CreateItemGroupDialogState extends State<CreateItemGroupDialog> {
     _nameController.dispose();
     super.dispose();
   }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
+  }
 }
 
 // Dialog for editing item group
@@ -1010,13 +1035,13 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItemGroup(
-        name: widget.itemGroup.name,
-        itemGroupName: _nameController.text,
-        parentItemGroup: _selectedParentGroup,
-        isGroup: _isGroup ? 1 : 0,
-        disabled: widget.itemGroup.disabled,
-      ));
+      final response = await _safeApiCall(() => PosService().updateItemGroup(
+            name: widget.itemGroup.name,
+            itemGroupName: _nameController.text,
+            parentItemGroup: _selectedParentGroup,
+            isGroup: _isGroup ? 1 : 0,
+            disabled: widget.itemGroup.disabled,
+          ));
 
       if (response['success'] == true) {
         widget.onSave();
@@ -1211,6 +1236,18 @@ class _EditItemGroupDialogState extends State<EditItemGroupDialog> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }
 

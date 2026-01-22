@@ -123,10 +123,10 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         return;
       }
 
-      final responses = await  Future.wait([
-        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getAllItems(posProfile)),
-        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroups()),
-        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups()),
+      final responses = await Future.wait([
+        _safeApiCall(() => PosService().getAllItems(posProfile)),
+        _safeApiCall(() => PosService().getItemGroups()),
+        _safeApiCall(() => PosService().getVariantGroups()),
       ]);
 
       if (!mounted) return;
@@ -196,7 +196,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
               return _detailedItemsCache[basicItem.itemCode]!;
             }
 
-            final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(basicItem.itemCode));
+            final response = await _safeApiCall(
+                () => PosService().getItem(basicItem.itemCode));
 
             if (response['success'] == true) {
               final detailedItem = Item.fromDetailedJson(
@@ -248,7 +249,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
         }
 
         // Fetch detailed item information
-        final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(basicItem.itemCode));
+        final response =
+            await _safeApiCall(() => PosService().getItem(basicItem.itemCode));
 
         if (!mounted) break; // Check again after async operation
 
@@ -281,7 +283,8 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
   Future<void> _refreshItemDetails(Item item) async {
     try {
       // Fetch updated detailed information
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(item.itemCode));
+      final response =
+          await _safeApiCall(() => PosService().getItem(item.itemCode));
 
       if (!mounted) return;
 
@@ -470,7 +473,7 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       });
 
       // Fetch updated item details
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(itemCode));
+      final response = await _safeApiCall(() => PosService().getItem(itemCode));
 
       if (!mounted) return;
 
@@ -532,18 +535,18 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       await _refreshItemDetails(item);
       final currentItem = _detailedItemsCache[item.itemCode] ?? item;
 
-      await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItem(
-        itemCode: item.itemCode,
-        itemName: currentItem.itemName,
-        itemGroup: currentItem.itemGroup,
-        variantGroupTable: currentItem.variantGroups
-            .map<Map<String, Object>>((group) => {
-                  'variant_group': group,
-                  'active': 0,
-                })
-            .toList(),
-        disabled: isActive ? 0 : 1,
-      ));
+      await _safeApiCall(() => PosService().updateItem(
+            itemCode: item.itemCode,
+            itemName: currentItem.itemName,
+            itemGroup: currentItem.itemGroup,
+            variantGroupTable: currentItem.variantGroups
+                .map<Map<String, Object>>((group) => {
+                      'variant_group': group,
+                      'active': 0,
+                    })
+                .toList(),
+            disabled: isActive ? 0 : 1,
+          ));
 
       // Instead of reloading all data, just update this specific item
       await _refreshItemDetails(item);
@@ -1228,6 +1231,18 @@ class _ItemManagementState extends ConsumerState<ItemManagement> {
       },
     );
   }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
+  }
 }
 
 class ItemCard extends StatefulWidget {
@@ -1499,14 +1514,14 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createItem(
-        itemCode: _codeController.text.trim(),
-        itemName: _nameController.text.trim(),
-        itemGroup: _selectedItemGroup!,
-        variantGroupTable: _selectedVariantGroups,
-        description: _descriptionController.text.trim(),
-        isPosItem: _isPosItem ? 1 : 0,
-      ));
+      final response = await _safeApiCall(() => PosService().createItem(
+            itemCode: _codeController.text.trim(),
+            itemName: _nameController.text.trim(),
+            itemGroup: _selectedItemGroup!,
+            variantGroupTable: _selectedVariantGroups,
+            description: _descriptionController.text.trim(),
+            isPosItem: _isPosItem ? 1 : 0,
+          ));
 
       if (response['success'] == true) {
         widget.onSave();
@@ -1859,6 +1874,18 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     _imageUrlController.dispose();
     super.dispose();
   }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
+  }
 }
 
 // Dialog for editing item - Updated to match CreateItemDialog style
@@ -1937,14 +1964,14 @@ class _EditItemDialogState extends State<EditItemDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItem(
-        itemCode: widget.item.itemCode,
-        itemName: _nameController.text.trim(),
-        itemGroup: _selectedItemGroup!,
-        variantGroupTable: _selectedVariantGroups,
-        description: _descriptionController.text.trim(),
-        isPosItem: _isPosItem ? 1 : 0,
-      ));
+      final response = await _safeApiCall(() => PosService().updateItem(
+            itemCode: widget.item.itemCode,
+            itemName: _nameController.text.trim(),
+            itemGroup: _selectedItemGroup!,
+            variantGroupTable: _selectedVariantGroups,
+            description: _descriptionController.text.trim(),
+            isPosItem: _isPosItem ? 1 : 0,
+          ));
 
       if (response['success'] == true) {
         widget.onSave();
@@ -2309,6 +2336,18 @@ class _EditItemDialogState extends State<EditItemDialog> {
     _descriptionController.dispose();
     _imageUrlController.dispose();
     super.dispose();
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }
 

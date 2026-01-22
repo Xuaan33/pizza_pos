@@ -1410,7 +1410,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Future<void> _processRefund(Map<String, dynamic> order) async {
     final orderIdForRefund = order['orderId'];
 
-    final refundCheckResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().checkItemsAvailableForRefund(
+    final refundCheckResponse = await _safeApiCall(() => PosService().checkItemsAvailableForRefund(
       posInvoice: orderIdForRefund,
     ));
     final availableItems = refundCheckResponse['message'] as List<dynamic>;
@@ -1669,7 +1669,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
       if (isCashPayment) {
         // For cash payments, use the new refund API
-        final refundResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().refundOrder(
+        final refundResponse = await _safeApiCall(() => PosService().refundOrder(
           name: orderId,
           items: items,
         ));
@@ -1774,7 +1774,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         }
 
         // If POS transaction successful, call the refund API
-        final refundResponse = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().refundOrder(
+        final refundResponse = await _safeApiCall(() => PosService().refundOrder(
           name: orderId,
           items: items,
         ));
@@ -2511,5 +2511,17 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     }
 
     return formattedItems;
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

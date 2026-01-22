@@ -66,7 +66,7 @@ class _SplitOrderPaymentDialogState
 
   Future<void> _fetchOrderDetails() async {
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getOrders(
+      final response = await _safeApiCall(() => PosService().getOrders(
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
                     sid,
@@ -992,7 +992,7 @@ class _SplitOrderPaymentDialogState
       }
 
       // Complete the payment
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().checkoutOrder(
+      final response = await _safeApiCall(() => PosService().checkoutOrder(
         invoiceName: widget.order['name'],
         payments: payments,
       ));
@@ -1110,7 +1110,7 @@ class _SplitOrderPaymentDialogState
         throw Exception('Invalid order name');
       }
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().deleteOrder(orderName));
+      final response = await _safeApiCall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         Fluttertoast.showToast(
@@ -1765,7 +1765,7 @@ class _SplitOrderPaymentDialogState
       // Convert user input to uppercase
       final uppercaseVoucherCode = voucherCode.toUpperCase();
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().validateVoucher(uppercaseVoucherCode));
+      final response = await _safeApiCall(() => PosService().validateVoucher(uppercaseVoucherCode));
 
       if (response['success'] == true) {
         final voucherData = response['message'];
@@ -1815,7 +1815,7 @@ class _SplitOrderPaymentDialogState
         _voucherCode = voucherName;
       });
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
+      final response = await _safeApiCall(() => PosService().submitOrder(
           name: orderName,
           posProfile: ref.read(authProvider).maybeWhen(
                     authenticated: (
@@ -1895,7 +1895,7 @@ class _SplitOrderPaymentDialogState
         _discountAmount = amount;
       });
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
+      final response = await _safeApiCall(() => PosService().submitOrder(
         name: orderName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -1987,7 +1987,7 @@ class _SplitOrderPaymentDialogState
         _voucherCode = '';
       });
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
+      final response = await _safeApiCall(() => PosService().submitOrder(
         name: orderName,
         posProfile: ref.read(authProvider).maybeWhen(
                   authenticated: (
@@ -2139,7 +2139,7 @@ class _SplitOrderPaymentDialogState
         return itemData;
       }).toList();
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().submitOrder(
+      final response = await _safeApiCall(() => PosService().submitOrder(
         name: _orderDetails['name'],
         posProfile: posProfile,
         customer: _orderDetails['customer'] ?? 'Guest',
@@ -2585,5 +2585,17 @@ class _SplitOrderPaymentDialogState
     }
 
     return 'Discount';
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

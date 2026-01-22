@@ -70,8 +70,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getKitchenStations(
+          final response =
+              await _safeApiCall(() => PosService().getKitchenStations(
                     posProfile: posProfile,
                   ));
 
@@ -169,8 +169,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
           final fromDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
           final toDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getKitchenOrders(
+          final response =
+              await _safeApiCall(() => PosService().getKitchenOrders(
                     posProfile: posProfile,
                     kitchenStation: _selectedKitchenStation!,
                     fromDate: fromDate,
@@ -244,8 +244,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
           final firstStation =
               _kitchenStations.isNotEmpty ? _kitchenStations.first['name'] : '';
 
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getKitchenOrders(
+          final response =
+              await _safeApiCall(() => PosService().getKitchenOrders(
                     posProfile: posProfile,
                     kitchenStation: firstStation,
                     fromDate: fromDate,
@@ -276,11 +276,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
   Future<void> _fulfillItem(String posInvoiceItem, bool fulfilled) async {
     try {
-      final response = await MainLayout.of(context)!
-          .safeExecuteAPICall(() => PosService().fulfillKitchenItem(
-                posInvoiceItem: posInvoiceItem,
-                fulfilled: fulfilled ? 1 : 0,
-              ));
+      final response = await _safeApiCall(() => PosService().fulfillKitchenItem(
+            posInvoiceItem: posInvoiceItem,
+            fulfilled: fulfilled ? 1 : 0,
+          ));
       if (!mounted) return;
 
       if (response['success'] == true) {
@@ -321,8 +320,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
       return; // Add mounted check
 
     try {
-      final response = await MainLayout.of(context)!
-          .safeExecuteAPICall(() => PosService().fulfillKitchenOrder(
+      final response =
+          await _safeApiCall(() => PosService().fulfillKitchenOrder(
                 posInvoice: posInvoice,
                 kitchenStation: _selectedKitchenStation!,
                 fulfilled: fulfilled ? 1 : 0,
@@ -1873,5 +1872,17 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     } catch (e) {
       return timeString;
     }
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

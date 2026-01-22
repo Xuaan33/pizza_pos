@@ -170,8 +170,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getOrders(
+          final response = await _safeApiCall(() => PosService().getOrders(
                     posProfile: posProfile,
                     status: 'Draft',
                     pageLength: 1000,
@@ -314,36 +313,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         // Fetch all data concurrently - UPDATED: Now 7 futures
         final results = await Future.wait([
           // 0: Total sales
-          MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().makeRequest(
+          _safeApiCall(() => PosService().makeRequest(
                     endpoint:
                         'shiok_pos.api.get_total_sales?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
                   )),
           // 1: Peak time
-          MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().makeRequest(
+          _safeApiCall(() => PosService().makeRequest(
                     endpoint:
                         'shiok_pos.api.get_peak_time?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}',
                   )),
           // 2: Today info
-          MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getTodayInfo()),
+          _safeApiCall(() => PosService().getTodayInfo()),
           // 3: Revenue data
-          MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().makeRequest(
+          _safeApiCall(() => PosService().makeRequest(
                     endpoint: 'shiok_pos.api.get_revenue?'
                         'pos_profile=$posProfile&'
                         'daterange=["${dateFormat.format(fromDate)}","${dateFormat.format(toDate)}"]&'
                         'xaxis=$xaxisParam',
                   )),
           // 4: Popular items
-          MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().makeRequest(
+          _safeApiCall(() => PosService().makeRequest(
                     endpoint:
                         'shiok_pos.api.get_popular_items?pos_profile=$posProfile&from_date=${dateFormat.format(fromDate)}&to_date=${dateFormat.format(toDate)}&limit=$limit',
                   )),
           // 5: Payment methods
-          MainLayout.of(context)!.safeExecuteAPICall(
+          _safeApiCall(
               () => PosService().getPaymentMethodDistribution(
                     posProfile: posProfile,
                     fromDate: dateFormat.format(fromDate),
@@ -1981,6 +1975,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }
 

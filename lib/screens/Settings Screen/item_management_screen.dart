@@ -84,9 +84,9 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
       }
 
       final [itemsRes, groupsRes, variantsRes] = await  Future.wait([
-        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getAllItems(posProfile)), // Only this one needs posProfile
-        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItemGroups()), // No posProfile needed
-        MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups()), // No posProfile needed
+        _safeApiCall(() => PosService().getAllItems(posProfile)), // Only this one needs posProfile
+        _safeApiCall(() => PosService().getItemGroups()), // No posProfile needed
+        _safeApiCall(() => PosService().getVariantGroups()), // No posProfile needed
       ]);
 
       setState(() {
@@ -156,7 +156,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
   Future<void> _loadItemDetails(String itemCode) async {
     setState(() => _isLoading = true);
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getItem(itemCode));
+      final response = await _safeApiCall(() => PosService().getItem(itemCode));
       final data = response['message'];
 
       // Verify if itemCode exists in _items
@@ -216,7 +216,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
     try {
       if (_selectedItem == null) {
         // Create new
-        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createItem(
+        await _safeApiCall(() => PosService().createItem(
           itemCode: _codeController.text,
           itemName: _nameController.text,
           itemGroup: _selectedItemGroup ?? '',
@@ -231,7 +231,7 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
         _showSuccess('Item created successfully');
       } else {
         // Update existing
-        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateItem(
+        await _safeApiCall(() => PosService().updateItem(
           itemCode: _codeController.text,
           itemName: _nameController.text,
           itemGroup: _selectedItemGroup,
@@ -531,5 +531,17 @@ class _ItemManagementScreenState extends ConsumerState<ItemManagementScreen> {
         ],
       ],
     );
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

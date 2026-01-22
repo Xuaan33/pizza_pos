@@ -80,7 +80,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
       if (branch == null) throw Exception('Branch not set');
 
       final posService = PosService();
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => posService.getFloorsAndTables(branch));
+      final response = await _safeApiCall(() => posService.getFloorsAndTables(branch));
       print('Floors and Tables Response: $response');
 
       if (response['success'] == true) {
@@ -135,7 +135,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
   Future<void> _loadTodayInfo() async {
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getTodayInfo());
+      final response = await _safeApiCall(() => PosService().getTodayInfo());
 
       if (response['success'] == true) {
         setState(() {
@@ -629,5 +629,17 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
   double _calculateOrderTotal(Map<String, dynamic> order) {
     return _calculateOrderSubtotal(order) + _calculateOrderTax(order);
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

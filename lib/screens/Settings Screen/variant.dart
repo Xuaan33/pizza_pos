@@ -49,7 +49,8 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
         setState(() => isLoading = true);
       }
 
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
+      final response =
+          await _safeApiCall(() => PosService().getVariantGroups());
       if (response['success'] == true) {
         if (mounted) {
           setState(() {
@@ -374,14 +375,14 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
   ) async {
     try {
       setState(() => isLoading = true);
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createVariantGroup(
-        title: title,
-        variantInfoTable: [],
-        required: isRequired ? 1 : 0,
-        optionRequiredNo: optionRequiredNo,
-        maximumSelection: maximumSelection,
-        allowMultipleSelection: maximumSelection > 1 ? 1 : 0,
-      ));
+      final response = await _safeApiCall(() => PosService().createVariantGroup(
+            title: title,
+            variantInfoTable: [],
+            required: isRequired ? 1 : 0,
+            optionRequiredNo: optionRequiredNo,
+            maximumSelection: maximumSelection,
+            allowMultipleSelection: maximumSelection > 1 ? 1 : 0,
+          ));
 
       if (response['success'] == true) {
         _loadDataAfterCreate(); // Use the new method
@@ -741,14 +742,14 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
                   });
                 }
 
-                await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateVariantGroup(
-                  name: nameController.text.trim(),
-                  required: isRequired ? 1 : 0,
-                  optionRequiredNo: optionRequiredNo,
-                  maximumSelection: maximumSelection,
-                  allowMultipleSelection: allowMultipleSelection ? 1 : 0,
-                  variantInfoTable: confirmedOptions,
-                ));
+                await _safeApiCall(() => PosService().updateVariantGroup(
+                      name: nameController.text.trim(),
+                      required: isRequired ? 1 : 0,
+                      optionRequiredNo: optionRequiredNo,
+                      maximumSelection: maximumSelection,
+                      allowMultipleSelection: allowMultipleSelection ? 1 : 0,
+                      variantInfoTable: confirmedOptions,
+                    ));
 
                 Navigator.pop(context);
 
@@ -768,7 +769,8 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
   Future<void> _refreshSingleVariantGroup(String variantGroupName) async {
     try {
       // Fetch all variant groups and find the updated one
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
+      final response =
+          await _safeApiCall(() => PosService().getVariantGroups());
 
       if (response['success'] == true && mounted) {
         final allGroups = (response['message'] as List)
@@ -816,7 +818,6 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
     }
   }
 
-
   Future<void> _toggleVariantGroupStatus(
       VariantGroup group, bool isActive) async {
     try {
@@ -827,10 +828,10 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
         });
       }
 
-      await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().disableVariantGroup(
-        variantGroup: group.variantGroup,
-        disabled: isActive ? 0 : 1,
-      ));
+      await _safeApiCall(() => PosService().disableVariantGroup(
+            variantGroup: group.variantGroup,
+            disabled: isActive ? 0 : 1,
+          ));
 
       // NEW: Update only the specific variant group
       await _refreshSingleVariantGroup(group.variantGroup);
@@ -1065,5 +1066,17 @@ class _VariantSectionState extends ConsumerState<VariantSection> {
         );
       },
     );
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

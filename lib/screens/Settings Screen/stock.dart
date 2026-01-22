@@ -74,7 +74,7 @@ class _StockManagementSectionState
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getStockBalanceSummary(
+          final response = await _safeApiCall(() => PosService().getStockBalanceSummary(
             posProfile: posProfile,
             isPosItem: 1,
             date: DateFormat('yyyy-MM-dd').format(_selectedDate),
@@ -179,7 +179,7 @@ class _StockManagementSectionState
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getStockQuantity(
+          final response = await _safeApiCall(() => PosService().getStockQuantity(
             posProfile: posProfile,
             itemCode: itemCode,
             date: DateFormat('yyyy-MM-dd').format(_selectedDate),
@@ -486,7 +486,7 @@ class _StockManagementSectionState
             }
           ];
 
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().stockInItems(
+          final response = await _safeApiCall(() => PosService().stockInItems(
             posProfile: posProfile,
             items: itemsToStockIn,
           ));
@@ -560,7 +560,7 @@ class _StockManagementSectionState
             }
           ];
 
-          final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().adjustStock(
+          final response = await _safeApiCall(() => PosService().adjustStock(
             posProfile: posProfile,
             items: itemsToAdjust,
           ));
@@ -619,6 +619,18 @@ class _StockManagementSectionState
     setState(() {
       _filteredStockItems = filtered;
     });
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }
 

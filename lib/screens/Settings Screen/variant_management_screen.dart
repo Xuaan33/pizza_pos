@@ -67,7 +67,8 @@ class _VariantManagementScreenState
   Future<void> _loadVariantGroups() async {
     setState(() => _isLoading = true);
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroups());
+      final response =
+          await _safeApiCall(() => PosService().getVariantGroups());
       final newVariantGroups = response['message'] ?? [];
 
       final mappedVariantGroups = newVariantGroups.map((group) {
@@ -103,7 +104,8 @@ class _VariantManagementScreenState
   Future<void> _loadVariantGroupDetails(String name) async {
     setState(() => _isLoading = true);
     try {
-      final response = await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().getVariantGroup(name));
+      final response =
+          await _safeApiCall(() => PosService().getVariantGroup(name));
       final data = response['message'];
 
       setState(() {
@@ -148,24 +150,24 @@ class _VariantManagementScreenState
       }).toList();
 
       if (_selectedVariantGroup == null) {
-        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().createVariantGroup(
-          title: _titleController.text,
-          variantInfoTable: mappedVariantInfoTable,
-          required: _isRequired ? 1 : 0,
-          optionRequiredNo: _optionRequiredNo,
-          maximumSelection: _maximumSelection,
-          allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
-        ));
+        await _safeApiCall(() => PosService().createVariantGroup(
+              title: _titleController.text,
+              variantInfoTable: mappedVariantInfoTable,
+              required: _isRequired ? 1 : 0,
+              optionRequiredNo: _optionRequiredNo,
+              maximumSelection: _maximumSelection,
+              allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
+            ));
         _showSuccess('Variant group created successfully');
       } else {
-        await MainLayout.of(context)!.safeExecuteAPICall(() => PosService().updateVariantGroup(
-          name: _selectedVariantGroup!,
-          variantInfoTable: mappedVariantInfoTable,
-          required: _isRequired ? 1 : 0,
-          optionRequiredNo: _optionRequiredNo,
-          maximumSelection: _maximumSelection,
-          allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
-        ));
+        await _safeApiCall(() => PosService().updateVariantGroup(
+              name: _selectedVariantGroup!,
+              variantInfoTable: mappedVariantInfoTable,
+              required: _isRequired ? 1 : 0,
+              optionRequiredNo: _optionRequiredNo,
+              maximumSelection: _maximumSelection,
+              allowMultipleSelection: _allowMultipleSelection ? 0 : 1,
+            ));
         _showSuccess('Variant group updated successfully');
       }
       await _loadVariantGroups();
@@ -578,5 +580,17 @@ class _VariantManagementScreenState
         ],
       ],
     );
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }

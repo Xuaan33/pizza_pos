@@ -187,8 +187,7 @@ class SettingsScreenState extends ConsumerState<SettingsScreen> {
         cashDrawerPin,
       ) async {
         try {
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getKitchenStations(
+          final response = await _safeApiCall(() => PosService().getKitchenStations(
                     posProfile: posProfile,
                   ));
 
@@ -1426,8 +1425,7 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().getEmployees());
+            final response = await _safeApiCall(() => PosService().getEmployees());
           if (response['success'] == true) {
             if (mounted) {
               setState(() {
@@ -1464,8 +1462,7 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _employeeCheckIn(String employeeId, String branch) async {
     try {
       setState(() => _isEmployeeLoading = true);
-      final response = await MainLayout.of(context)!
-          .safeExecuteAPICall(() => PosService().employeeCheckIn(
+            final response = await _safeApiCall(() => PosService().employeeCheckIn(
                 employee: employeeId,
                 branch: branch,
               ));
@@ -1496,12 +1493,10 @@ Future<void> _discoverUsbDevices() async {
   Future<void> _employeeCheckOut(String employeeId, String branch) async {
     try {
       setState(() => _isEmployeeLoading = true);
-      final response = await MainLayout.of(context)!
-          .safeExecuteAPICall(() => PosService().employeeCheckOut(
-                employee: employeeId,
-                branch: branch,
-              ));
-
+      final response = await _safeApiCall(() => PosService().employeeCheckOut(
+            employee: employeeId,
+            branch: branch,
+          ));
       if (response['success'] == true) {
         Fluttertoast.showToast(
           msg: 'Check-out successful',
@@ -2951,10 +2946,9 @@ Future<void> _discoverUsbDevices() async {
           cashDrawerPinNeeded,
           cashDrawerPin,
         ) async {
-          final response = await MainLayout.of(context)!
-              .safeExecuteAPICall(() => PosService().requestClosingVoucher(
-                    posProfile: posProfile,
-                  ));
+          final response = await _safeApiCall(() => PosService().requestClosingVoucher( 
+                posProfile: posProfile,
+              ));
 
           if (mounted) {
             showDialog(
@@ -3546,5 +3540,17 @@ Future<void> _discoverUsbDevices() async {
     buffer.writeln('5. Test with ping command from device');
 
     return buffer.toString();
+  }
+
+  Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
+    try {
+      final mainLayout = MainLayout.of(context);
+      if (mainLayout != null) {
+        return await mainLayout.safeExecuteAPICall(apiCall);
+      }
+    } catch (e) {
+      debugPrint('MainLayout not available: $e');
+    }
+    return await apiCall(); // Fallback
   }
 }
