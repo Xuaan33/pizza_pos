@@ -21,6 +21,7 @@ import 'package:shiok_pos_android_app/screens/dashboard_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/service/notification_queue.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shiok_pos_android_app/components/grab_notification_overlay.dart';
 
@@ -107,6 +108,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       // Initialize both notification overlays
       await GrabNotificationOverlay.initialize();
       await KitchenNotificationOverlay.initialize();
+      Future.delayed(const Duration(milliseconds: 2500), () async {
+        if (mounted) {
+          await _processQueuedNotifications();
+        }
+      });
 
       // Load kitchen stations
       await _loadKitchenStations();
@@ -211,6 +217,32 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   void _stopAllOrdersTimer() {
     _allOrdersRefreshTimer?.cancel();
     _allOrdersRefreshTimer = null;
+  }
+
+  /// Process any queued notifications that were saved during checkout
+  Future<void> _processQueuedNotifications() async {
+    try {
+      final queuedOrderIds = await NotificationQueue.getAndClearQueue();
+
+      if (queuedOrderIds.isEmpty) {
+        debugPrint('📭 No queued notifications');
+        return;
+      }
+
+      debugPrint(
+          '📬 Processing ${queuedOrderIds.length} queued notification(s)');
+
+      for (final orderId in queuedOrderIds) {
+        // Small delay between notifications
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          await triggerKitchenNotificationForOrder(orderId);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error processing queued notifications: $e');
+    }
   }
 
   // ============ BACKGROUND REFRESH WITHOUT FLICKERING ============
@@ -362,6 +394,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         }
       },
     );
+  }
+
+  bool _hasKitchenStations() {
+    return _kitchenStations.isNotEmpty;
   }
 
   // ============ BACKGROUND REFRESH FOR ALL KITCHEN ORDERS ============
@@ -575,9 +611,16 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final orderId = order['name']?.toString() ?? '';
       final isUnfulfilled = order['custom_fulfilled'] != 1;
       final isNotNotified = !notificationProvider.hasBeenNotified(orderId);
+      final isNotPending =
+          !notificationProvider.isPendingPayment(orderId); // 🔥 ADD THIS
       final isNew = !cachedIds.contains(orderId);
 
-      return orderId.isNotEmpty && isUnfulfilled && isNotNotified && isNew;
+      // 🔥 Also check isNotPending
+      return orderId.isNotEmpty &&
+          isUnfulfilled &&
+          isNotNotified &&
+          isNotPending &&
+          isNew;
     }).toList();
   }
 
@@ -693,9 +736,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 cashDrawerPin,
               ) {
                 final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
+                final orderTabIndex = tier.toLowerCase() != 'tier 3' ? 1 : 2;
+                final hasKitchenStations = _hasKitchenStations();
                 if (mounted) {
                   setState(() {
-                    _selectedTabIndex = kitchenTabIndex;
+                    _selectedTabIndex =
+                        hasKitchenStations ? kitchenTabIndex : orderTabIndex;
                   });
                 }
               },
@@ -709,6 +755,73 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
 // ============ SHOW KITCHEN ORDER NOTIFICATION ============
+  Future<void> triggerKitchenNotificationForOrder(String orderId) async {
+    try {
+      debugPrint('🔔 Manually triggering notification for order: $orderId');
+
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) async {
+          // Fetch the order details from the API
+          final response = await PosService().getOrders(
+            posProfile: posProfile,
+            search: orderId,
+          );
+
+          if (response['success'] == true &&
+              response['message'] != null &&
+              (response['message'] as List).isNotEmpty) {
+            final order = (response['message'] as List).first;
+            final tableName = order['table']?.toString() ?? 'N/A';
+            final orderChannel =
+                order['custom_order_channel']?.toString() ?? '';
+            final isGrab = orderChannel.toLowerCase().contains('grab');
+
+            debugPrint(
+                '📦 Order details fetched: $orderId, table: $tableName, isGrab: $isGrab');
+
+            // Show the notification
+            await _showKitchenOrderNotification(
+              order,
+              isGrab: isGrab,
+              stationName: isGrab ? 'GRAB' : 'Kitchen',
+            );
+
+            debugPrint(
+                '✅ Notification triggered successfully for order $orderId');
+          } else {
+            debugPrint('⚠️ Could not fetch order details for $orderId');
+            debugPrint('Response: ${response}');
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Error triggering notification for order $orderId: $e');
+    }
+  }
+
   Future<void> _showKitchenOrderNotification(
     Map<String, dynamic> order, {
     required bool isGrab,
@@ -719,11 +832,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final customerName = order['customer_name']?.toString() ?? 'Customer';
       final tableName = order['table']?.toString() ?? 'N/A';
 
-      // Mark as notified using the persistent provider
       if (orderId != 'Unknown') {
         await ref
             .read(kitchenNotificationsProvider.notifier)
             .markAsNotified(orderId);
+        debugPrint('✅ Marked order as notified: $orderId');
       }
 
       // ============ Trigger dashboard refresh ============
@@ -766,9 +879,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 cashDrawerPin,
               ) {
                 final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
+                final orderTabIndex = tier.toLowerCase() != 'tier 3' ? 1 : 2;
+                final hasKitchenStations = _hasKitchenStations();
+
                 if (mounted) {
                   setState(() {
-                    _selectedTabIndex = kitchenTabIndex;
+                    _selectedTabIndex =
+                        hasKitchenStations ? kitchenTabIndex : orderTabIndex;
                   });
                 }
               },
@@ -1556,6 +1673,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
+        final hasKitchenStations = _hasKitchenStations();
+
         if (tier.toLowerCase() != 'tier 3') {
           return [
             FutureBuilder(
@@ -1635,10 +1754,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               toDate: _toDate,
             ),
             DashboardScreen(),
-            KitchenScreen(
-              key: ValueKey(
-                  'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
-            ),
+            if (hasKitchenStations)
+              KitchenScreen(
+                key: ValueKey(
+                    'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
+              ),
             SettingsScreen(key: settingsScreenKey),
           ];
         } else {
@@ -1719,10 +1839,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 fromDate: _fromDate,
                 toDate: _toDate),
             DashboardScreen(),
-            KitchenScreen(
-              key: ValueKey(
-                  'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
-            ),
+            if (hasKitchenStations)
+              KitchenScreen(
+                key: ValueKey(
+                    'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
+              ),
             SettingsScreen(key: settingsScreenKey),
           ];
         }
@@ -1786,6 +1907,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
+        final hasKitchenStations = _hasKitchenStations();
+
         return Container(
           width: 100,
           color: Colors.white,
@@ -1822,15 +1945,18 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 'assets/img-sidebar-dashboard.png',
                 'Dashboard',
               ),
+              if (hasKitchenStations)
+                _buildNavItem(
+                  tier.toLowerCase() != 'tier 3' ? 3 : 4,
+                  'assets/img-sidebar-kitchen.png',
+                  'Fulfilment',
+                  null,
+                  _pendingGrabOrdersCount, // Pass badge count
+                ),
               _buildNavItem(
-                tier.toLowerCase() != 'tier 3' ? 3 : 4,
-                'assets/img-sidebar-kitchen.png',
-                'Fulfilment',
-                null, // No custom action
-                _pendingGrabOrdersCount, // Show badge with pending Grab orders count
-              ),
-              _buildNavItem(
-                tier.toLowerCase() != 'tier 3' ? 4 : 5,
+                hasKitchenStations
+                    ? (tier.toLowerCase() != 'tier 3' ? 4 : 5)
+                    : (tier.toLowerCase() != 'tier 3' ? 3 : 4),
                 'assets/img-sidebar-settings.png',
                 'Settings',
               ),

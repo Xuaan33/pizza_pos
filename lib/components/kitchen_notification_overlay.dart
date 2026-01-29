@@ -11,7 +11,10 @@ class KitchenNotificationOverlay {
 
   /// Initialize the audio player
   static Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      debugPrint('⚠️ Audio player already initialized');
+      return;
+    }
     
     try {
       _audioPlayer = AudioPlayer();
@@ -26,6 +29,11 @@ class KitchenNotificationOverlay {
 
   /// Dispose audio player
   static Future<void> dispose() async {
+    if (!_isInitialized || _audioPlayer == null) {
+      debugPrint('⚠️ Audio player not initialized, nothing to dispose');
+      return;
+    }
+    
     try {
       await _audioPlayer?.stop();
       await _audioPlayer?.dispose();
@@ -85,10 +93,10 @@ class KitchenNotificationOverlay {
     });
   }
 
-  /// Play notification sound - optimized for speed
+  /// Play notification sound using the static audio player
   static void _playSound({required bool isGrab}) {
-    if (_audioPlayer == null) {
-      debugPrint('⚠️ Audio player not initialized');
+    if (_audioPlayer == null || !_isInitialized) {
+      debugPrint('⚠️ Audio player not initialized, cannot play sound');
       return;
     }
 
@@ -96,31 +104,29 @@ class KitchenNotificationOverlay {
     _playAsync(isGrab: isGrab);
   }
 
+  /// Play sound using the static audio player (not creating new ones)
   static Future<void> _playAsync({required bool isGrab}) async {
     try {
       debugPrint('🔊 Playing notification sound...');
       
-      // Create a fresh player for each notification to avoid conflicts
-      final player = AudioPlayer();
+      // 🔥 FIX: Use the static _audioPlayer instead of creating new ones
+      if (_audioPlayer == null) {
+        debugPrint('❌ Audio player is null');
+        return;
+      }
       
-      // Set release mode
-      await player.setReleaseMode(ReleaseMode.release);
+      // Stop any currently playing sound first
+      await _audioPlayer!.stop();
       
       // Play the sound based on order type
       final soundFile = isGrab ? 'grab_notification.mp3' : 'order.mp3';
       
-      await player.play(
+      await _audioPlayer!.play(
         AssetSource(soundFile),
         volume: 1.0,
       );
       
       debugPrint('✅ Playing $soundFile');
-      
-      // Auto-dispose after sound finishes
-      player.onPlayerComplete.listen((event) {
-        player.dispose();
-        debugPrint('🔊 Sound completed and disposed');
-      });
       
     } catch (e) {
       debugPrint('❌ Error playing notification sound: $e');
@@ -288,7 +294,7 @@ class _KitchenNotificationWidgetState extends State<_KitchenNotificationWidget>
                           Text(
                             widget.isGrab
                                 ? '🛵 New Grab Order'
-                                : '🔔 New Kitchen Order',
+                                : '🔔 New Order',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -325,7 +331,7 @@ class _KitchenNotificationWidgetState extends State<_KitchenNotificationWidget>
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Tap to dismiss',
+                                'Tap to view details',
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.8),
                                   fontSize: 11,

@@ -9,6 +9,7 @@ import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
+import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -2050,6 +2051,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (result ?? false) {
       if (!mounted) return false;
+      
       Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       // CustomerDisplayController.showDefaultDisplay();
       return true;
@@ -2410,6 +2412,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         }
 
+        if (orderName != null && orderName.isNotEmpty) {
+          await ref
+              .read(kitchenNotificationsProvider.notifier)
+              .markAsPendingPayment(orderName);
+          debugPrint('⏳ Order $orderName marked as pending payment');
+        }
+
         // Now proceed to checkout with updated order
         final result = await Navigator.pushAndRemoveUntil(
           context,
@@ -2636,6 +2645,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         if (response['success'] == true) {
           final orderName = response['message']['name'];
+
+          if (orderName != null && orderName.isNotEmpty) {
+            await ref
+                .read(kitchenNotificationsProvider.notifier)
+                .markAsPendingPayment(orderName);
+            debugPrint('⏳ Order $orderName marked as pending payment');
+          }
 
           // Now proceed to checkout with the new order
           final result = await Navigator.pushAndRemoveUntil(

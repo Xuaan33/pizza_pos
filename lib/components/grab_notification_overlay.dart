@@ -292,7 +292,7 @@ class _GrabNotificationWidgetState extends State<_GrabNotificationWidget>
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Tap to view in Kitchen',
+                                'Tap to view details',
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.8),
                                   fontSize: 11,

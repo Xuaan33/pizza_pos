@@ -16,8 +16,10 @@ import 'package:shiok_pos_android_app/components/pos_terminal_manager.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/dialogs/split_order_payment_dialog.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
+import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
+import 'package:shiok_pos_android_app/service/notification_queue.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/service/usb_connection_service.dart';
@@ -90,12 +92,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.initState();
     _loadBaseUrl();
     _loadPaymentMethods();
-    
+
     // Initialize remarks
     _selectedOrderChannel = widget.order['orderType'] ?? 'Dine In';
     _currentRemarks = widget.order['remarks'] ?? '';
     _remarksController.text = _currentRemarks;
-    
+
     // Delay API calls until after the first frame when MainLayout context is available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -123,7 +125,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // MainLayout not found or error accessing it
       debugPrint('MainLayout not available, executing API call directly: $e');
     }
-    
+
     // Fallback: execute API call directly
     return await apiCall();
   }
@@ -171,7 +173,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _loadTodayInfo() async {
     try {
-      final response = await _safeExecuteAPICall(() => PosService().getTodayInfo());
+      final response =
+          await _safeExecuteAPICall(() => PosService().getTodayInfo());
 
       if (response['success'] == true) {
         setState(() {
@@ -205,37 +208,37 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       debugPrint('=== FETCHING ORDER DETAILS FROM SERVER ===');
       final response = await _safeExecuteAPICall(() => PosService().getOrders(
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
-                    cashDrawerPinNeeded,
-                    cashDrawerPin,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        search: invoiceName,
-      ));
+            posProfile: ref.read(authProvider).maybeWhen(
+                      authenticated: (
+                        sid,
+                        apiKey,
+                        apiSecret,
+                        username,
+                        email,
+                        fullName,
+                        posProfile,
+                        branch,
+                        paymentMethods,
+                        taxes,
+                        hasOpening,
+                        tier,
+                        printKitchenOrder,
+                        openingDate,
+                        itemsGroups,
+                        baseUrl,
+                        merchantId,
+                        printMerchantReceiptCopy,
+                        enableFiuu,
+                        cashDrawerPinNeeded,
+                        cashDrawerPin,
+                      ) {
+                        return posProfile;
+                      },
+                      orElse: () => null,
+                    ) ??
+                '',
+            search: invoiceName,
+          ));
 
       debugPrint('Server response: ${jsonEncode(response)}');
 
@@ -365,11 +368,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final newStockQuantities = <String, int>{};
 
           // Call API once to get all stock data
-          final response = await _safeExecuteAPICall(() => PosService().getStockBalanceSummary(
-            posProfile: posProfile,
-            isPosItem: 1,
-            disable: 0,
-          ));
+          final response = await _safeExecuteAPICall(
+              () => PosService().getStockBalanceSummary(
+                    posProfile: posProfile,
+                    isPosItem: 1,
+                    disable: 0,
+                  ));
           if (response['success'] == true) {
             final message = response['message'];
 
@@ -1298,7 +1302,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final variantCost = _calculateVariantCost(variantInfo);
       final totalItemPrice = basePrice + variantCost;
       final amount = totalItemPrice * quantity;
-
     }
     // debugPrint('=== END ITEMS DEBUG ===');
     return Table(
@@ -2337,14 +2340,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
+
+          if (invoiceName != null && invoiceName.isNotEmpty) {
+            // Mark as paid and remove from pending
+            await ref
+                .read(kitchenNotificationsProvider.notifier)
+                .markAsNotifiedAndPaid(invoiceName);
+
+            // 🔥 Queue the notification to be shown after navigation
+            await NotificationQueue.queueNotification(invoiceName);
+
+            debugPrint('📬 Queued notification for order: $invoiceName');
+          }
           Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       } else {
         // Original payment processing code
-        final response = await _safeExecuteAPICall(() => PosService().checkoutOrder(
-          invoiceName: invoiceName,
-          payments: payments,
-        ));
+        final response =
+            await _safeExecuteAPICall(() => PosService().checkoutOrder(
+                  invoiceName: invoiceName,
+                  payments: payments,
+                ));
 
         if (response['success'] == true) {
           // In the _completePayment method, around line 1320, modify the cash payment section:
@@ -2393,6 +2409,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             );
           }
 
+          if (invoiceName != null && invoiceName.isNotEmpty) {
+            // Mark as paid and remove from pending
+            await ref
+                .read(kitchenNotificationsProvider.notifier)
+                .markAsNotifiedAndPaid(invoiceName);
+
+            // 🔥 Queue the notification to be shown after navigation
+            await NotificationQueue.queueNotification(invoiceName);
+
+            debugPrint('📬 Queued notification for order: $invoiceName');
+          }
           if (dialogCompleter != null && !dialogCompleter.isCompleted) {
             Navigator.of(context).pop();
             dialogCompleter.complete();
@@ -3053,6 +3080,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final orderName = widget.order['invoiceNumber']?.toString();
     if (orderName == null || orderName.isEmpty) {
       // If no invoice number, just navigate back
+      final invoiceName = widget.order['invoiceNumber'];
+      if (invoiceName != null && invoiceName.isNotEmpty) {
+        await ref
+            .read(kitchenNotificationsProvider.notifier)
+            .removeFromPendingPayment(invoiceName);
+        debugPrint('✅ Order $invoiceName remove from pending');
+      }
       Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       return;
     }
@@ -3060,7 +3094,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isProcessingPayment = true);
 
     try {
-      final response = await _safeExecuteAPICall(() => PosService().deleteOrder(orderName));
+      final response =
+          await _safeExecuteAPICall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3070,6 +3105,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
+
+          final invoiceName = widget.order['invoiceNumber'];
+          if (invoiceName != null && invoiceName.isNotEmpty) {
+            await ref
+                .read(kitchenNotificationsProvider.notifier)
+                .removeFromPendingPayment(invoiceName);
+            debugPrint('✅ Order $invoiceName remove from pending');
+          }
           Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       }
@@ -3151,7 +3194,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isProcessingPayment = true);
 
     try {
-      final response = await _safeExecuteAPICall(() => PosService().deleteOrder(orderName));
+      final response =
+          await _safeExecuteAPICall(() => PosService().deleteOrder(orderName));
 
       if (response['success'] == true) {
         if (mounted) {
@@ -3161,6 +3205,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             backgroundColor: Colors.green,
             textColor: Colors.white,
           );
+
+          final invoiceName = widget.order['invoiceNumber'];
+          if (invoiceName != null && invoiceName.isNotEmpty) {
+            await ref
+                .read(kitchenNotificationsProvider.notifier)
+                .removeFromPendingPayment(invoiceName);
+            debugPrint('✅ Order $invoiceName remove from pending');
+          }
           Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
         }
       }
@@ -3960,54 +4012,55 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
 
       final response = await _safeExecuteAPICall(() => PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
-                    cashDrawerPinNeeded,
-                    cashDrawerPin,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        table: widget.order['tableFullName'],
-        orderChannel: _selectedOrderChannel,
-        items: orderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'] +
-                _calculateVariantCost(item['custom_variant_info']),
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        remarks: widget.order['remarks'] ?? "N/A",
-        discountAmount: amount, // Pass the discount amount directly
-      ));
+            name: invoiceName,
+            posProfile: ref.read(authProvider).maybeWhen(
+                      authenticated: (
+                        sid,
+                        apiKey,
+                        apiSecret,
+                        username,
+                        email,
+                        fullName,
+                        posProfile,
+                        branch,
+                        paymentMethods,
+                        taxes,
+                        hasOpening,
+                        tier,
+                        printKitchenOrder,
+                        openingDate,
+                        itemsGroups,
+                        baseUrl,
+                        merchantId,
+                        printMerchantReceiptCopy,
+                        enableFiuu,
+                        cashDrawerPinNeeded,
+                        cashDrawerPin,
+                      ) {
+                        return posProfile;
+                      },
+                      orElse: () => null,
+                    ) ??
+                '',
+            customer: 'Guest',
+            table: widget.order['tableFullName'],
+            orderChannel: _selectedOrderChannel,
+            items: orderItems.map((item) {
+              return {
+                'item_code': item['item_code'] ?? '',
+                'qty': item['quantity'],
+                'price_list_rate': item['price'] +
+                    _calculateVariantCost(item['custom_variant_info']),
+                'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                'custom_serve_later':
+                    item['custom_serve_later'] == true ? 1 : 0,
+                if (item['custom_variant_info'] != null)
+                  'custom_variant_info': item['custom_variant_info'],
+              };
+            }).toList(),
+            remarks: widget.order['remarks'] ?? "N/A",
+            discountAmount: amount, // Pass the discount amount directly
+          ));
 
       if (response['success'] == true) {
         // Update the order details with new amounts from server
@@ -4074,55 +4127,56 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
 
       final response = await _safeExecuteAPICall(() => PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
-                    cashDrawerPinNeeded,
-                    cashDrawerPin,
-                  ) =>
-                      posProfile,
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        table: widget.order['tableFullName'],
-        orderChannel: _selectedOrderChannel,
-        items: orderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'] +
-                _calculateVariantCost(item['custom_variant_info']),
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        couponCode: null, // Set to null to remove
-        custom_user_voucher: null, // Set to null to remove
-        discountAmount: 0, // Set to 0 to remove
-        remarks: widget.order['remarks'] ?? "N/A",
-      ));
+            name: invoiceName,
+            posProfile: ref.read(authProvider).maybeWhen(
+                      authenticated: (
+                        sid,
+                        apiKey,
+                        apiSecret,
+                        username,
+                        email,
+                        fullName,
+                        posProfile,
+                        branch,
+                        paymentMethods,
+                        taxes,
+                        hasOpening,
+                        tier,
+                        printKitchenOrder,
+                        openingDate,
+                        itemsGroups,
+                        baseUrl,
+                        merchantId,
+                        printMerchantReceiptCopy,
+                        enableFiuu,
+                        cashDrawerPinNeeded,
+                        cashDrawerPin,
+                      ) =>
+                          posProfile,
+                      orElse: () => null,
+                    ) ??
+                '',
+            customer: 'Guest',
+            table: widget.order['tableFullName'],
+            orderChannel: _selectedOrderChannel,
+            items: orderItems.map((item) {
+              return {
+                'item_code': item['item_code'] ?? '',
+                'qty': item['quantity'],
+                'price_list_rate': item['price'] +
+                    _calculateVariantCost(item['custom_variant_info']),
+                'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                'custom_serve_later':
+                    item['custom_serve_later'] == true ? 1 : 0,
+                if (item['custom_variant_info'] != null)
+                  'custom_variant_info': item['custom_variant_info'],
+              };
+            }).toList(),
+            couponCode: null, // Set to null to remove
+            custom_user_voucher: null, // Set to null to remove
+            discountAmount: 0, // Set to 0 to remove
+            remarks: widget.order['remarks'] ?? "N/A",
+          ));
 
       if (response['success'] == true) {
         // Force a complete refresh of order details
@@ -4166,7 +4220,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Convert user input to uppercase
       final uppercaseVoucherCode = voucherCode.toUpperCase();
 
-      final response = await _safeExecuteAPICall(() => PosService().validateVoucher(uppercaseVoucherCode));
+      final response = await _safeExecuteAPICall(
+          () => PosService().validateVoucher(uppercaseVoucherCode));
 
       if (response['success'] == true) {
         final voucherData = response['message'];
@@ -4743,56 +4798,57 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (invoiceName == null) return;
 
       final response = await _safeExecuteAPICall(() => PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrder,
-                    openingDate,
-                    itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
-                    cashDrawerPinNeeded,
-                    cashDrawerPin,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        table: widget.order['tableFullName'],
-        orderChannel: orderChannel, // Updated order channel
-        items: orderItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'] +
-                _calculateVariantCost(item['custom_variant_info']),
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        couponCode: widget.order['coupon_code'],
-        custom_user_voucher: _voucherCode,
-        remarks: _remarksController.text,
-        discountAmount: widget.order['discount_amount'],
-      ));
+            name: invoiceName,
+            posProfile: ref.read(authProvider).maybeWhen(
+                      authenticated: (
+                        sid,
+                        apiKey,
+                        apiSecret,
+                        username,
+                        email,
+                        fullName,
+                        posProfile,
+                        branch,
+                        paymentMethods,
+                        taxes,
+                        hasOpening,
+                        tier,
+                        printKitchenOrder,
+                        openingDate,
+                        itemsGroups,
+                        baseUrl,
+                        merchantId,
+                        printMerchantReceiptCopy,
+                        enableFiuu,
+                        cashDrawerPinNeeded,
+                        cashDrawerPin,
+                      ) {
+                        return posProfile;
+                      },
+                      orElse: () => null,
+                    ) ??
+                '',
+            customer: 'Guest',
+            table: widget.order['tableFullName'],
+            orderChannel: orderChannel, // Updated order channel
+            items: orderItems.map((item) {
+              return {
+                'item_code': item['item_code'] ?? '',
+                'qty': item['quantity'],
+                'price_list_rate': item['price'] +
+                    _calculateVariantCost(item['custom_variant_info']),
+                'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                'custom_serve_later':
+                    item['custom_serve_later'] == true ? 1 : 0,
+                if (item['custom_variant_info'] != null)
+                  'custom_variant_info': item['custom_variant_info'],
+              };
+            }).toList(),
+            couponCode: widget.order['coupon_code'],
+            custom_user_voucher: _voucherCode,
+            remarks: _remarksController.text,
+            discountAmount: widget.order['discount_amount'],
+          ));
 
       if (response['success'] == true) {
         // Update local state
@@ -4851,56 +4907,57 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (invoiceName == null) return;
 
       final response = await _safeExecuteAPICall(() => PosService().submitOrder(
-        name: invoiceName,
-        posProfile: ref.read(authProvider).maybeWhen(
-                  authenticated: (
-                    sid,
-                    apiKey,
-                    apiSecret,
-                    username,
-                    email,
-                    fullName,
-                    posProfile,
-                    branch,
-                    paymentMethods,
-                    taxes,
-                    hasOpening,
-                    tier,
-                    printKitchenOrde,
-                    openingDate,
-                    itemsGroups,
-                    baseUrl,
-                    merchantId,
-                    printMerchantReceiptCopy,
-                    enableFiuu,
-                    cashDrawerPinNeeded,
-                    cashDrawerPin,
-                  ) {
-                    return posProfile;
-                  },
-                  orElse: () => null,
-                ) ??
-            '',
-        customer: 'Guest',
-        table: widget.order['tableFullName'],
-        orderChannel: _selectedOrderChannel,
-        items: _editableItems.map((item) {
-          return {
-            'item_code': item['item_code'] ?? '',
-            'qty': item['quantity'],
-            'price_list_rate': item['price'] +
-                _calculateVariantCost(item['custom_variant_info']),
-            'custom_item_remarks': item['custom_item_remarks'] ?? '',
-            'custom_serve_later': item['custom_serve_later'] == true ? 1 : 0,
-            if (item['custom_variant_info'] != null)
-              'custom_variant_info': item['custom_variant_info'],
-          };
-        }).toList(),
-        couponCode: widget.order['coupon_code'],
-        custom_user_voucher: widget.order['user_voucher_code'],
-        discountAmount: widget.order['discount_amount'],
-        remarks: widget.order['remarks'] ?? "N/A",
-      ));
+            name: invoiceName,
+            posProfile: ref.read(authProvider).maybeWhen(
+                      authenticated: (
+                        sid,
+                        apiKey,
+                        apiSecret,
+                        username,
+                        email,
+                        fullName,
+                        posProfile,
+                        branch,
+                        paymentMethods,
+                        taxes,
+                        hasOpening,
+                        tier,
+                        printKitchenOrde,
+                        openingDate,
+                        itemsGroups,
+                        baseUrl,
+                        merchantId,
+                        printMerchantReceiptCopy,
+                        enableFiuu,
+                        cashDrawerPinNeeded,
+                        cashDrawerPin,
+                      ) {
+                        return posProfile;
+                      },
+                      orElse: () => null,
+                    ) ??
+                '',
+            customer: 'Guest',
+            table: widget.order['tableFullName'],
+            orderChannel: _selectedOrderChannel,
+            items: _editableItems.map((item) {
+              return {
+                'item_code': item['item_code'] ?? '',
+                'qty': item['quantity'],
+                'price_list_rate': item['price'] +
+                    _calculateVariantCost(item['custom_variant_info']),
+                'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                'custom_serve_later':
+                    item['custom_serve_later'] == true ? 1 : 0,
+                if (item['custom_variant_info'] != null)
+                  'custom_variant_info': item['custom_variant_info'],
+              };
+            }).toList(),
+            couponCode: widget.order['coupon_code'],
+            custom_user_voucher: widget.order['user_voucher_code'],
+            discountAmount: widget.order['discount_amount'],
+            remarks: widget.order['remarks'] ?? "N/A",
+          ));
 
       if (response['success'] == true) {
         // Update the order details with new amounts
@@ -5045,7 +5102,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
         } else {
           // If payment failed or cancelled, delete the split order
-          await _safeExecuteAPICall(() => PosService().deleteOrder(splitOrder['name']));
+          await _safeExecuteAPICall(
+              () => PosService().deleteOrder(splitOrder['name']));
 
           Fluttertoast.showToast(
             msg: "Split cancelled - items restored to original order",
