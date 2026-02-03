@@ -7,6 +7,10 @@ import 'package:flutter_thermal_printer/utils/printer.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image/image.dart' as img;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart' as prt;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 
 class ReceiptPrinter {
@@ -284,21 +288,73 @@ class ReceiptPrinter {
     Uint8List bytes, {
     bool isPdf = false,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final isManual = (prefs.getString('printer_mode') ?? 'auto') == 'manual';
+
+    if (isManual) {
+      await _printViaLayoutPdf(bytes);
+    } else {
+      await _printViaEscPos(bytes);
+    }
+  }
+
+  /// -------------------------------------------
+  /// Manual mode: wrap image in PDF, open Android print dialog
+  /// -------------------------------------------
+  static Future<void> _printViaLayoutPdf(Uint8List bytes) async {
+    try {
+      final image = img.decodeImage(bytes);
+      if (image == null) throw Exception('Failed to decode image');
+
+      final pdf = pw.Document();
+
+      final pageFormat = PdfPageFormat(
+        image.width.toDouble() * 0.75, // pixels → points
+        image.height.toDouble() * 0.75,
+        marginAll: 0,
+      );
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          build: (pw.Context context) {
+            return pw.Container(
+              child: pw.Image(
+                pw.MemoryImage(bytes),
+                fit: pw.BoxFit.fitWidth,
+              ),
+            );
+          },
+        ),
+      );
+
+      final pdfBytes = await pdf.save();
+
+      await prt.Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+      );
+    } catch (e) {
+      debugPrint('❌ Manual print error: $e');
+      throw Exception('Failed to print receipt: $e');
+    }
+  }
+
+  /// -------------------------------------------
+  /// Auto mode: direct ESC/POS to USB thermal printer
+  /// -------------------------------------------
+  static Future<void> _printViaEscPos(Uint8List bytes) async {
     try {
       final printer = await _ensureUsbPrinter();
       if (printer == null) throw Exception("No USB printer found");
 
-      // 🔥 FASTER: Parallel processing and simplified image handling
       final List<int> ticket = await _processReceiptImage(bytes);
 
-      // 🔥 Larger chunks for faster transmission
       final chunkSize = _calculateOptimalChunkSize(ticket.length);
       final totalChunks = (ticket.length / chunkSize).ceil();
 
       for (int i = 0; i < ticket.length; i += chunkSize) {
         final chunkNumber = (i / chunkSize).floor() + 1;
         if (totalChunks > 5) {
-          // Only show progress for large prints
           debugPrint("📄 Sending chunk $chunkNumber/$totalChunks...");
         }
 

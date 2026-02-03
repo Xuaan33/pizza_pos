@@ -60,10 +60,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isEmployeeLoading = false;
   TextEditingController _employeeSearchController = TextEditingController();
 
+  // Printer Configuration
+  bool _autoPrint = true;
+
   List<String> _getSections(String tier) {
     final sections = [
       'POS Opening & Closing',
       'POS Card Terminal',
+      'Printer Configuration',
       'Item Group',
       'Item',
       'Variant',
@@ -85,6 +89,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadSavedConfig(); // Load saved config when widget initializes
     _loadEmployees(); // Load employees when screen initializes
     _loadConfiguration();
+    _loadPrinterConfig();
   }
 
   @override
@@ -101,6 +106,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _ipController.text = prefs.getString('pos_ip') ?? '192.168';
       _portController.text = prefs.getInt('pos_port')?.toString() ?? '8800';
     });
+  }
+
+  Future<void> _loadPrinterConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _autoPrint = (prefs.getString('printer_mode') ?? 'auto') == 'auto';
+      });
+    }
+  }
+
+  Future<void> _savePrinterConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('printer_mode', _autoPrint ? 'auto' : 'manual');
+    if (mounted) {
+      Fluttertoast.showToast(
+        msg: _autoPrint ? 'Switched to Auto Print' : 'Switched to Manual Print',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    }
   }
 
   // Future<void> _loadConfiguration() async {
@@ -798,6 +825,8 @@ Future<void> _discoverUsbDevices() async {
         return _buildPosOpeningClosingSection(hasOpening);
       case 'POS Card Terminal':
         return _buildPosTerminalSection();
+      case 'Printer Configuration':
+        return _buildPrinterConfigSection();
       case 'Item Group':
         return _buildItemGroupSection();
       case 'Item':
@@ -954,6 +983,140 @@ Future<void> _discoverUsbDevices() async {
               .toList(),
         ],
       ],
+    );
+  }
+
+  // ─── Printer Configuration ──────────────────────────────────────────────
+  Widget _buildPrinterConfigSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Printer Configuration',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Choose how receipts are handled after payment.',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+        const SizedBox(height: 24),
+
+        // Auto Print
+        _buildPrintModeCard(
+          icon: Icons.print,
+          iconColor: const Color(0xFFE732A0),
+          title: 'Auto Print',
+          subtitle:
+              'Receipt is sent directly to the USB thermal printer after payment. No preview is shown.',
+          isSelected: _autoPrint,
+          onTap: () {
+            if (!_autoPrint) {
+              setState(() => _autoPrint = true);
+              _savePrinterConfig();
+            }
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // Manual Print
+        _buildPrintModeCard(
+          icon: Icons.print_outlined,
+          iconColor: Colors.blue,
+          title: 'Manual Print',
+          subtitle:
+              'Android\'s native print preview is shown first. You can review, select a printer, and print from there.',
+          isSelected: !_autoPrint,
+          onTap: () {
+            if (_autoPrint) {
+              setState(() => _autoPrint = false);
+              _savePrinterConfig();
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPrintModeCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.pink[50] : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFE732A0) : Colors.grey[300]!,
+            width: isSelected ? 2.5 : 1.5,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFE732A0).withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : [],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(child: Icon(icon, color: iconColor, size: 26)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            isSelected ? const Color(0xFFE732A0) : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: isSelected ? const Color(0xFFE732A0) : Colors.grey,
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
