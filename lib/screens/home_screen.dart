@@ -18,22 +18,22 @@ class HomeScreen extends ConsumerStatefulWidget {
   final String tableNumber;
   final Map<String, dynamic>? existingOrder;
   final bool isTier1;
-  final bool isDefaultTable; // NEW PARAMETER
-  final bool isExchangeMode; // NEW
-  final List<Map<String, dynamic>>? exchangeReturnItems; // NEW
-  final double? exchangeAmount; // NEW
-  final String? originalOrderId; // NEW
+  final bool isDefaultTable;
+  final bool isExchangeMode;
+  final List<Map<String, dynamic>>? exchangeReturnItems;
+  final double? exchangeAmount;
+  final String? originalOrderId;
 
   const HomeScreen({
     Key? key,
     required this.tableNumber,
     this.existingOrder,
-    this.isTier1 = false, // Default to false
-    this.isDefaultTable = false, // NEW DEFAULT
-    this.isExchangeMode = false, // NEW
-    this.exchangeReturnItems, // NEW
-    this.exchangeAmount, // NEW
-    this.originalOrderId, // NEW
+    this.isTier1 = false,
+    this.isDefaultTable = false,
+    this.isExchangeMode = false,
+    this.exchangeReturnItems,
+    this.exchangeAmount,
+    this.originalOrderId,
   }) : super(key: key);
 
   @override
@@ -1124,7 +1124,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   child: Expanded(
                                     child: ListView.builder(
                                       physics:
-                                          ClampingScrollPhysics(), // still good to include
+                                          ClampingScrollPhysics(),
                                       itemCount: currentOrderItems.length,
                                       itemBuilder: (context, index) {
                                         return _buildOrderItem(
@@ -2051,7 +2051,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (result ?? false) {
       if (!mounted) return false;
-      
+
       Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
       // CustomerDisplayController.showDefaultDisplay();
       return true;
@@ -2158,7 +2158,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           if (floorsResponse['success'] == true) {
             for (var floor in floorsResponse['message']) {
-              for (var table in floor['tables']) {
+              // Handle both cases where tables is a Map or List
+              List<Map<String, dynamic>> tables = [];
+
+              if (floor['tables'] is Map) {
+                tables.add(Map<String, dynamic>.from(floor['tables']));
+              } else if (floor['tables'] is List) {
+                tables = List<Map<String, dynamic>>.from(floor['tables']);
+              }
+
+              for (var table in tables) {
                 if (table['title'] == '${widget.tableNumber}') {
                   tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
                   break;
@@ -2608,7 +2617,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         if (floorsResponse['success'] == true) {
           for (var floor in floorsResponse['message']) {
-            for (var table in floor['tables']) {
+            // Handle both cases where tables is a Map or List
+            List<Map<String, dynamic>> tables = [];
+
+            if (floor['tables'] is Map) {
+              tables.add(Map<String, dynamic>.from(floor['tables']));
+            } else if (floor['tables'] is List) {
+              tables = List<Map<String, dynamic>>.from(floor['tables']);
+            }
+
+            for (var table in tables) {
               if (table['title'] == '${widget.tableNumber}') {
                 tableFullName = table['name']; // e.g. "MK-Floor 1-Table 1"
                 break;

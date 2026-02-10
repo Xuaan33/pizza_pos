@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
@@ -54,7 +55,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Refresh when the screen is focused
     if (ModalRoute.of(context)?.isCurrent ?? false) {
       _refreshData();
     }
@@ -80,7 +80,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
       if (branch == null) throw Exception('Branch not set');
 
       final posService = PosService();
-      final response = await _safeApiCall(() => posService.getFloorsAndTables(branch));
+      final response =
+          await _safeApiCall(() => posService.getFloorsAndTables(branch));
 
       if (response['success'] == true) {
         final floorsData = response['message'];
@@ -91,18 +92,15 @@ class _TableScreenState extends ConsumerState<TableScreen>
           final floorName = floor['floor'];
           List<Map<String, dynamic>> tables = [];
 
-          // Handle both cases where tables is a Map or List
           if (floor['tables'] is Map) {
             tables.add(Map<String, dynamic>.from(floor['tables']));
           } else if (floor['tables'] is List) {
             tables = List<Map<String, dynamic>>.from(floor['tables']);
           }
 
-          // FILTER OUT tables with is_default == 1 (takeaway/default table)
           tables = tables.where((table) {
-            // Check if table has is_default property and it's NOT set to 1
             final isDefault = (table['is_default'] ?? 0) == 1;
-            return !isDefault; // Only include non-default tables
+            return !isDefault;
           }).toList();
 
           if (tables.isNotEmpty) {
@@ -124,8 +122,11 @@ class _TableScreenState extends ConsumerState<TableScreen>
       if (!_isDisposed) {
         setState(() => _isLoading = false);
         if (mounted && ref.read(authProvider) is AsyncData) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load tables: $e')),
+          Fluttertoast.showToast(
+            msg: "Failed to load tables: $e",
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.red,
+            textColor: Colors.white,
           );
         }
       }
@@ -138,7 +139,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
       if (response['success'] == true) {
         setState(() {
-          // Ensure we handle both int and double values
           _totalRevenue = (response['data']['total_revenue'] is int
               ? (response['data']['total_revenue'] as int).toDouble()
               : (response['data']['total_revenue'] ?? 0).toDouble());
@@ -154,17 +154,20 @@ class _TableScreenState extends ConsumerState<TableScreen>
       }
     } catch (e) {
       if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load today info: $e')),
+        Fluttertoast.showToast(
+          msg: "Failed to load today info: $e",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
       }
     }
   }
 
-  void _handleTableTap(Map<String, dynamic> table) {
+  void _handleTableTap(Map<String, dynamic> table) async {
     final authState = ref.read(authProvider);
 
-    authState.when(
+    await authState.when(
       authenticated: (
         sid,
         apiKey,
@@ -187,104 +190,508 @@ class _TableScreenState extends ConsumerState<TableScreen>
         enableFiuu,
         cashDrawerPinNeeded,
         cashDrawerPin,
-      ) {
+      ) async {
         if (!hasOpening) {
           _showOpeningRequiredDialog();
           return;
         }
 
-        // Extract the table number from the table data
         final tableNumber = table['title']?.toString() ?? 'Table';
         final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
 
-        var existingOrder = widget.activeOrders.firstWhere(
-          (order) => order['tableNumber'] == tableNum && !order['isPaid'],
-          orElse: () => {},
-        );
+        Map<String, dynamic>? existingOrder;
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HomeScreen(
-              tableNumber: tableNumber, // Pass the actual table number
-              existingOrder: existingOrder.isNotEmpty ? existingOrder : null,
-              isTier1: false, // This is for tier 3 table screen
-                isDefaultTable: false,
-            ),
-          ),
-        ).then((result) {
-          if (result != null) {
-            _handleOrderResult(tableNum, result);
+        // Check if table has unpaid_order and pos_invoice_name
+        final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
+        final posInvoiceName = table['pos_invoice_name']?.toString();
+
+        print('📊 TABLE TAP DEBUG:');
+        print('   Table: $tableNumber');
+        print('   Unpaid Amount: $unpaidAmount');
+        print('   Invoice Name: $posInvoiceName');
+
+        if (unpaidAmount > 0 &&
+            posInvoiceName != null &&
+            posInvoiceName.isNotEmpty) {
+          try {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const Center(
+                child: CircularProgressIndicator(color: Color(0xFFE732A0)),
+              ),
+            );
+
+            print('🔍 Fetching order from API...');
+            final ordersResponse =
+                await _safeApiCall(() => PosService().getOrders(
+                      posProfile: posProfile,
+                      search: posInvoiceName,
+                      status: 'Draft',
+                      pageLength: 1,
+                    ));
+
+            if (mounted) Navigator.pop(context);
+
+            print('📦 API Response:');
+            print('   Raw Response: ${ordersResponse.toString()}');
+            print('   Has message key: ${ordersResponse['message'] != null}');
+
+            // The response structure is: {message: {success: true, message: [orders]}}
+            final innerResponse = ordersResponse['message'];
+            print('   Inner Response Success: ${innerResponse?['success']}');
+            print('   Inner Message: ${innerResponse?['message']}');
+
+            if (innerResponse != null &&
+                innerResponse['success'] == true &&
+                innerResponse['message'] != null &&
+                innerResponse['message'].isNotEmpty) {
+              final orderData = innerResponse['message'][0];
+
+              print('📋 Order Data Found:');
+              print('   Order ID: ${orderData['name']}');
+              print('   Items Count: ${orderData['items']?.length ?? 0}');
+
+              // Map to HomeScreen format - matching the expected field names
+              existingOrder = {
+                'orderId': orderData['name'],
+                'tableNumber': tableNum,
+                'items': (orderData['items'] as List).map((item) {
+                  print('   Item: ${item['item_name']} x ${item['qty']}');
+                  return {
+                    'item_code': item['item_code'],
+                    'item_name':
+                        item['item_name'], // HomeScreen expects 'item_name'
+                    'name':
+                        item['item_name'], // Also provide 'name' as fallback
+                    'price': (item['rate'] as num).toDouble(),
+                    'qty': (item['qty'] as num).toDouble(),
+                    'quantity': (item['qty'] as num)
+                        .toDouble(), // Also provide 'quantity'
+                    'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                    'custom_serve_later': item['custom_serve_later'] ?? 0,
+                    'custom_variant_info': item['custom_variant_info'],
+                    'options': {},
+                    'option_text': '',
+                    'image': item['image'] ?? '',
+                  };
+                }).toList(),
+                'customerName': orderData['customer_name'] ?? 'Guest',
+                'customer_name': orderData['customer_name'] ?? 'Guest',
+                'isPaid': false,
+                'status': orderData['status'],
+                'remarks': orderData['remarks'] ?? '',
+              };
+
+              print(
+                  '✅ Order mapped successfully with ${existingOrder['items'].length} items');
+            } else {
+              print('⚠️ No order found in API response');
+            }
+          } catch (e) {
+            print('❌ Error fetching order: $e');
+            if (mounted) {
+              if (Navigator.canPop(context)) Navigator.pop(context);
+              Fluttertoast.showToast(
+                msg: "Failed to load order: $e",
+                gravity: ToastGravity.BOTTOM,
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+              );
+            }
           }
-        });
-      },
-      unauthenticated: () {
-        // Handle unauthenticated state if needed
-      },
-      initial: () {
-        // Handle initial state if needed
-      },
-    );
-  }
+        }
 
-  void _showOpeningRequiredDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false, // User must tap button to close
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Opening Entry Required',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Please create an opening entry before taking any orders. '
-          'You can create one in the Settings screen.',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext); // Close the dialog
-              // Use the original context (not dialogContext) to find MainLayout
-              final mainLayout = MainLayout.of(context);
-              if (mainLayout != null) {
-                mainLayout.setSelectedTabIndex(3);
-              } else {
-                print('MainLayout.of(context) returned null');
-              }
-            },
-            style: TextButton.styleFrom(
-              backgroundColor: const Color(0xFFE732A0),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: const Text(
-              'Go to Settings',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+        // Fallback to activeOrders
+        if (existingOrder == null) {
+          print('🔄 Trying fallback to activeOrders...');
+          final orderFromList = widget.activeOrders.firstWhere(
+            (order) => order['tableNumber'] == tableNum && !order['isPaid'],
+            orElse: () => {},
+          );
+          if (orderFromList.isNotEmpty) {
+            existingOrder = orderFromList;
+            print('✅ Found order in activeOrders');
+          } else {
+            print('⚠️ No order in activeOrders either');
+          }
+        }
+
+        if (mounted) {
+          print(
+              '🚀 Navigating to HomeScreen with existingOrder: ${existingOrder != null ? 'YES (${existingOrder['items']?.length ?? 0} items)' : 'NO'}');
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomeScreen(
+                tableNumber: tableNumber,
+                existingOrder: existingOrder,
+                isTier1: false,
+                isDefaultTable: false,
               ),
             ),
-          ),
-        ],
-      ),
+          ).then((result) {
+            if (result != null) {
+              _handleOrderResult(tableNum, result);
+            }
+          });
+        }
+      },
+      unauthenticated: () async {},
+      initial: () async {},
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    final authState = ref.watch(authProvider);
+  void _handleTableLongPress(Map<String, dynamic> table) {
+    final tableNumber = table['title']?.toString() ?? 'Table';
+    final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
+    final hasOrder = table['active'] == 1 ||
+        table['unpaid_order'] > 0 ||
+        widget.tablesWithSubmittedOrders.contains(tableNum);
 
-    return authState.when(
-        initial: () => const Center(child: CircularProgressIndicator()),
-        unauthenticated: () => const Center(child: Text('Unauthorized')),
+    if (!hasOrder) {
+      Fluttertoast.showToast(
+        msg: "This table has no active orders",
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    _showTableOptionsDialog(table);
+  }
+
+  void _showTableOptionsDialog(Map<String, dynamic> table) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text(
+            table['title']?.toString() ?? 'Table',
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.swap_horiz, color: Color(0xFFE732A0)),
+                title: const Text(
+                  'Transfer Table',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showTransferTableDialog(table);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.merge, color: Color(0xFFE732A0)),
+                title: const Text(
+                  'Merge Table',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Fluttertoast.showToast(
+                    msg: "Merge Table feature coming soon",
+                    gravity: ToastGravity.BOTTOM,
+                    backgroundColor: Colors.black,
+                    textColor: Colors.white,
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showTransferTableDialog(Map<String, dynamic> sourceTable) {
+    final sourceTableTitle = sourceTable['title']?.toString() ?? 'Table';
+    final sourceTableNum = int.tryParse(sourceTableTitle.split(' ').last) ?? 0;
+
+    List<Map<String, dynamic>> availableTables = [];
+    _floorTables.forEach((floor, tables) {
+      for (var table in tables) {
+        final tableTitle = table['title']?.toString() ?? '';
+        final tableNum = int.tryParse(tableTitle.split(' ').last) ?? 0;
+        final hasOrder = table['active'] == 1 ||
+            table['unpaid_order'] > 0 ||
+            widget.tablesWithSubmittedOrders.contains(tableNum);
+
+        if (tableNum != sourceTableNum) {
+          availableTables.add({
+            ...table,
+            'floor': floor,
+            'hasOrder': hasOrder,
+          });
+        }
+      }
+    });
+
+    availableTables.sort((a, b) {
+      if (a['hasOrder'] != b['hasOrder']) {
+        return a['hasOrder'] ? 1 : -1;
+      }
+      final aNum = int.tryParse(a['title'].toString().split(' ').last) ?? 0;
+      final bNum = int.tryParse(b['title'].toString().split(' ').last) ?? 0;
+      return aNum.compareTo(bNum);
+    });
+
+    Map<String, dynamic>? selectedTable;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: const Text(
+                'Transfer Table',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'From: $sourceTableTitle',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'To:',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Map<String, dynamic>>(
+                          value: selectedTable,
+                          hint: const Text(
+                            'Select a table',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          isExpanded: true,
+                          items: availableTables.map((table) {
+                            final tableTitle = table['title']?.toString() ?? '';
+                            final floor = table['floor']?.toString() ?? '';
+                            final hasOrder = table['hasOrder'] ?? false;
+
+                            return DropdownMenuItem<Map<String, dynamic>>(
+                              value: table,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '$tableTitle ($floor)',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color:
+                                          hasOrder ? Colors.grey : Colors.black,
+                                    ),
+                                  ),
+                                  if (hasOrder)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade100,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'Active',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.orange,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedTable = value;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (selectedTable != null && selectedTable!['hasOrder'])
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                color: Colors.orange),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Warning: This table already has an active order',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: selectedTable == null
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext);
+                          _confirmTransferTable(sourceTable, selectedTable!);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE732A0),
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Text(
+                    'Confirm',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmTransferTable(
+    Map<String, dynamic> sourceTable,
+    Map<String, dynamic> targetTable,
+  ) {
+    final sourceTitle = sourceTable['title']?.toString() ?? 'Table';
+    final targetTitle = targetTable['title']?.toString() ?? 'Table';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Confirm Transfer',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Transfer order from $sourceTitle to $targetTitle?',
+            style: const TextStyle(fontSize: 18),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _performTransferTable(sourceTable, targetTable);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE732A0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                'Transfer',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _performTransferTable(
+    Map<String, dynamic> sourceTable,
+    Map<String, dynamic> targetTable,
+  ) async {
+    try {
+      final authState = ref.read(authProvider);
+
+      await authState.when(
         authenticated: (
           sid,
           apiKey,
@@ -307,45 +714,226 @@ class _TableScreenState extends ConsumerState<TableScreen>
           enableFiuu,
           cashDrawerPinNeeded,
           cashDrawerPin,
-        ) {
-          return Container(
-            color: Colors.grey[100],
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top section with logo, welcome message and stats
-                _buildTopSection(),
-
-                const SizedBox(height: 30),
-
-                // Tables area
-                Expanded(
-                  child: Column(
-                    children: [
-                      // Tables grid
-                      Expanded(
-                        child: _buildTablesGrid(),
-                      ),
-
-                      // Floor selector
-                      const SizedBox(height: 20),
-                      _buildFloorSelector(),
-                    ],
-                  ),
-                ),
-              ],
+        ) async {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE732A0)),
             ),
           );
-        });
+
+          print('🔄 TRANSFER TABLE DEBUG:');
+          final sourceTableTitle = sourceTable['title']?.toString() ?? 'Table';
+          final sourceTableNum =
+              int.tryParse(sourceTableTitle.split(' ').last) ?? 0;
+          final targetTableFullName = targetTable['name']?.toString() ?? '';
+          final posInvoiceName = sourceTable['pos_invoice_name']?.toString();
+
+          print('   Source Table: $sourceTableTitle');
+          print('   Target Table: ${targetTable['title']}');
+          print('   Source Invoice: $posInvoiceName');
+
+          Map<String, dynamic>? existingOrder;
+
+          // Fetch the order from API using pos_invoice_name
+          if (posInvoiceName != null && posInvoiceName.isNotEmpty) {
+            try {
+              print('🔍 Fetching order from API for transfer...');
+              final ordersResponse =
+                  await _safeApiCall(() => PosService().getOrders(
+                        posProfile: posProfile,
+                        search: posInvoiceName,
+                        status: 'Draft',
+                        pageLength: 1,
+                      ));
+
+              final innerResponse = ordersResponse['message'];
+
+              if (innerResponse != null &&
+                  innerResponse['success'] == true &&
+                  innerResponse['message'] != null &&
+                  innerResponse['message'].isNotEmpty) {
+                final orderData = innerResponse['message'][0];
+
+                print('📋 Order Data Found: $orderData');
+                print('   Order ID: ${orderData['name']}');
+                print('   Items Count: ${orderData['items']?.length ?? 0}');
+
+                existingOrder = {
+                  'orderId': orderData['name'],
+                  'items': (orderData['items'] as List).map((item) {
+                    return {
+                      'item_code': item['item_code'],
+                      'item_name': item['item_name'],
+                      'name': item['item_name'],
+                      'price': (item['rate'] as num).toDouble(),
+                      'qty': (item['qty'] as num).toDouble(),
+                      'quantity': (item['qty'] as num).toDouble(),
+                      'custom_item_remarks': item['custom_item_remarks'] ?? '',
+                      'custom_serve_later': item['custom_serve_later'] ?? 0,
+                      'custom_variant_info': item['custom_variant_info'],
+                    };
+                  }).toList(),
+                  'customerName': orderData['customer_name'] ?? 'Guest',
+                  'remarks': orderData['remarks'] ?? '',
+                };
+
+                print('✅ Order fetched successfully');
+              }
+            } catch (e) {
+              print('❌ Error fetching order from API: $e');
+            }
+          }
+
+          // Fallback to activeOrders if API fetch failed
+          if (existingOrder == null) {
+            print('🔄 Trying fallback to activeOrders...');
+            final orderFromList = widget.activeOrders.firstWhere(
+              (order) =>
+                  order['tableNumber'] == sourceTableNum && !order['isPaid'],
+              orElse: () => {},
+            );
+            if (orderFromList.isNotEmpty) {
+              existingOrder = orderFromList;
+              print('✅ Found order in activeOrders');
+            }
+          }
+
+          if (mounted) Navigator.pop(context); // Close loading dialog
+
+          if (existingOrder == null || existingOrder.isEmpty) {
+            throw Exception('No active order found for source table');
+          }
+
+          final orderId = existingOrder['orderId']?.toString();
+
+          if (orderId == null) {
+            throw Exception('Order ID not found');
+          }
+
+          print('📦 Preparing items for transfer...');
+          final items = (existingOrder['items'] as List<dynamic>).map((item) {
+            return {
+              'item_code': item['item_code'] ?? '',
+              'qty': (item['quantity'] ?? item['qty'] ?? 1).toDouble(),
+              'price_list_rate': (item['price'] ?? 0).toDouble(),
+              'custom_item_remarks': item['custom_item_remarks'] ?? '',
+              'custom_serve_later':
+                  (item['custom_serve_later'] ?? 0) == 1 ? 1 : 0,
+              if (item['custom_variant_info'] != null &&
+                  item['custom_variant_info'].toString().isNotEmpty)
+                'custom_variant_info': item['custom_variant_info'],
+            };
+          }).toList();
+
+          print('🚀 Submitting transfer order...');
+          print('   Order ID: $orderId');
+          print('   Target Table: $targetTableFullName');
+          print('   Items Count: ${items.length}');
+
+          final response = await _safeApiCall(() => PosService().submitOrder(
+                posProfile: posProfile,
+                customer: existingOrder?['customer'] ?? 'Guest',
+                items: items,
+                table: targetTableFullName,
+                orderChannel: 'Dine In',
+                name: orderId,
+                remarks: existingOrder?['remarks'],
+              ));
+
+          print('📨 Transfer Response: ${response['success']}');
+
+          if (response['success'] == true) {
+            await _refreshData();
+
+            if (mounted) {
+              Fluttertoast.showToast(
+                msg:
+                    'Table transferred successfully from ${sourceTable['title']} to ${targetTable['title']}',
+                gravity: ToastGravity.BOTTOM,
+                backgroundColor: Colors.green,
+                textColor: Colors.white,
+              );
+            }
+          } else {
+            throw Exception(response['message'] ?? 'Transfer failed');
+          }
+        },
+        unauthenticated: () async {
+          throw Exception('User not authenticated');
+        },
+        initial: () async {
+          throw Exception('Authentication not initialized');
+        },
+      );
+    } catch (e) {
+      print('❌ Transfer Error: $e');
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: 'Failed to transfer table: $e',
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
   }
 
-  Widget _buildTopSection() {
-    final authState = ref.read(authProvider);
+  void _showOpeningRequiredDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Opening Entry Required',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Please create an opening entry before taking any orders. '
+          'You can create one in the Settings screen.',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              final mainLayout = MainLayout.of(context);
+              if (mainLayout != null) {
+                mainLayout.setSelectedTabIndex(3);
+              }
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: const Color(0xFFE732A0),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text(
+              'Go to Settings',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
 
     return authState.when(
-      initial: () => const Center(child: CircularProgressIndicator()),
-      unauthenticated: () => const Center(child: Text('Unauthorized')),
       authenticated: (
         sid,
         apiKey,
@@ -369,46 +957,59 @@ class _TableScreenState extends ConsumerState<TableScreen>
         cashDrawerPinNeeded,
         cashDrawerPin,
       ) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Welcome back, $username',
-                style: const TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (tier.toLowerCase() == 'tier 3') ...[
-                Row(
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: _isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFE732A0)))
+              : Column(
                   children: [
-                    _buildStatPill(
-                      'Revenue',
-                      'RM ${_totalRevenue.toStringAsFixed(2)}',
-                      Colors.black,
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildFloorSelector(),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              _buildStatPill(
+                                'Revenue',
+                                'RM ${_totalRevenue.toStringAsFixed(2)}',
+                                Colors.black,
+                              ),
+                              const SizedBox(width: 10),
+                              _buildStatPill(
+                                'Unpaid Orders',
+                                '${(_totalUnpaidOrders).toStringAsFixed(2)}',
+                                Colors.black,
+                              ),
+                              const SizedBox(width: 10),
+                              _buildStatPill(
+                                'Tables Free',
+                                '$_totalTablesFree',
+                                Colors.black,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 10),
-                    _buildStatPill(
-                      'Unpaid Orders',
-                      '${(_totalUnpaidOrders).toStringAsFixed(2)}',
-                      Colors.black,
-                    ),
-                    const SizedBox(width: 10),
-                    _buildStatPill(
-                      'Tables Free',
-                      '$_totalTablesFree',
-                      Colors.black,
-                    ),
+                    Expanded(child: _buildTablesGrid()),
                   ],
                 ),
-              ],
-            ],
-          ),
         );
       },
-      // ... other cases
+      unauthenticated: () => const Center(
+        child: Text('Please log in to view tables'),
+      ),
+      initial: () => const Center(
+        child: CircularProgressIndicator(color: Color(0xFFE732A0)),
+      ),
     );
   }
 
@@ -463,20 +1064,15 @@ class _TableScreenState extends ConsumerState<TableScreen>
     final tableNumber = table['title']?.toString() ?? 'Table';
     final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
     final hasOrder = table['active'] == 1 ||
+        table['unpaid_order'] > 0 ||
         widget.tablesWithSubmittedOrders.contains(tableNum);
 
-    // Calculate unpaid amount for this table
-    final unpaidOrder = widget.activeOrders.firstWhere(
-      (order) => order['tableNumber'] == tableNum && !order['isPaid'],
-      orElse: () => {},
-    );
-
     final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
-
     final capacity = table['capacity'] ?? 4;
 
     return GestureDetector(
       onTap: () => _handleTableTap(table),
+      onLongPress: () => _handleTableLongPress(table),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -593,7 +1189,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
           context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              tableNumber: "tableNumber", //TO FIX;
+              tableNumber: "tableNumber",
               existingOrder: result['order'],
             ),
           ),
@@ -609,25 +1205,14 @@ class _TableScreenState extends ConsumerState<TableScreen>
     } catch (e) {
       print('Error handling order result: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing order: $e')),
+        Fluttertoast.showToast(
+          msg: "Error processing order: $e",
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
         );
       }
     }
-  }
-
-  double _calculateOrderSubtotal(Map<String, dynamic> order) {
-    return (order['items'] as List).fold(0.0, (sum, item) {
-      return sum + (item['price'] ?? 0) * (item['quantity'] ?? 1);
-    });
-  }
-
-  double _calculateOrderTax(Map<String, dynamic> order) {
-    return _calculateOrderSubtotal(order) * 0.06; // 6% GST
-  }
-
-  double _calculateOrderTotal(Map<String, dynamic> order) {
-    return _calculateOrderSubtotal(order) + _calculateOrderTax(order);
   }
 
   Future<T> _safeApiCall<T>(Future<T> Function() apiCall) async {
@@ -639,6 +1224,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
     } catch (e) {
       debugPrint('MainLayout not available: $e');
     }
-    return await apiCall(); // Fallback
+    return await apiCall();
   }
 }
