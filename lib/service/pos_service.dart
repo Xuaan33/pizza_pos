@@ -697,6 +697,32 @@ class PosService {
     );
   }
 
+  Future<Map<String, dynamic>> mergeOrders({
+    required List<String> posInvoices,
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.merge_orders',
+      method: 'POST',
+      body: {
+        'pos_invoices': posInvoices,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> acceptRejectGrabOrder({
+    required String orderId,
+    required String toState, // "Accepted" or "Rejected"
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.accept_reject_grab_order',
+      method: 'POST',
+      body: {
+        'order_id': orderId,
+        'to_state': toState,
+      },
+    );
+  }
+
   Uint8List hexStringToBytes(String hexString) {
     hexString = hexString.replaceAll(' ', '');
     final result = Uint8List(hexString.length ~/ 2);

@@ -14,6 +14,7 @@ import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.d
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/kitchen_screen.dart';
+import 'package:shiok_pos_android_app/screens/grab_screen.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -1844,6 +1845,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 key: ValueKey(
                     'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
               ),
+            const GrabScreen(), // Add Grab screen
             SettingsScreen(key: settingsScreenKey),
           ];
         }
@@ -1953,10 +1955,21 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   null,
                   _pendingGrabOrdersCount, // Pass badge count
                 ),
+              // Grab screen - Tier 3 only
+              if (tier.toLowerCase() == 'tier 3')
+                _buildNavItem(
+                  hasKitchenStations ? 5 : 4,
+                  'assets/icon-grab.png',
+                  'Grab',
+                  null,
+                  0,
+                  true, // preserveIconColor = true for Grab icon
+                ),
+              // Settings (updated index)
               _buildNavItem(
                 hasKitchenStations
-                    ? (tier.toLowerCase() != 'tier 3' ? 4 : 5)
-                    : (tier.toLowerCase() != 'tier 3' ? 3 : 4),
+                    ? (tier.toLowerCase() != 'tier 3' ? 4 : (tier.toLowerCase() == 'tier 3' ? 6 : 5))
+                    : (tier.toLowerCase() != 'tier 3' ? 3 : (tier.toLowerCase() == 'tier 3' ? 5 : 4)),
                 'assets/img-sidebar-settings.png',
                 'Settings',
               ),
@@ -1971,7 +1984,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   Widget _buildNavItem(int index, String imagePath, String label,
-      [VoidCallback? action, int badgeCount = 0] // Add badge count parameter
+      [VoidCallback? action, int badgeCount = 0, bool preserveIconColor = false] // Add preserveIconColor parameter
       ) {
     final bool isSelected = index == _selectedTabIndex;
     return GestureDetector(
@@ -2048,7 +2061,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   ),
                   child: Image.asset(
                     imagePath,
-                    color: isSelected ? Colors.pink : const Color(0xFF555555),
+                    // Only apply color if preserveIconColor is false
+                    color: preserveIconColor 
+                        ? null 
+                        : (isSelected ? Colors.pink : const Color(0xFF555555)),
                     width: index == 1 ? 50 : 40,
                     height: index == 1 ? 50 : 40,
                   ),
