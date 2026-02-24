@@ -1519,7 +1519,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     // Show original amount if there's a discount
                     if ((items[i]['discount_amount'] ?? 0) > 0) ...[
                       Text(
-                        'RM${(((items[i]['price'] + _calculateVariantCost(items[i]['custom_variant_info']) * items[i]['quantity'])) + ((items[i]['discount_amount'] ?? 0) * items[i]['quantity'])).toStringAsFixed(2)}',
+                        'RM${(((items[i]['price'] + items[i]['discount_amount'] + _calculateVariantCost(items[i]['custom_variant_info'])) * items[i]['quantity'])).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1529,7 +1529,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ],
                     // Show current amount with proper discount calculation
                     Text(
-                      'RM${((items[i]['price'] + _calculateVariantCost(items[i]['custom_variant_info']) * items[i]['quantity'])).toStringAsFixed(2)}',
+                      'RM${((items[i]['price'] + _calculateVariantCost(items[i]['custom_variant_info'])) * items[i]['quantity']).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: (items[i]['discount_amount'] ?? 0) > 0
