@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/image_url_helper.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
 import 'package:shiok_pos_android_app/components/no_stretch_scroll_behavior.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
@@ -1123,8 +1124,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   behavior: NoStretchScrollBehavior(),
                                   child: Expanded(
                                     child: ListView.builder(
-                                      physics:
-                                          ClampingScrollPhysics(),
+                                      physics: ClampingScrollPhysics(),
                                       itemCount: currentOrderItems.length,
                                       itemBuilder: (context, index) {
                                         return _buildOrderItem(
@@ -2222,6 +2222,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
             );
 
+            await _printKitchenOrderOnly(
+              response['message']['name'],
+            );
+
             Fluttertoast.showToast(
               msg: "Order Submitted",
               gravity: ToastGravity.BOTTOM,
@@ -2238,7 +2242,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             textColor: Colors.white,
           );
         } finally {
-          setState(() => _isLoading = false);
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
         }
       },
     );
@@ -2350,7 +2356,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           final tables = floor['tables'];
 
           if (tables is Map<String, dynamic>) {
-            if (tables['is_default'] == 1) {
+            // Check if this single table matches our table number
+            if (tables['title'] == '${widget.tableNumber}') {
               tableFullName = tables['name'];
               break;
             }
@@ -2361,6 +2368,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 break;
               }
             }
+            if (tableFullName != null) break;
           }
         }
 
@@ -3553,6 +3561,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       subtotal += (basePrice + additionalCost) * item['quantity'];
     }
     return subtotal;
+  }
+
+  Future<void> _printKitchenOrderOnly(
+    String orderName,
+  ) async {
+    try {
+      await ReceiptPrinter.printKitchenOrderOnly(orderName);
+    } catch (e) {
+      debugPrint('Failed to print kitchen order: $e');
+      // Don't show error toast for kitchen order failure as it's non-critical
+    }
   }
 
   double _calculateGST() {

@@ -933,7 +933,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                 'assets/icon-grab.png',
                 width: 80,
                 height: 80,
-                color: Colors.grey[400],
               ),
               SizedBox(height: 20),
               Text(

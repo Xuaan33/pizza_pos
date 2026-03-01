@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -39,6 +40,9 @@ class _TableScreenState extends ConsumerState<TableScreen>
   
   // Track recently merged tables: tableName -> mainTableTitle
   Map<String, String> _mergedTables = {};
+  
+  // Auto-refresh timer
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -46,13 +50,33 @@ class _TableScreenState extends ConsumerState<TableScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadFloorsAndTables();
     _loadTodayInfo();
+    _startRefreshTimer(); // Start auto-refresh
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel(); // Cancel timer
     WidgetsBinding.instance.removeObserver(this);
     _isDisposed = true;
     super.dispose();
+  }
+
+  // Start 5-second auto-refresh timer
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted && !_isLoading && !_isDisposed) {
+        debugPrint('🔄 Auto-refreshing tables (silent)...');
+        _loadFloorsAndTables(silent: true);
+        _loadTodayInfo(silent: true);
+      }
+    });
+  }
+
+  // Stop refresh timer
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
   }
 
   @override
@@ -76,7 +100,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
     await _loadTodayInfo();
   }
 
-  Future<void> _loadFloorsAndTables() async {
+  Future<void> _loadFloorsAndTables({bool silent = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final branch = prefs.getString('branch');
@@ -88,7 +112,9 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
       if (response['success'] == true) {
         final floorsData = response['message'];
-        print('🚪 Floors Data: $floorsData');
+        if (!silent) {
+          print('🚪 Floors Data: $floorsData');
+        }
         final floorTables = <String, List<Map<String, dynamic>>>{};
         final floors = <String>[];
 
@@ -118,12 +144,14 @@ class _TableScreenState extends ConsumerState<TableScreen>
             _floorTables = floorTables;
             _floors = floors;
             _selectedFloor = floors.isNotEmpty ? floors.first : '';
-            _isLoading = false;
+            if (!silent) {
+              _isLoading = false;
+            }
           });
         }
       }
     } catch (e) {
-      if (!_isDisposed) {
+      if (!_isDisposed && !silent) {
         setState(() => _isLoading = false);
         if (mounted && ref.read(authProvider) is AsyncData) {
           Fluttertoast.showToast(
@@ -137,7 +165,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
     }
   }
 
-  Future<void> _loadTodayInfo() async {
+  Future<void> _loadTodayInfo({bool silent = false}) async {
     try {
       final response = await _safeApiCall(() => PosService().getTodayInfo());
 
@@ -157,7 +185,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
         });
       }
     } catch (e) {
-      if (!_isDisposed && mounted && ref.read(authProvider) is AsyncData) {
+      if (!_isDisposed && !silent && mounted && ref.read(authProvider) is AsyncData) {
         Fluttertoast.showToast(
           msg: "Failed to load today info: $e",
           gravity: ToastGravity.BOTTOM,
@@ -170,8 +198,25 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
   void _handleTableTap(Map<String, dynamic> table) async {
     final tableName = table['name']?.toString() ?? '';
+    final tableTitle = table['title']?.toString() ?? 'Table';
+    final isActive = table['active'] == 1;
+    final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
     
-    // Check if this table was recently merged
+    // Check if table is merged (active but no unpaid order)
+    final isMergedTable = isActive && unpaidAmount == 0.0;
+    
+    if (isMergedTable) {
+      Fluttertoast.showToast(
+        msg: 'This table has been merged. Order has been moved to another table.',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.orange,
+        textColor: Colors.white,
+        toastLength: Toast.LENGTH_LONG,
+      );
+      return; // Don't allow tapping on merged tables
+    }
+    
+    // Check if this table was recently merged (temporary state)
     if (_mergedTables.containsKey(tableName)) {
       final mainTableTitle = _mergedTables[tableName];
       Fluttertoast.showToast(
@@ -1451,16 +1496,24 @@ class _TableScreenState extends ConsumerState<TableScreen>
     final tableNumber = table['title']?.toString() ?? 'Table';
     final tableName = table['name']?.toString() ?? '';
     final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
-    final hasOrder = table['active'] == 1 ||
-        table['unpaid_order'] > 0 ||
-        widget.tablesWithSubmittedOrders.contains(tableNum);
-
+    final isActive = table['active'] == 1;
     final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
-    final capacity = table['capacity'] ?? 4;
     
-    // Check if this table was merged
-    final isMerged = _mergedTables.containsKey(tableName);
+    // Table is merged if active but has no unpaid order
+    final isMergedFromFloor = isActive && unpaidAmount == 0.0;
+    
+    // Also check temporary merged state
+    final isMergedTemporary = _mergedTables.containsKey(tableName);
     final mergedWithTable = _mergedTables[tableName];
+    
+    // Combined merged state
+    final isMerged = isMergedFromFloor || isMergedTemporary;
+    
+    final hasOrder = isActive || 
+                    unpaidAmount > 0 ||
+                    widget.tablesWithSubmittedOrders.contains(tableNum);
+
+    final capacity = table['capacity'] ?? 4;
 
     return GestureDetector(
       onTap: () => _handleTableTap(table),
@@ -1493,7 +1546,9 @@ class _TableScreenState extends ConsumerState<TableScreen>
                     SizedBox(height: 2),
                     if (isMerged)
                       Text(
-                        'Merged with $mergedWithTable',
+                        isMergedTemporary 
+                            ? 'Merged with $mergedWithTable'
+                            : 'Table Merged',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.orange,
@@ -1524,19 +1579,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
                 ),
               ],
             ),
-            if (isMerged)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.orange.withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
+            // Removed orange overlay - just fade and strikethrough
           ],
         ),
       ),

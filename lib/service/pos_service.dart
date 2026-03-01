@@ -1195,6 +1195,95 @@ class PosService {
 
     return false;
   }
+
+  // Pause or resume Grab store
+  Future<Map<String, dynamic>> pauseGrabStore({
+    required String branch,
+    required bool isPause,
+    String? duration, // "30m", "1h", "24h"
+  }) async {
+    return makeRequest(
+      endpoint: 'shiok_pos.api.pause_grab_store',
+      method: 'POST',
+      body: {
+        'branch': branch,
+        'is_pause': isPause,
+        'duration': duration ?? '30m', // Backend requires duration even when resuming
+      },
+    );
+  }
+
+  // Get Grab store status
+  Future<Map<String, dynamic>> getGrabStoreStatus({
+    required String branch,
+  }) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final baseUrl = await _getBaseUrl();
+      // Append branch as query parameter for GET request
+      final uri = Uri.parse('$baseUrl/api/method/shiok_pos.api.get_grab_store_status?branch=$branch');
+      final headers = {
+        'Authorization': token,
+      };
+
+      final response = await http.get(uri, headers: headers).timeout(Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final responseBody = response.body;
+        if (responseBody.isEmpty) {
+          return {'success': false, 'message': 'Empty response'};
+        }
+        return jsonDecode(responseBody);
+      } else if (response.statusCode == 403) {
+        throw SessionTimeoutException('Session expired. Please login again.');
+      } else {
+        throw Exception('Request failed with status ${response.statusCode}: ${response.body}');
+      }
+    } on SessionTimeoutException {
+      rethrow;
+    } catch (e) {
+      print('Error in getGrabStoreStatus: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Get Grab order state
+  Future<Map<String, dynamic>> getGrabOrderState({
+    required String orderId,
+  }) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final baseUrl = await _getBaseUrl();
+      // Append order_id as query parameter for GET request
+      final uri = Uri.parse('$baseUrl/api/method/shiok_pos.api.get_grab_order_state?order_id=$orderId');
+      final headers = {
+        'Authorization': token,
+      };
+
+      final response = await http.get(uri, headers: headers).timeout(Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final responseBody = response.body;
+        if (responseBody.isEmpty) {
+          return {'success': false, 'message': 'Empty response'};
+        }
+        return jsonDecode(responseBody);
+      } else if (response.statusCode == 403) {
+        throw SessionTimeoutException('Session expired. Please login again.');
+      } else {
+        throw Exception('Request failed with status ${response.statusCode}: ${response.body}');
+      }
+    } on SessionTimeoutException {
+      rethrow;
+    } catch (e) {
+      print('Error in getGrabOrderState: $e');
+      throw Exception('Network error: $e');
+    }
+  }
 }
 
 class OrderMapper {
