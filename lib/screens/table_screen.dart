@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
 import 'package:shiok_pos_android_app/components/main_layout.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/screens/checkout_screen.dart';
 import 'home_screen.dart';
 
@@ -37,10 +38,10 @@ class _TableScreenState extends ConsumerState<TableScreen>
   double _totalRevenue = 0.0;
   double _totalUnpaidOrders = 0;
   int _totalTablesFree = 0;
-  
+
   // Track recently merged tables: tableName -> mainTableTitle
   Map<String, String> _mergedTables = {};
-  
+
   // Auto-refresh timer
   Timer? _refreshTimer;
 
@@ -143,7 +144,13 @@ class _TableScreenState extends ConsumerState<TableScreen>
           setState(() {
             _floorTables = floorTables;
             _floors = floors;
-            _selectedFloor = floors.isNotEmpty ? floors.first : '';
+            
+            // Only set selected floor on initial load or if current selection is invalid
+            // During silent refresh, preserve the user's current floor selection
+            if (_selectedFloor.isEmpty || !floors.contains(_selectedFloor)) {
+              _selectedFloor = floors.isNotEmpty ? floors.first : '';
+            }
+            
             if (!silent) {
               _isLoading = false;
             }
@@ -185,7 +192,10 @@ class _TableScreenState extends ConsumerState<TableScreen>
         });
       }
     } catch (e) {
-      if (!_isDisposed && !silent && mounted && ref.read(authProvider) is AsyncData) {
+      if (!_isDisposed &&
+          !silent &&
+          mounted &&
+          ref.read(authProvider) is AsyncData) {
         Fluttertoast.showToast(
           msg: "Failed to load today info: $e",
           gravity: ToastGravity.BOTTOM,
@@ -201,13 +211,14 @@ class _TableScreenState extends ConsumerState<TableScreen>
     final tableTitle = table['title']?.toString() ?? 'Table';
     final isActive = table['active'] == 1;
     final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
-    
+
     // Check if table is merged (active but no unpaid order)
-    final isMergedTable = isActive && unpaidAmount == 0.0;
-    
+    final isMergedTable = !isActive && unpaidAmount == 0.0;
+
     if (isMergedTable) {
       Fluttertoast.showToast(
-        msg: 'This table has been merged. Order has been moved to another table.',
+        msg:
+            'This table has been merged. Order has been moved to another table.',
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.orange,
         textColor: Colors.white,
@@ -215,7 +226,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
       );
       return; // Don't allow tapping on merged tables
     }
-    
+
     // Check if this table was recently merged (temporary state)
     if (_mergedTables.containsKey(tableName)) {
       final mainTableTitle = _mergedTables[tableName];
@@ -330,7 +341,6 @@ class _TableScreenState extends ConsumerState<TableScreen>
                 'status': orderData['status'],
                 'remarks': orderData['remarks'] ?? '',
               };
-
             } else {
               print('⚠️ No order found in API response');
             }
@@ -389,25 +399,37 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
   void _handleTableLongPress(Map<String, dynamic> table) {
     final tableNumber = table['title']?.toString() ?? 'Table';
+    final tableName = table['name']?.toString() ?? '';
     final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
-    final hasOrder = table['active'] == 1 ||
-        table['unpaid_order'] > 0 ||
-        widget.tablesWithSubmittedOrders.contains(tableNum);
-
-    if (!hasOrder) {
+    final isActive = table['active'] == 1;
+    final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
+    
+    // Check if table is merged
+    final isMergedTable = !isActive && unpaidAmount == 0.0;
+    
+    if (isMergedTable) {
       Fluttertoast.showToast(
-        msg: "This table has no active orders",
+        msg: 'Cannot perform actions on merged tables',
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
+        backgroundColor: Colors.orange,
         textColor: Colors.white,
       );
       return;
     }
 
+    // Show options dialog for all non-merged tables
     _showTableOptionsDialog(table);
   }
 
   void _showTableOptionsDialog(Map<String, dynamic> table) {
+    final tableNum = int.tryParse(table['title']?.toString().split(' ').last ?? '0') ?? 0;
+    final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
+    
+    // Check if table is occupied (has order)
+    final hasOrder = table['active'] == 0 ||
+        unpaidAmount > 0 ||
+        widget.tablesWithSubmittedOrders.contains(tableNum);
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -423,28 +445,44 @@ class _TableScreenState extends ConsumerState<TableScreen>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Print QR - Available for ALL tables (occupied or empty)
               ListTile(
-                leading: const Icon(Icons.swap_horiz, color: Color(0xFFE732A0)),
+                leading: const Icon(Icons.qr_code, color: Color(0xFFE732A0)),
                 title: const Text(
-                  'Transfer Table',
+                  'Print QR',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  _showTransferTableDialog(table);
+                  _printTableQR(table);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.merge, color: Color(0xFFE732A0)),
-                title: const Text(
-                  'Merge Table',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              // Transfer Table - Only for occupied tables
+              if (hasOrder)
+                ListTile(
+                  leading: const Icon(Icons.swap_horiz, color: Color(0xFFE732A0)),
+                  title: const Text(
+                    'Transfer Table',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showTransferTableDialog(table);
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showMergeTableDialog(table);
-                },
-              ),
+              // Merge Table - Only for occupied tables
+              if (hasOrder)
+                ListTile(
+                  leading: const Icon(Icons.merge, color: Color(0xFFE732A0)),
+                  title: const Text(
+                    'Merge Table',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showMergeTableDialog(table);
+                  },
+                ),
             ],
           ),
           actions: [
@@ -461,6 +499,96 @@ class _TableScreenState extends ConsumerState<TableScreen>
     );
   }
 
+  Future<void> _printTableQR(Map<String, dynamic> table) async {
+    final tableName = table['name']?.toString() ?? '';
+    final tableTitle = table['title']?.toString() ?? 'Table';
+    
+    if (tableName.isEmpty) {
+      Fluttertoast.showToast(
+        msg: 'Invalid table information',
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFFE732A0)),
+        ),
+      );
+
+      final authState = ref.read(authProvider);
+      await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) async {
+          try {
+            debugPrint('🖨️ Printing QR for table: $tableTitle ($tableName)');
+            debugPrint('   POS Profile: $posProfile');
+            
+            // Print QR code using ReceiptPrinter
+            await ReceiptPrinter.printTableQR(
+              posProfile: posProfile,
+              table: tableName, // Use full table name (e.g., "MK-Floor 1-Table 1")
+            );
+
+            if (mounted) Navigator.pop(context); // Close loading dialog
+
+            Fluttertoast.showToast(
+              msg: 'QR code printed for $tableTitle',
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.green,
+              textColor: Colors.white,
+            );
+          } catch (e) {
+            if (mounted) Navigator.pop(context); // Close loading dialog
+            debugPrint('❌ Error printing QR: $e');
+            
+            if (mounted) {
+              Fluttertoast.showToast(
+                msg: 'Failed to print QR: $e',
+                gravity: ToastGravity.BOTTOM,
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+              );
+            }
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context); // Close loading dialog
+      }
+      debugPrint('❌ Error in printTableQR: $e');
+    }
+  }
+
   void _showTransferTableDialog(Map<String, dynamic> sourceTable) {
     final sourceTableTitle = sourceTable['title']?.toString() ?? 'Table';
     final sourceTableNum = int.tryParse(sourceTableTitle.split(' ').last) ?? 0;
@@ -470,7 +598,9 @@ class _TableScreenState extends ConsumerState<TableScreen>
       for (var table in tables) {
         final tableTitle = table['title']?.toString() ?? '';
         final tableNum = int.tryParse(tableTitle.split(' ').last) ?? 0;
-        final hasOrder = table['active'] == 1 ||
+
+        // CORRECTED: active:0 means occupied/has order
+        final hasOrder = table['active'] == 0 ||
             table['unpaid_order'] > 0 ||
             widget.tablesWithSubmittedOrders.contains(tableNum);
 
@@ -914,8 +1044,10 @@ class _TableScreenState extends ConsumerState<TableScreen>
         final tableTitle = table['title']?.toString() ?? '';
         final tableNum = int.tryParse(tableTitle.split(' ').last) ?? 0;
         final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
-        final hasOrder = table['active'] == 1 || unpaidAmount > 0;
-        
+
+        // CORRECTED: active:0 means occupied/has order
+        final hasOrder = table['active'] == 0 || unpaidAmount > 0;
+
         // Only include tables with orders, excluding the source table
         if (hasOrder && tableNum != sourceTableNum) {
           tablesWithOrders.add({
@@ -992,8 +1124,10 @@ class _TableScreenState extends ConsumerState<TableScreen>
                             final tableName = table['name'].toString();
                             final tableTitle = table['title']?.toString() ?? '';
                             final floor = table['floor']?.toString() ?? '';
-                            final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
-                            final isSelected = selectedTableNames.contains(tableName);
+                            final unpaidAmount =
+                                table['unpaid_order']?.toDouble() ?? 0.0;
+                            final isSelected =
+                                selectedTableNames.contains(tableName);
 
                             return CheckboxListTile(
                               title: Text(
@@ -1017,7 +1151,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
                                     selectedTables.add(table);
                                   } else {
                                     selectedTableNames.remove(tableName);
-                                    selectedTables.removeWhere((t) => t['name'] == tableName);
+                                    selectedTables.removeWhere(
+                                        (t) => t['name'] == tableName);
                                   }
                                 });
                               },
@@ -1036,7 +1171,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                          const Icon(Icons.info_outline,
+                              color: Colors.blue, size: 20),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -1096,7 +1232,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
   // Confirm merge tables
   void _confirmMergeTables(List<Map<String, dynamic>> selectedTables) {
-    final tableNames = selectedTables.map((t) => t['title'].toString()).join(', ');
+    final tableNames =
+        selectedTables.map((t) => t['title'].toString()).join(', ');
     final mainTable = selectedTables.first;
 
     showDialog(
@@ -1190,10 +1327,11 @@ class _TableScreenState extends ConsumerState<TableScreen>
   }
 
   // Perform the actual merge operation
-  Future<void> _performMergeTables(List<Map<String, dynamic>> selectedTables) async {
+  Future<void> _performMergeTables(
+      List<Map<String, dynamic>> selectedTables) async {
     try {
       final authState = ref.read(authProvider);
-      
+
       await authState.when(
         authenticated: (
           sid,
@@ -1257,7 +1395,7 @@ class _TableScreenState extends ConsumerState<TableScreen>
             // Track merged tables
             final mainTable = selectedTables.first;
             final mainTableTitle = mainTable['title']?.toString() ?? '';
-            
+
             // Mark all other tables as merged (except the main table)
             for (int i = 1; i < selectedTables.length; i++) {
               final tableName = selectedTables[i]['name']?.toString() ?? '';
@@ -1265,13 +1403,14 @@ class _TableScreenState extends ConsumerState<TableScreen>
                 _mergedTables[tableName] = mainTableTitle;
               }
             }
-            
+
             // Clear merged table markers after 10 seconds
             Future.delayed(const Duration(seconds: 10), () {
               if (mounted) {
                 setState(() {
                   for (int i = 1; i < selectedTables.length; i++) {
-                    final tableName = selectedTables[i]['name']?.toString() ?? '';
+                    final tableName =
+                        selectedTables[i]['name']?.toString() ?? '';
                     _mergedTables.remove(tableName);
                   }
                 });
@@ -1282,7 +1421,8 @@ class _TableScreenState extends ConsumerState<TableScreen>
 
             if (mounted) {
               Fluttertoast.showToast(
-                msg: 'Tables merged successfully into ${selectedTables.first['title']}',
+                msg:
+                    'Tables merged successfully into ${selectedTables.first['title']}',
                 gravity: ToastGravity.BOTTOM,
                 backgroundColor: Colors.green,
                 textColor: Colors.white,
@@ -1475,7 +1615,20 @@ class _TableScreenState extends ConsumerState<TableScreen>
   }
 
   Widget _buildTablesGrid() {
-    final tables = _floorTables[_selectedFloor] ?? [];
+    final unsortedTables = _floorTables[_selectedFloor] ?? [];
+    
+    // Sort tables in ascending order by table number
+    final tables = List<Map<String, dynamic>>.from(unsortedTables);
+    tables.sort((a, b) {
+      final aTitle = a['title']?.toString() ?? 'Table 0';
+      final bTitle = b['title']?.toString() ?? 'Table 0';
+      
+      // Extract number from title (e.g., "Table 1" -> 1)
+      final aNum = int.tryParse(aTitle.split(' ').last) ?? 0;
+      final bNum = int.tryParse(bTitle.split(' ').last) ?? 0;
+      
+      return aNum.compareTo(bNum); // Ascending order
+    });
 
     return GridView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1498,20 +1651,26 @@ class _TableScreenState extends ConsumerState<TableScreen>
     final tableNum = int.tryParse(tableNumber.split(' ').last) ?? 0;
     final isActive = table['active'] == 1;
     final unpaidAmount = table['unpaid_order']?.toDouble() ?? 0.0;
-    
-    // Table is merged if active but has no unpaid order
-    final isMergedFromFloor = isActive && unpaidAmount == 0.0;
-    
-    // Also check temporary merged state
-    final isMergedTemporary = _mergedTables.containsKey(tableName);
-    final mergedWithTable = _mergedTables[tableName];
-    
+
+    // CORRECTED LOGIC:
+    // active: 1 = Table is empty/available (plain icon)
+    // active: 0 = Table is occupied with customers (colorful icon)
+    // Merged table = active: 1 AND unpaid_order: 0.0 (occupied but order moved)
+
+    // Table is merged if active:1 but has unpaid order 0.0
+    // This means table was occupied, but order was merged elsewhere
+    final isMergedFromFloor = !isActive && unpaidAmount == 0.0;
+
     // Combined merged state
-    final isMerged = isMergedFromFloor || isMergedTemporary;
-    
-    final hasOrder = isActive || 
-                    unpaidAmount > 0 ||
-                    widget.tablesWithSubmittedOrders.contains(tableNum);
+    final isMerged = isMergedFromFloor;
+
+    // Table is occupied if:
+    // - active: 0 (occupied with customers)
+    // - Has unpaid order amount
+    // - In submitted orders list
+    final isOccupied = !isActive ||
+        unpaidAmount > 0 ||
+        widget.tablesWithSubmittedOrders.contains(tableNum);
 
     final capacity = table['capacity'] ?? 4;
 
@@ -1526,9 +1685,11 @@ class _TableScreenState extends ConsumerState<TableScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset(
-                  hasOrder
-                      ? 'assets/icon-table-with-order.png'
-                      : 'assets/icon-table-empty.png',
+                  // active: 0 (occupied) → colorful icon
+                  // active: 1 (empty) → plain icon
+                  isOccupied
+                      ? 'assets/icon-table-with-order.png' // Occupied → colorful
+                      : 'assets/icon-table-empty.png', // Empty → plain
                   width: 120,
                   height: 120,
                 ),
@@ -1540,15 +1701,14 @@ class _TableScreenState extends ConsumerState<TableScreen>
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        decoration: isMerged ? TextDecoration.lineThrough : null,
+                        decoration:
+                            isMerged ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     SizedBox(height: 2),
                     if (isMerged)
                       Text(
-                        isMergedTemporary 
-                            ? 'Merged with $mergedWithTable'
-                            : 'Table Merged',
+                        'Table Merged',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.orange,
@@ -1572,14 +1732,15 @@ class _TableScreenState extends ConsumerState<TableScreen>
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: hasOrder ? const Color(0xFFE732A0) : Colors.grey[600],
+                          color: isOccupied
+                              ? const Color(0xFFE732A0)
+                              : Colors.grey[600],
                         ),
                       ),
                   ],
                 ),
               ],
             ),
-            // Removed orange overlay - just fade and strikethrough
           ],
         ),
       ),

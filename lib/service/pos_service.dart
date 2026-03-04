@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'auth_service.dart';
@@ -1281,6 +1282,47 @@ class PosService {
       rethrow;
     } catch (e) {
       print('Error in getGrabOrderState: $e');
+      throw Exception('Network error: $e');
+    }
+  }
+
+  // Print QR code for table
+  Future<Uint8List> printOrderQR({
+    required String posProfile,
+    required String table,
+  }) async {
+    try {
+      final token = await AuthService.getAuthToken();
+      if (token == null) throw Exception('Not authenticated');
+
+      final baseUrl = await _getBaseUrl();
+      
+      // Encode parameters for URL
+      final encodedPosProfile = Uri.encodeComponent(posProfile);
+      final encodedTable = Uri.encodeComponent(table);
+      
+      final uri = Uri.parse(
+        '$baseUrl/api/method/shiok_pos.api.print_order_qr?pos_profile=$encodedPosProfile&table=$encodedTable'
+      );
+      
+      debugPrint('🖨️ Fetching QR image from: $uri');
+      
+      final response = await http.get(
+        uri,
+        headers: {'Authorization': token},
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        // Return the raw PNG bytes
+        debugPrint('✅ QR image received (${response.bodyBytes.length} bytes)');
+        return response.bodyBytes;
+      } else {
+        throw Exception('Request failed with status ${response.statusCode}');
+      }
+    } on SessionTimeoutException {
+      rethrow;
+    } catch (e) {
+      print('Error in printOrderQR: $e');
       throw Exception('Network error: $e');
     }
   }

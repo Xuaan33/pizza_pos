@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/kitchen_notification_overlay.dart';
+import 'package:shiok_pos_android_app/components/receipt_printer.dart';
 import 'package:shiok_pos_android_app/providers/grab_notifications_provider.dart';
 import 'package:shiok_pos_android_app/providers/grab_orders_provider.dart';
 import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.dart';
@@ -838,6 +839,59 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             .read(kitchenNotificationsProvider.notifier)
             .markAsNotified(orderId);
         debugPrint('✅ Marked order as notified: $orderId');
+      }
+
+      // ============ AUTO PRINT KITCHEN ORDER ============
+      // Print kitchen order automatically when notification comes in
+      if (orderId != 'Unknown') {
+        try {
+          debugPrint('🖨️ Auto-printing kitchen order for: $orderId');
+          
+          // Check if printing is enabled in settings
+          final authState = ref.read(authProvider);
+          final shouldPrint = await authState.whenOrNull(
+            authenticated: (
+              sid,
+              apiKey,
+              apiSecret,
+              username,
+              email,
+              fullName,
+              posProfile,
+              branch,
+              paymentMethods,
+              taxes,
+              hasOpening,
+              tier,
+              printKitchenOrder,
+              openingDate,
+              itemsGroups,
+              baseUrl,
+              merchantId,
+              printMerchantReceiptCopy,
+              enableFiuu,
+              cashDrawerPinNeeded,
+              cashDrawerPin,
+            ) async {
+              return printKitchenOrder == 1;
+            },
+          );
+
+          if (shouldPrint == true) {
+            // Print kitchen order in background (don't await to avoid blocking notification)
+            ReceiptPrinter.printKitchenOrderOnly(orderId).then((_) {
+              debugPrint('✅ Kitchen order auto-printed successfully: $orderId');
+            }).catchError((e) {
+              debugPrint('❌ Kitchen order auto-print failed: $e');
+              // Don't show error to user - printing is background task
+            });
+          } else {
+            debugPrint('⏭️ Kitchen order printing disabled in settings');
+          }
+        } catch (e) {
+          debugPrint('❌ Error in auto-print: $e');
+          // Don't throw - notification should still show even if printing fails
+        }
       }
 
       // ============ Trigger dashboard refresh ============

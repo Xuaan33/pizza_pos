@@ -1038,6 +1038,38 @@ class ReceiptPrinter {
     }
   }
 
+  // Print QR code for table
+  static Future<void> printTableQR({
+    required String posProfile,
+    required String table,
+  }) async {
+    try {
+      debugPrint('🖨️ Printing QR code for table: $table');
+
+      // Fetch QR image from API
+      final Uint8List qrImageBytes = await PosService().printOrderQR(
+        posProfile: posProfile,
+        table: table,
+      );
+
+      debugPrint('✅ QR image received (${qrImageBytes.length} bytes)');
+
+      // Print the QR image to receipt printer
+      // Use isReceipt: true to print to main receipt printer
+      await printReceipt(
+        qrImageBytes,
+        isPdf: false,
+        isReceipt: true, // Print to receipt printer
+        kitchenStation: null,
+      );
+
+      debugPrint('✅ QR code printed successfully');
+    } catch (e) {
+      debugPrint('❌ Print QR code error: $e');
+      throw Exception('Failed to print QR code: $e');
+    }
+  }
+
   static Future<void> printReceiptAndKitchenOrder(String orderName) async {
     try {
       final printResults = await PosService().printReceiptAndKitchenOrder(
