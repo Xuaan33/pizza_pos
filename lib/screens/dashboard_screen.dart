@@ -68,7 +68,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       // Use the stored reference from didChangeDependencies
       if (_mainLayout != null && mounted) {
         _mainLayout!.registerDashboardRefreshCallback(_onNotificationRefresh);
-        debugPrint('✅ Dashboard registered for notification refresh');
       }
     });
   }
@@ -112,7 +111,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _isInitialLoading = false;
           _isBackgroundRefreshing = false;
         });
-        debugPrint('✅ Dashboard data updated smoothly');
       }
     } catch (e) {
       debugPrint('❌ Error loading dashboard data: $e');
@@ -135,8 +133,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         setState(() {
           _payLaterAmount = newAmount;
         });
-        debugPrint(
-            '✅ Pay Later amount updated smoothly: \$${newAmount.toStringAsFixed(2)}');
       }
     } catch (e) {
       debugPrint('❌ Error loading pay later data: $e');
@@ -375,13 +371,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
       },
     );
-    debugPrint('✅ Dashboard auto-refresh timer started (30s interval)');
   }
 
   void _stopDashboardRefreshTimer() {
     _dashboardRefreshTimer?.cancel();
     _dashboardRefreshTimer = null;
-    debugPrint('🛑 Dashboard auto-refresh timer stopped');
   }
 
   // ============ PAY LATER AUTO-REFRESH TIMER ============
@@ -395,13 +389,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
       },
     );
-    debugPrint('✅ Pay Later auto-refresh timer started (15s interval)');
   }
 
   void _stopPayLaterRefreshTimer() {
     _payLaterRefreshTimer?.cancel();
     _payLaterRefreshTimer = null;
-    debugPrint('🛑 Pay Later auto-refresh timer stopped');
   }
 
   // ============ BACKGROUND REFRESH METHODS ============
@@ -410,9 +402,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     _isRefreshing = true;
     try {
-      debugPrint('🔄 Silently refreshing dashboard data...');
       await _loadData(); // Wait for it to complete
-      debugPrint('✅ Dashboard data refreshed (smooth)');
     } catch (e) {
       debugPrint('❌ Error auto-refreshing dashboard: $e');
     } finally {
@@ -425,9 +415,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     _isRefreshing = true;
     try {
-      debugPrint('🔄 Silently refreshing pay later data...');
       await _loadPayLaterData(); // Wait for it to complete
-      debugPrint('✅ Pay Later data refreshed (smooth)');
     } catch (e) {
       debugPrint('❌ Error auto-refreshing pay later: $e');
     } finally {
@@ -439,8 +427,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   /// Called when a new order notification is triggered (smooth, no flicker)
   void _onNotificationRefresh() {
     if (!mounted || _isInitialLoading) return;
-
-    debugPrint('📲 Dashboard refresh triggered by notification (smooth)');
 
     // Prevent multiple simultaneous refreshes
     if (_isRefreshing) {
@@ -455,7 +441,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _loadData(),
       _loadPayLaterData(),
     ]).then((_) {
-      debugPrint('✅ Dashboard refreshed from notification (smooth)');
     }).catchError((e) {
       debugPrint('❌ Error refreshing dashboard from notification: $e');
     }).whenComplete(() {

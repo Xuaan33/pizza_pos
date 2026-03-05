@@ -61,6 +61,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   List<Map<String, dynamic>> _cachedGrabOrders = []; // Cache for comparison
   bool _isLoadingGlobalGrab = false;
   DateTime? _lastGlobalGrabLoad;
+  Map<String, int> _orderItemCounts = {}; // Track item counts to detect add-ons
+  Set<String> _notifiedAddOns = {}; // Track which add-ons we already notified about
 
   // API Queue System
   final List<Future<void> Function()> _apiQueue = [];
@@ -489,6 +491,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                       );
                     }
                   }
+                  
+                  // ============ CHECK FOR ADD-ONS IN REGULAR ORDERS ============
+                  // Detect when existing orders have new items added
+                  await _checkForAddOnOrders(newOrders);
                 }
 
                 // Small delay before next API call
@@ -693,6 +699,203 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           await notificationProvider.markAsNotified(orderId);
         }
       }
+    }
+    
+    // ============ CHECK FOR ADD-ON ORDERS ============
+    // Detect when existing orders have new items added
+    await _checkForAddOnOrders(orders);
+  }
+  
+  Future<void> _checkForAddOnOrders(List<Map<String, dynamic>> orders) async {
+    try {
+      for (var order in orders) {
+        final orderId = order['name']?.toString() ?? '';
+        if (orderId.isEmpty) continue;
+        
+        // Check if order is fulfilled - skip if fully fulfilled
+        final isFulfilled = order['custom_fulfilled'] == 1;
+        if (isFulfilled) {
+          // Order is fully fulfilled, no need to check for add-ons
+          continue;
+        }
+        
+        final items = order['items'] as List?;
+        final currentItemCount = items?.length ?? 0;
+        
+        // Count unfulfilled items only
+        int unfulfilledCount = 0;
+        if (items != null) {
+          for (var item in items) {
+            final itemFulfilled = item['custom_fulfilled'] == 1;
+            if (!itemFulfilled) {
+              unfulfilledCount++;
+            }
+          }
+        }
+        
+        // Get previous item count for this order
+        final previousItemCount = _orderItemCounts[orderId] ?? 0;
+        
+        // Create a unique key for this add-on state (orderId + item count)
+        final addOnKey = '$orderId-$currentItemCount';
+        
+        // Check if we already notified for this add-on
+        if (_notifiedAddOns.contains(addOnKey)) {
+          // Already notified for this add-on, skip
+          continue;
+        }
+        
+        // Update the stored count
+        _orderItemCounts[orderId] = currentItemCount;
+        
+        // If unfulfilled count > 0 AND item count increased, it means items were added
+        if (unfulfilledCount > 0 && previousItemCount > 0 && currentItemCount > previousItemCount) {
+          final addedCount = currentItemCount - previousItemCount;
+          debugPrint('🆕 Add-on detected for order $orderId: $addedCount new item(s) added');
+          debugPrint('   Previous items: $previousItemCount, Current items: $currentItemCount');
+          debugPrint('   Unfulfilled items: $unfulfilledCount');
+          
+          // Mark this add-on as notified BEFORE printing
+          _notifiedAddOns.add(addOnKey);
+          
+          // Auto-print kitchen order for the new items
+          // The API will only print unfulfilled items
+          await _printAddOnKitchenOrder(orderId);
+          
+          // Show a subtle notification about the add-on
+          await _showAddOnNotification(order, addedCount);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error checking for add-on orders: $e');
+    }
+  }
+  
+  Future<void> _printAddOnKitchenOrder(String orderId) async {
+    try {
+      final authState = ref.read(authProvider);
+      final shouldPrint = await authState.whenOrNull(
+        authenticated: (
+          sid,
+          apiKey,
+          apiSecret,
+          username,
+          email,
+          fullName,
+          posProfile,
+          branch,
+          paymentMethods,
+          taxes,
+          hasOpening,
+          tier,
+          printKitchenOrder,
+          openingDate,
+          itemsGroups,
+          baseUrl,
+          merchantId,
+          printMerchantReceiptCopy,
+          enableFiuu,
+          cashDrawerPinNeeded,
+          cashDrawerPin,
+        ) async {
+          return printKitchenOrder == 1;
+        },
+      );
+
+      if (shouldPrint == true) {
+        debugPrint('🖨️ Auto-printing kitchen order for add-on items: $orderId');
+        
+        // Print in background (don't await to avoid blocking)
+        ReceiptPrinter.printKitchenOrderOnly(orderId).then((_) {
+          debugPrint('✅ Add-on kitchen order printed successfully: $orderId');
+        }).catchError((e) {
+          final errorString = e.toString();
+          
+          // Check if it's the "no additional items" error
+          if (errorString.contains('No additional items to print') ||
+              (errorString.contains('"success":false') &&
+                  errorString.contains('No additional items')) ||
+              (errorString.contains('HTTP 400') &&
+                  errorString.contains('No additional items'))) {
+            debugPrint('ℹ️ No unfulfilled items to print for add-on - items may already be fulfilled');
+            return; // Don't log as error
+          }
+          
+          debugPrint('❌ Add-on kitchen order print failed: $e');
+        });
+      } else {
+        debugPrint('⏭️ Kitchen order printing disabled in settings');
+      }
+    } catch (e) {
+      debugPrint('❌ Error printing add-on kitchen order: $e');
+    }
+  }
+  
+  Future<void> _showAddOnNotification(Map<String, dynamic> order, int addedCount) async {
+    try {
+      final orderId = order['name']?.toString() ?? 'Unknown';
+      final customerName = order['customer_name']?.toString() ?? 'Customer';
+      final tableName = order['table']?.toString() ?? 'N/A';
+      
+      // Check if it's a Grab order
+      final isGrab = tableName.toUpperCase().contains('GRAB');
+
+      // Trigger dashboard refresh
+      _triggerDashboardRefresh();
+
+      if (mounted && context.mounted) {
+        // Show kitchen notification overlay for add-on (works for both Grab and table orders)
+        await KitchenNotificationOverlay.show(
+          context,
+          orderId: orderId,
+          customerName: customerName,
+          tableName: tableName,
+          isGrab: isGrab,
+          stationName: null,
+          onTap: () {
+            // Navigate to Kitchen screen
+            final authState = ref.read(authProvider);
+            authState.whenOrNull(
+              authenticated: (
+                sid,
+                apiKey,
+                apiSecret,
+                username,
+                email,
+                fullName,
+                posProfile,
+                branch,
+                paymentMethods,
+                taxes,
+                hasOpening,
+                tier,
+                printKitchenOrder,
+                openingDate,
+                itemsGroups,
+                baseUrl,
+                merchantId,
+                printMerchantReceiptCopy,
+                enableFiuu,
+                cashDrawerPinNeeded,
+                cashDrawerPin,
+              ) {
+                final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
+                final hasKitchenStations = _hasKitchenStations();
+
+                if (mounted) {
+                  setState(() {
+                    _selectedTabIndex = hasKitchenStations ? kitchenTabIndex : tier.toLowerCase() != 'tier 3' ? 1 : 2;
+                  });
+                }
+              },
+            );
+
+            debugPrint('🔔 Add-on notification tapped: $orderId ($addedCount new items) - ${isGrab ? "GRAB" : tableName}');
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error showing add-on notification: $e');
     }
   }
 

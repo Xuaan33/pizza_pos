@@ -66,7 +66,6 @@ class _GrabScreenState extends ConsumerState<GrabScreen>
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted && !_isLoading) {
-        debugPrint('🔄 Auto-refreshing Grab orders (silent)...');
         _loadGrabOrders(silent: true); // Silent refresh - no loading indicator
       }
     });
@@ -411,10 +410,6 @@ class _GrabScreenState extends ConsumerState<GrabScreen>
           if (response['success'] == true) {
             final ordersData = (response['message'] as List?) ?? [];
             
-            debugPrint('═══════════════════════════════════════════════');
-            debugPrint('📦 GRAB ORDERS LOADED: ${ordersData.length} orders');
-            debugPrint('═══════════════════════════════════════════════');
-            
             // Create a DEEP copy of orders to prevent item duplication
             final freshOrders = ordersData.map((orderData) {
               // Deep copy each item in the items array
@@ -434,7 +429,6 @@ class _GrabScreenState extends ConsumerState<GrabScreen>
             // Fetch state for each Grab order
             for (int i = 0; i < freshOrders.length; i++) {
               final order = freshOrders[i];
-              debugPrint('\n--- Processing Order ${i + 1}/${freshOrders.length} ---');
               await _fetchOrderState(order);
             }
             
@@ -444,10 +438,6 @@ class _GrabScreenState extends ConsumerState<GrabScreen>
                 _grabOrders.clear();
                 _grabOrders = freshOrders;
               });
-              
-              debugPrint('\n═══════════════════════════════════════════════');
-              debugPrint('✅ FINISHED: ${_grabOrders.length} orders with states');
-              debugPrint('═══════════════════════════════════════════════\n');
             }
           }
         } catch (e) {
@@ -493,25 +483,13 @@ class _GrabScreenState extends ConsumerState<GrabScreen>
       }
       
       if (grabOrderId == null || grabOrderId.isEmpty) {
-        debugPrint('   ⚠️  No Grab order ID found!');
-        debugPrint('   📋 Available fields: ${order.keys.toList()}');
-        debugPrint('   💡 Check which field contains the Grab ID (e.g., GF-xxxx)');
-        debugPrint('   💡 name field value: "$orderName"');
         return;
       }
 
-      debugPrint('   📱 Grab Order ID: $grabOrderId');
-      debugPrint('   🌐 Calling getGrabOrderState API...');
 
       final stateResponse = await _safeApiCall(
         () => PosService().getGrabOrderState(orderId: grabOrderId),
       );
-
-      debugPrint('   📊 API Response:');
-      debugPrint('      success: ${stateResponse['success']}');
-      debugPrint('      message: ${stateResponse['message']}');
-      debugPrint('      message type: ${stateResponse['message'].runtimeType}');
-      debugPrint('      full response: $stateResponse');
 
       if (stateResponse['success'] == true) {
         final message = stateResponse['message'];
@@ -520,32 +498,23 @@ class _GrabScreenState extends ConsumerState<GrabScreen>
         // Handle different response formats
         if (message is String) {
           state = message;
-          debugPrint('   ✅ State (String): "$state"');
         } else if (message is Map) {
           // Check various possible keys for state
           state = message['state']?.toString() ?? 
                   message['status']?.toString() ?? 
                   message['order_state']?.toString() ??
                   message.toString();
-          debugPrint('   ✅ State (Map): "$state"');
-          debugPrint('      Map keys: ${message.keys.toList()}');
         } else {
           state = message.toString();
-          debugPrint('   ✅ State (Other): "$state"');
         }
         
         // Store the state in the order object
         order['grab_state'] = state;
         order['grab_state_raw'] = message; // Store raw for debugging
         
-        debugPrint('   💾 Stored in order["grab_state"]: "$state"');
       } else {
-        debugPrint('   ❌ API returned success: false');
-        debugPrint('      Error: ${stateResponse['message']}');
       }
     } catch (e, stackTrace) {
-      debugPrint('   ❌ Exception: $e');
-      debugPrint('   Stack: $stackTrace');
     }
   }
 
