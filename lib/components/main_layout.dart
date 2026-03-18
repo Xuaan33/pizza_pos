@@ -61,8 +61,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   List<Map<String, dynamic>> _cachedGrabOrders = []; // Cache for comparison
   bool _isLoadingGlobalGrab = false;
   DateTime? _lastGlobalGrabLoad;
-  Map<String, int> _orderItemCounts = {}; // Track item counts to detect add-ons
-  Set<String> _notifiedAddOns = {}; // Track which add-ons we already notified about
+  Map<String, int> _orderUnfulfilledCounts = {}; // Track UNFULFILLED item counts
 
   // API Queue System
   final List<Future<void> Function()> _apiQueue = [];
@@ -708,66 +707,83 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   
   Future<void> _checkForAddOnOrders(List<Map<String, dynamic>> orders) async {
     try {
+      debugPrint('🔍 Checking ${orders.length} orders for add-ons...');
+      
       for (var order in orders) {
         final orderId = order['name']?.toString() ?? '';
         if (orderId.isEmpty) continue;
         
+        debugPrint('📦 Checking order: $orderId');
+        
         // Check if order is fulfilled - skip if fully fulfilled
         final isFulfilled = order['custom_fulfilled'] == 1;
         if (isFulfilled) {
-          // Order is fully fulfilled, no need to check for add-ons
+          debugPrint('   ✅ Order fully fulfilled, skipping');
+          // Order is fully fulfilled, remove from tracking
+          _orderUnfulfilledCounts.remove(orderId);
           continue;
         }
         
         final items = order['items'] as List?;
-        final currentItemCount = items?.length ?? 0;
+        debugPrint('   Total items: ${items?.length ?? 0}');
         
-        // Count unfulfilled items only
-        int unfulfilledCount = 0;
+        // Count TOTAL QUANTITY of unfulfilled items (not just item count)
+        int currentUnfulfilledQty = 0;
         if (items != null) {
           for (var item in items) {
             final itemFulfilled = item['custom_fulfilled'] == 1;
+            final itemName = item['item_name'] ?? item['name'] ?? 'Unknown';
+            final int qty = (item['qty'] ?? item['quantity'] ?? 1).toInt();
+            
+            debugPrint('      - $itemName x$qty: ${itemFulfilled ? "fulfilled ✅" : "unfulfilled ❌"}');
+            
             if (!itemFulfilled) {
-              unfulfilledCount++;
+              currentUnfulfilledQty += qty; // Add quantity, not just count
             }
           }
         }
         
-        // Get previous item count for this order
-        final previousItemCount = _orderItemCounts[orderId] ?? 0;
+        debugPrint('   Total unfulfilled quantity: $currentUnfulfilledQty');
         
-        // Create a unique key for this add-on state (orderId + item count)
-        final addOnKey = '$orderId-$currentItemCount';
+        // Get previous unfulfilled quantity for this order
+        final previousUnfulfilledQty = _orderUnfulfilledCounts[orderId];
+        debugPrint('   Previous unfulfilled quantity: ${previousUnfulfilledQty ?? "none (first time)"}');
         
-        // Check if we already notified for this add-on
-        if (_notifiedAddOns.contains(addOnKey)) {
-          // Already notified for this add-on, skip
-          continue;
-        }
+        // Update the stored unfulfilled quantity
+        _orderUnfulfilledCounts[orderId] = currentUnfulfilledQty;
         
-        // Update the stored count
-        _orderItemCounts[orderId] = currentItemCount;
-        
-        // If unfulfilled count > 0 AND item count increased, it means items were added
-        if (unfulfilledCount > 0 && previousItemCount > 0 && currentItemCount > previousItemCount) {
-          final addedCount = currentItemCount - previousItemCount;
-          debugPrint('🆕 Add-on detected for order $orderId: $addedCount new item(s) added');
-          debugPrint('   Previous items: $previousItemCount, Current items: $currentItemCount');
-          debugPrint('   Unfulfilled items: $unfulfilledCount');
+        // Only trigger if:
+        // 1. We have a previous count (not first time seeing this order)
+        // 2. Current unfulfilled qty > previous unfulfilled qty (items/qty added)
+        // 3. Current unfulfilled qty > 0 (there are items to print)
+        if (previousUnfulfilledQty != null && 
+            currentUnfulfilledQty > previousUnfulfilledQty && 
+            currentUnfulfilledQty > 0) {
           
-          // Mark this add-on as notified BEFORE printing
-          _notifiedAddOns.add(addOnKey);
+          final addedQty = currentUnfulfilledQty - previousUnfulfilledQty;
+          debugPrint('🆕 ✅ ADD-ON DETECTED for order $orderId: $addedQty additional quantity');
+          debugPrint('   Previous unfulfilled qty: $previousUnfulfilledQty, Current unfulfilled qty: $currentUnfulfilledQty');
           
           // Auto-print kitchen order for the new items
           // The API will only print unfulfilled items
           await _printAddOnKitchenOrder(orderId);
           
           // Show a subtle notification about the add-on
-          await _showAddOnNotification(order, addedCount);
+          await _showAddOnNotification(order, addedQty);
+        } else if (previousUnfulfilledQty == null && currentUnfulfilledQty > 0) {
+          // First time seeing this order, just store the quantity (don't notify)
+          debugPrint('📝 First time tracking order $orderId with $currentUnfulfilledQty unfulfilled quantity');
+        } else if (previousUnfulfilledQty != null && currentUnfulfilledQty == previousUnfulfilledQty) {
+          debugPrint('   ⏭️ No change in unfulfilled quantity, skipping');
+        } else if (previousUnfulfilledQty != null && currentUnfulfilledQty < previousUnfulfilledQty) {
+          debugPrint('   📉 Unfulfilled quantity decreased (items were fulfilled), skipping add-on');
         }
       }
+      
+      debugPrint('✅ Add-on check complete');
     } catch (e) {
       debugPrint('❌ Error checking for add-on orders: $e');
+      debugPrint('   Stack trace: ${StackTrace.current}');
     }
   }
   

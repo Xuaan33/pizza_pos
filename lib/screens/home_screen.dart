@@ -306,7 +306,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         'value': groupName.toString(),
                         'disabled': 0,
                       })
-                  .toList();
+                  .toList()
+                ..sort((a, b) => (a['name'] as String)
+                    .toLowerCase()
+                    .compareTo((b['name'] as String).toLowerCase()));
               this.itemGroups = [
                 {
                   'name': 'All',
