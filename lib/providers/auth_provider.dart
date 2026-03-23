@@ -29,7 +29,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final printKitchenOrder = prefs.getInt('print_kitchen_order');
     final openingDateString = prefs.getString('opening_date');
     final itemsGroupsJson = prefs.getString('item_groups');
-    final baseUrl = prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+    final baseUrl = prefs.getString('base_url') ?? 'https://mejaa.joydivisionpadel.com';
     final merchantId = prefs.getString('merchant_id');
     final printMerchantReceiptCopy =
         prefs.getInt('print_merchant_receipt_copy');
@@ -88,7 +88,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
               ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
               : [],
           hasOpening: hasOpening,
-          tier: tier ?? '',
+          tier: tier ?? 'tier 3',
           printKitchenOrder: printKitchenOrder ?? 1,
           openingDate: openingDate,
           itemsGroups: itemsGroups,
@@ -156,7 +156,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       String username, String password, String merchantId) async {
     try {
       final response =
-          await AuthService().login(username, password, merchantId);
+          await AuthService().login(username, password);
 
       if (response['success'] == true) {
         await _saveLoginData(response);
@@ -174,14 +174,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> login(
-      String username, String password, String merchantId) async {
+      String username, String password) async {
     try {
       final response =
-          await AuthService().login(username, password, merchantId);
+          await AuthService().login(username, password);
 
       if (response['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
-        await AuthService.storeCredentials(username, password, merchantId);
+        await AuthService.storeCredentials(username, password);
 
         await prefs.setString('sid', response['sid']);
         await prefs.setString('api_key', response['api_key']);
@@ -197,14 +197,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await prefs.setBool('has_opening', response['has_opening']);
         await prefs.setInt(
             'print_kitchen_order', response['print_kitchen_order']);
-        await prefs.setString('tier', response['tier'] ?? 'tier 1');
+        await prefs.setString('tier', response['tier'] ?? 'tier 3');
         await prefs.setString('last_login', DateTime.now().toIso8601String());
         await prefs.setString(
             'item_groups', jsonEncode(response['item_groups'] ?? []));
         await prefs.setString(
-            'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
+            'base_url', response['base_url'] ?? 'https://mejaa.joydivisionpadel.com');
         await prefs.setString(
-            'merchant_id', response['merchant_id'] ?? merchantId);
+            'merchant_id', response['merchant_id'] ?? '');
         await prefs.setInt('print_merchant_receipt_copy',
             response['print_merchant_receipt_copy'] ?? 0);
         await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
@@ -257,12 +257,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
           tier:
-              response['tier'] ?? 'tier 1', // Default to tier2 if not provided
+              response['tier'] ?? 'tier 3', // Default to tier2 if not provided
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
           openingDate: openingDate,
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
-          baseUrl: response['base_url'] ?? 'https://asdf.byondwave.com',
-          merchantId: response['merchant_id'] ?? merchantId,
+          baseUrl: response['base_url'] ?? 'https://mejaa.joydivisionpadel.com',
+          merchantId: response['merchant_id'] ?? '',
           printMerchantReceiptCopy:
               response['print_merchant_receipt_copy'] ?? 0,
           enableFiuu: response['enable_fiuu'] ?? 0,
@@ -295,12 +295,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await prefs.setString('taxes', jsonEncode(response['taxes']));
     await prefs.setBool('has_opening', response['has_opening']);
     await prefs.setInt('print_kitchen_order', response['print_kitchen_order']);
-    await prefs.setString('tier', response['tier'] ?? 'tier 1');
+    await prefs.setString('tier', response['tier'] ?? 'tier 3');
     await prefs.setString('last_login', DateTime.now().toIso8601String());
     await prefs.setString(
         'item_groups', jsonEncode(response['item_groups'] ?? []));
     await prefs.setString(
-        'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
+        'base_url', response['base_url'] ?? 'https://mejaa.joydivisionpadel.com');
     await prefs.setString('merchant_id', response['merchant_id']);
     await prefs.setInt('print_merchant_receipt_copy',
         response['print_merchant_receipt_copy'] ?? 0);

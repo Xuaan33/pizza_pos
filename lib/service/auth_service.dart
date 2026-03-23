@@ -19,7 +19,7 @@ class AuthService {
       }
 
       // Perform login with stored credentials
-      return await login(username, password, merchantId);
+      return await login(username, password);
     } catch (e) {
       return {
         'success': false,
@@ -30,12 +30,12 @@ class AuthService {
 
   // Store password securely (consider using flutter_secure_storage)
   static Future<void> storeCredentials(
-      String username, String password, String merchantId) async {
+      String username, String password) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('username', username);
     // For production, use flutter_secure_storage instead
     await prefs.setString('password', password);
-    await prefs.setString('merchant_id', merchantId);
+    await prefs.setString('merchant_id', '');
   }
 
   static Future<void> clearStoredCredentials() async {
@@ -45,17 +45,16 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> login(
-      String username, String password, String merchantId) async {
+      String username, String password) async {
     try {
       // Use the original URL for login
       final response = await http.post(
         Uri.parse(
-            'https://shiokpos.byondwave.com/api/method/shiok_pos_admin.api.v1.login'),
+            'https://mejaa.joydivisionpadel.com/api/method/shiok_pos.api.login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'username': username,
           'password': password,
-          'merchant_id': merchantId,
         }),
       );
 
@@ -80,8 +79,8 @@ class AuthService {
           'tier': message['tier'],
           'print_kitchen_order': message['print_kitchen_order'] ?? 1,
           'item_groups': message['item_groups'] ?? [],
-          'base_url': message['url'] ?? 'https://asdf.byondwave.com',
-          'merchant_id': message['merchant_id'] ?? merchantId,
+          'base_url': message['url'] ?? 'https://mejaa.joydivisionpadel.com',
+          'merchant_id': message['merchant_id'] ?? '',
           'print_merchant_receipt_copy': message['print_merchant_receipt_copy'],
           'enable_fiuu': message['enable_fiuu'],
           'cash_drawer_pin_needed': message['cash_drawer_pin_needed'],
@@ -116,7 +115,7 @@ class AuthService {
 
   static Future<String?> getBaseUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
+    return prefs.getString('base_url') ?? 'https://mejaa.joydivisionpadel.com';
   }
 
   static Future<String?> getMerchantId() async {

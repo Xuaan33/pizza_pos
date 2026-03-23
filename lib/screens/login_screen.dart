@@ -16,27 +16,27 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   String enteredPin = "";
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _merchantIdController = TextEditingController();
+  // final TextEditingController _merchantIdController = TextEditingController();
   bool _isLoading = false;
   bool _showMerchantIdField = true;
 
   @override
   void initState() {
     super.initState();
-    _checkStoredMerchantId();
+    // _checkStoredMerchantId();
   }
 
-  Future<void> _checkStoredMerchantId() async {
-    final prefs = await SharedPreferences.getInstance();
-    final storedMerchantId = prefs.getString('merchant_id');
+  // Future<void> _checkStoredMerchantId() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final storedMerchantId = prefs.getString('merchant_id');
 
-    if (storedMerchantId != null && storedMerchantId.isNotEmpty) {
-      setState(() {
-        _merchantIdController.text = storedMerchantId;
-        _showMerchantIdField = false;
-      });
-    }
-  }
+  //   if (storedMerchantId != null && storedMerchantId.isNotEmpty) {
+  //     setState(() {
+  //       _merchantIdController.text = storedMerchantId;
+  //       _showMerchantIdField = false;
+  //     });
+  //   }
+  // }
 
   void _onKeyPress(String value) {
     if (enteredPin.length < 4) {
@@ -48,11 +48,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   Future<void> _validateCredentials() async {
     final username = _usernameController.text.trim();
-    final merchantId = _merchantIdController.text.trim();
+    // final merchantId = _merchantIdController.text.trim();
 
-    if (username.isEmpty || enteredPin.isEmpty || merchantId.isEmpty) {
+    if (username.isEmpty || enteredPin.isEmpty) {
       Fluttertoast.showToast(
-        msg: "Please enter username, PIN and merchant ID",
+        msg: "Please enter username and PIN",
         gravity: ToastGravity.BOTTOM,
         backgroundColor: Colors.red,
         textColor: Colors.white,
@@ -64,7 +64,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     try {
       await ref
           .read(authProvider.notifier)
-          .login(username, enteredPin, merchantId);
+          .login(username, enteredPin);
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -99,7 +99,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   void dispose() {
     _usernameController.dispose();
-    _merchantIdController.dispose();
+    // _merchantIdController.dispose();
     super.dispose();
   }
 
@@ -247,76 +247,76 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   height: _getSpacingValue(
                       isLandscape, isTablet, isSmallScreen, 20, 30, 50)),
 
-              // Merchant ID Field
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(
-                    _getPaddingValue(isLandscape, isTablet, isSmallScreen)),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(_getBorderRadiusValue(
-                      isLandscape, isTablet, isSmallScreen)),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: _showMerchantIdField
-                    ? TextField(
-                        controller: _merchantIdController,
-                        decoration: InputDecoration(
-                          labelText: 'Merchant ID',
-                          border: InputBorder.none,
-                          labelStyle: TextStyle(
-                            color: Colors.grey,
-                            fontSize: _getFontSizeValue(isLandscape, isTablet,
-                                isSmallScreen, 12, 13, 14),
-                          ),
-                        ),
-                        style: TextStyle(
-                          fontSize: _getFontSizeValue(
-                              isLandscape, isTablet, isSmallScreen, 16, 17, 18),
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF00203A),
-                        ),
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Merchant ID',
-                                  style: TextStyle(
-                                    fontSize: _getFontSizeValue(isLandscape,
-                                        isTablet, isSmallScreen, 12, 13, 14),
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  _merchantIdController.text,
-                                  style: TextStyle(
-                                    fontSize: _getFontSizeValue(isLandscape,
-                                        isTablet, isSmallScreen, 16, 17, 18),
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF00203A),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.edit,
-                                size: _getIconSizeValue(
-                                    isLandscape, isTablet, isSmallScreen)),
-                            onPressed: _showMerchantIdInput,
-                            color: const Color(0xFF00203A),
-                          ),
-                        ],
-                      ),
-              ),
-              SizedBox(
-                  height: _getSpacingValue(
-                      isLandscape, isTablet, isSmallScreen, 15, 20, 30)),
+              // // Merchant ID Field
+              // Container(
+              //   width: double.infinity,
+              //   padding: EdgeInsets.all(
+              //       _getPaddingValue(isLandscape, isTablet, isSmallScreen)),
+              //   decoration: BoxDecoration(
+              //     color: Colors.white,
+              //     borderRadius: BorderRadius.circular(_getBorderRadiusValue(
+              //         isLandscape, isTablet, isSmallScreen)),
+              //     border: Border.all(color: Colors.grey.shade300),
+              //   ),
+              //   child: _showMerchantIdField
+              //       ? TextField(
+              //           controller: _merchantIdController,
+              //           decoration: InputDecoration(
+              //             labelText: 'Merchant ID',
+              //             border: InputBorder.none,
+              //             labelStyle: TextStyle(
+              //               color: Colors.grey,
+              //               fontSize: _getFontSizeValue(isLandscape, isTablet,
+              //                   isSmallScreen, 12, 13, 14),
+              //             ),
+              //           ),
+              //           style: TextStyle(
+              //             fontSize: _getFontSizeValue(
+              //                 isLandscape, isTablet, isSmallScreen, 16, 17, 18),
+              //             fontWeight: FontWeight.bold,
+              //             color: const Color(0xFF00203A),
+              //           ),
+              //         )
+              //       : Row(
+              //           children: [
+              //             Expanded(
+              //               child: Column(
+              //                 crossAxisAlignment: CrossAxisAlignment.start,
+              //                 children: [
+              //                   Text(
+              //                     'Merchant ID',
+              //                     style: TextStyle(
+              //                       fontSize: _getFontSizeValue(isLandscape,
+              //                           isTablet, isSmallScreen, 12, 13, 14),
+              //                       color: Colors.grey[600],
+              //                     ),
+              //                   ),
+              //                   SizedBox(height: 4),
+              //                   Text(
+              //                     _merchantIdController.text,
+              //                     style: TextStyle(
+              //                       fontSize: _getFontSizeValue(isLandscape,
+              //                           isTablet, isSmallScreen, 16, 17, 18),
+              //                       fontWeight: FontWeight.bold,
+              //                       color: const Color(0xFF00203A),
+              //                     ),
+              //                   ),
+              //                 ],
+              //               ),
+              //             ),
+              //             IconButton(
+              //               icon: Icon(Icons.edit,
+              //                   size: _getIconSizeValue(
+              //                       isLandscape, isTablet, isSmallScreen)),
+              //               onPressed: _showMerchantIdInput,
+              //               color: const Color(0xFF00203A),
+              //             ),
+              //           ],
+              //         ),
+              // ),
+              // SizedBox(
+              //     height: _getSpacingValue(
+              //         isLandscape, isTablet, isSmallScreen, 15, 20, 30)),
 
               // Username Field
               Container(
