@@ -9,13 +9,10 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shiok_pos_android_app/components/kitchen_notification_overlay.dart';
 import 'package:shiok_pos_android_app/components/receipt_printer.dart';
-import 'package:shiok_pos_android_app/providers/grab_notifications_provider.dart';
-import 'package:shiok_pos_android_app/providers/grab_orders_provider.dart';
 import 'package:shiok_pos_android_app/providers/kitchen_notifications_provider.dart';
 import 'package:shiok_pos_android_app/screens/Settings%20Screen/settings_screen.dart';
 import 'package:shiok_pos_android_app/screens/home_screen.dart';
 import 'package:shiok_pos_android_app/screens/kitchen_screen.dart';
-import 'package:shiok_pos_android_app/screens/grab_screen.dart';
 import 'package:shiok_pos_android_app/screens/login_screen.dart';
 import 'package:shiok_pos_android_app/screens/table_screen.dart';
 import 'package:shiok_pos_android_app/screens/orders_screen.dart';
@@ -25,7 +22,6 @@ import 'package:shiok_pos_android_app/providers/auth_provider.dart';
 import 'package:shiok_pos_android_app/secondary%20screen/customer_display_controller.dart';
 import 'package:shiok_pos_android_app/service/notification_queue.dart';
 import 'package:shiok_pos_android_app/service/pos_service.dart';
-import 'package:shiok_pos_android_app/components/grab_notification_overlay.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   static MainLayoutState? of(BuildContext context) =>
@@ -56,12 +52,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   bool get isLoadingMore => _isLoadingMore;
   bool _customerDisplayInitialized = false;
 
-  // ============ IMPROVED GRAB REFRESH SYSTEM ============
-  Timer? _globalGrabRefreshTimer;
-  List<Map<String, dynamic>> _cachedGrabOrders = []; // Cache for comparison
-  bool _isLoadingGlobalGrab = false;
-  DateTime? _lastGlobalGrabLoad;
-  Map<String, int> _orderUnfulfilledCounts = {}; // Track UNFULFILLED item counts
+  // Track unfulfilled item counts for add-on detection
+  Map<String, int> _orderUnfulfilledCounts = {};
 
   // API Queue System
   final List<Future<void> Function()> _apiQueue = [];
@@ -72,18 +64,21 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       GlobalKey<SettingsScreenState>();
   late FlutterLocalNotificationsPlugin _localNotifications;
 
-  // ============ GRAB ORDERS BADGE COUNT ============
-  /// Get the count of pending Grab orders for navigation badge
-  int get _pendingGrabOrdersCount {
-    final grabOrders = ref.read(grabOrdersProvider);
-    return grabOrders.where((order) {
-      return order['custom_fulfilled'] != 1; // Count unfulfilled orders
-    }).length;
+  // ============ KITCHEN ORDERS BADGE COUNT ============
+  /// Get the count of pending kitchen orders for navigation badge
+  int get _pendingKitchenOrdersCount {
+    // Count unfulfilled orders from all kitchen stations
+    int count = 0;
+    for (var orders in _cachedStationOrders.values) {
+      count += orders.where((order) {
+        return order['custom_fulfilled'] != 1; // Count unfulfilled orders
+      }).length;
+    }
+    return count;
   }
 
 // Separate caching for kitchen orders per station
   final Map<String, List<Map<String, dynamic>>> _cachedStationOrders = {};
-  final Map<String, List<Map<String, dynamic>>> _cachedStationGrabOrders = {};
 
 // ============ KITCHEN REFRESH SYSTEM ============
   Timer? _allOrdersRefreshTimer;
@@ -103,13 +98,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initializeCustomerDisplay();
       ref.read(authProvider.notifier).loadFromSharedPreferences();
-      await ref.read(grabNotificationsProvider.notifier).loadNotifiedOrders();
       await ref
           .read(kitchenNotificationsProvider.notifier)
           .loadNotifiedOrders();
 
-      // Initialize both notification overlays
-      await GrabNotificationOverlay.initialize();
+      // Initialize kitchen notification overlay only
       await KitchenNotificationOverlay.initialize();
       Future.delayed(const Duration(milliseconds: 2500), () async {
         if (mounted) {
@@ -120,12 +113,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       // Load kitchen stations
       await _loadKitchenStations();
 
-      // Start timers
-      _startGlobalGrabTimer();
+      // Start kitchen orders timer only
       _startAllOrdersTimer();
 
-      // Initial loads
-      _refreshGlobalGrabOrders();
+      // Initial load
       _refreshAllOrders();
     });
   }
@@ -185,25 +176,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
   }
 
-  // ============ GRAB TIMER SYSTEM ============
-  void _startGlobalGrabTimer() {
-    _globalGrabRefreshTimer?.cancel();
-
-    _globalGrabRefreshTimer =
-        Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      _refreshGlobalGrabOrders();
-    });
-  }
-
-  void _stopGlobalGrabTimer() {
-    _globalGrabRefreshTimer?.cancel();
-    _globalGrabRefreshTimer = null;
-  }
-
   // ============ ALL ORDERS TIMER SYSTEM ============
   void _startAllOrdersTimer() {
     _allOrdersRefreshTimer?.cancel();
@@ -245,110 +217,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       }
     } catch (e) {
       debugPrint('❌ Error processing queued notifications: $e');
-    }
-  }
-
-  // ============ BACKGROUND REFRESH WITHOUT FLICKERING ============
-  Future<void> _refreshGlobalGrabOrders() async {
-    // Don't start a new refresh if one is already in progress
-    if (_isLoadingGlobalGrab || !mounted) {
-      print('⏸️  Skipping GRAB refresh - already loading or not mounted');
-      return;
-    }
-
-    // Add to queue instead of executing immediately
-    _addToApiQueue(() => _performGrabRefresh());
-  }
-
-  Future<void> _performGrabRefresh() async {
-    if (!mounted) return; // Early return if not mounted
-    _isLoadingGlobalGrab = true;
-
-    try {
-      final authState = ref.read(authProvider);
-      await authState.whenOrNull(
-        authenticated: (
-          sid,
-          apiKey,
-          apiSecret,
-          username,
-          email,
-          fullName,
-          posProfile,
-          branch,
-          paymentMethods,
-          taxes,
-          hasOpening,
-          tier,
-          printKitchenOrder,
-          openingDate,
-          itemsGroups,
-          baseUrl,
-          merchantId,
-          printMerchantReceiptCopy,
-          enableFiuu,
-          cashDrawerPinNeeded,
-          cashDrawerPin,
-        ) async {
-          try {
-            if (!mounted) return; // Early return if not mounted
-            final fromDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
-            final toDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-            // Get first kitchen station
-            final stationsResponse = await PosService().getKitchenStations(
-              posProfile: posProfile,
-            );
-
-            String firstStation = '';
-            if (stationsResponse['success'] == true) {
-              final stations = (stationsResponse['message'] as List?) ?? [];
-              if (stations.isNotEmpty) {
-                firstStation = stations[0]['name']?.toString() ?? '';
-              }
-            }
-
-            if (firstStation.isNotEmpty) {
-              final response = await PosService().getKitchenOrders(
-                posProfile: posProfile,
-                kitchenStation: firstStation,
-                fromDate: fromDate,
-                toDate: toDate,
-                orderSource: 'grab',
-              );
-
-              if (response['success'] == true && mounted) {
-                final newOrders = (response['message'] as List?)
-                        ?.cast<Map<String, dynamic>>() ??
-                    [];
-
-                // Only update if there are actual changes
-                if (_hasOrdersChanged(newOrders)) {
-                  print('✅ GRAB orders changed, updating...');
-
-                  // Update cached orders
-                  _cachedGrabOrders = List.from(newOrders);
-                  _lastGlobalGrabLoad = DateTime.now();
-
-                  // Update provider (this won't cause flickering)
-                  ref.read(grabOrdersProvider.notifier).updateOrders(newOrders);
-
-                  // Check for new orders and notify
-                  await _checkAndNotifyNewOrders(newOrders);
-                } else {
-                  print('ℹ️  No changes in GRAB orders');
-                }
-              }
-            }
-          } catch (e) {
-            print('❌ Error loading GRAB orders: $e');
-          }
-        },
-      );
-    } finally {
-      if (mounted) {
-        _isLoadingGlobalGrab = false;
-      }
     }
   }
 
@@ -453,7 +321,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             debugPrint(
                 '🔄 Checking all ${_kitchenStations.length} kitchen stations for new orders...');
 
-            // Check each kitchen station for BOTH regular AND GRAB orders
+            // Check each kitchen station for regular orders
             for (var station in _kitchenStations) {
               try {
                 // ============ 1. FETCH REGULAR ORDERS FOR THIS STATION ============
@@ -485,7 +353,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                     for (var order in newOrdersList) {
                       await _showKitchenOrderNotification(
                         order,
-                        isGrab: false,
                         stationName: station,
                       );
                     }
@@ -494,57 +361,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   // ============ CHECK FOR ADD-ONS IN REGULAR ORDERS ============
                   // Detect when existing orders have new items added
                   await _checkForAddOnOrders(newOrders);
-                }
-
-                // Small delay before next API call
-                await Future.delayed(const Duration(milliseconds: 300));
-
-                // ============ 2. FETCH GRAB ORDERS FOR THIS STATION ============
-                final grabResponse = await PosService().getKitchenOrders(
-                  posProfile: posProfile,
-                  kitchenStation: station,
-                  fromDate: fromDate,
-                  toDate: toDate,
-                  orderSource: 'grab',
-                );
-
-                if (grabResponse['success'] == true && mounted) {
-                  final newGrabOrders = (grabResponse['message'] as List?)
-                          ?.cast<Map<String, dynamic>>() ??
-                      [];
-
-                  final cachedGrabOrders =
-                      _cachedStationGrabOrders[station] ?? [];
-
-                  if (_hasKitchenOrdersChanged(
-                      cachedGrabOrders, newGrabOrders)) {
-                    debugPrint(
-                        '✅ GRAB orders changed for station: $station (${newGrabOrders.length} orders)');
-
-                    // Find new orders
-                    final newGrabOrdersList =
-                        _findNewKitchenOrders(cachedGrabOrders, newGrabOrders);
-
-                    _cachedStationGrabOrders[station] =
-                        List.from(newGrabOrders);
-
-                    // Update provider with all GRAB orders (combined from all stations)
-                    final allGrabOrders = _cachedStationGrabOrders.values
-                        .expand((orders) => orders)
-                        .toList();
-                    ref
-                        .read(grabOrdersProvider.notifier)
-                        .updateOrders(allGrabOrders);
-
-                    // Notify for each new GRAB order
-                    for (var order in newGrabOrdersList) {
-                      await _showKitchenOrderNotification(
-                        order,
-                        isGrab: true,
-                        stationName: station,
-                      );
-                    }
-                  }
                 }
 
                 // Small delay before checking next station
@@ -631,21 +447,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }).toList();
   }
 
-  bool _hasOrdersChanged(List<Map<String, dynamic>> newOrders) {
-    if (_cachedGrabOrders.length != newOrders.length) {
-      return true;
-    }
-
-    // Compare order IDs and fulfillment status
-    final cachedIds = _cachedGrabOrders
-        .map((o) => '${o['name']}_${o['custom_fulfilled']}')
-        .toSet();
-    final newIds =
-        newOrders.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
-
-    return !cachedIds.containsAll(newIds) || !newIds.containsAll(cachedIds);
-  }
-
   // ============ API QUEUE SYSTEM ============
   Future<void> _addToApiQueue(Future<void> Function() apiCall) async {
     _apiQueue.add(apiCall);
@@ -683,28 +484,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   // ============ NOTIFICATION SYSTEM ============
-  Future<void> _checkAndNotifyNewOrders(
-      List<Map<String, dynamic>> orders) async {
-    final notificationProvider = ref.read(grabNotificationsProvider.notifier);
-    final newOrders = notificationProvider.filterNewOrders(orders);
-
-    if (newOrders.isNotEmpty) {
-      print('🔔 Found ${newOrders.length} new GRAB order(s)');
-
-      for (var order in newOrders) {
-        final orderId = order['name']?.toString() ?? '';
-        if (orderId.isNotEmpty) {
-          await _showGrabNotification(order);
-          await notificationProvider.markAsNotified(orderId);
-        }
-      }
-    }
-    
-    // ============ CHECK FOR ADD-ON ORDERS ============
-    // Detect when existing orders have new items added
-    await _checkForAddOnOrders(orders);
-  }
-  
+  // ============ CHECK FOR ADD-ON ORDERS ============
+  // Detect when existing orders have new items added (kitchen orders only)
   Future<void> _checkForAddOnOrders(List<Map<String, dynamic>> orders) async {
     try {
       debugPrint('🔍 Checking ${orders.length} orders for add-ons...');
@@ -852,21 +633,18 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final orderId = order['name']?.toString() ?? 'Unknown';
       final customerName = order['customer_name']?.toString() ?? 'Customer';
       final tableName = order['table']?.toString() ?? 'N/A';
-      
-      // Check if it's a Grab order
-      final isGrab = tableName.toUpperCase().contains('GRAB');
 
       // Trigger dashboard refresh
       _triggerDashboardRefresh();
 
       if (mounted && context.mounted) {
-        // Show kitchen notification overlay for add-on (works for both Grab and table orders)
+        // Show kitchen notification overlay for add-on
         await KitchenNotificationOverlay.show(
           context,
           orderId: orderId,
           customerName: customerName,
           tableName: tableName,
-          isGrab: isGrab,
+          isGrab: false, // No Grab orders
           stationName: null,
           onTap: () {
             // Navigate to Kitchen screen
@@ -906,72 +684,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               },
             );
 
-            debugPrint('🔔 Add-on notification tapped: $orderId ($addedCount new items) - ${isGrab ? "GRAB" : tableName}');
+            // debugPrint('🔔 Add-on notification tapped: $orderId ($addedCount new items) - ${isGrab ? "GRAB" : tableName}');
           },
         );
       }
     } catch (e) {
       debugPrint('❌ Error showing add-on notification: $e');
-    }
-  }
-
-  Future<void> _showGrabNotification(Map<String, dynamic> order) async {
-    try {
-      final orderId = order['name']?.toString() ?? 'Unknown';
-      final customerName = order['customer_name']?.toString() ?? 'Customer';
-
-      // ============ Trigger dashboard refresh ============
-      _triggerDashboardRefresh();
-
-      // Show custom in-app notification overlay
-      if (mounted && context.mounted) {
-        await GrabNotificationOverlay.show(
-          context,
-          orderId: orderId,
-          customerName: customerName,
-          onTap: () {
-            // Navigate to Kitchen screen with GRAB station selected
-            final authState = ref.read(authProvider);
-            authState.whenOrNull(
-              authenticated: (
-                sid,
-                apiKey,
-                apiSecret,
-                username,
-                email,
-                fullName,
-                posProfile,
-                branch,
-                paymentMethods,
-                taxes,
-                hasOpening,
-                tier,
-                printKitchenOrder,
-                openingDate,
-                itemsGroups,
-                baseUrl,
-                merchantId,
-                printMerchantReceiptCopy,
-                enableFiuu,
-                cashDrawerPinNeeded,
-                cashDrawerPin,
-              ) {
-                final kitchenTabIndex = tier.toLowerCase() != 'tier 3' ? 3 : 4;
-                final orderTabIndex = tier.toLowerCase() != 'tier 3' ? 1 : 2;
-                final hasKitchenStations = _hasKitchenStations();
-                if (mounted) {
-                  setState(() {
-                    _selectedTabIndex =
-                        hasKitchenStations ? kitchenTabIndex : orderTabIndex;
-                  });
-                }
-              },
-            );
-          },
-        );
-      }
-    } catch (e) {
-      print('❌ Error showing notification: $e');
     }
   }
 
@@ -1016,18 +734,14 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               (response['message'] as List).isNotEmpty) {
             final order = (response['message'] as List).first;
             final tableName = order['table']?.toString() ?? 'N/A';
-            final orderChannel =
-                order['custom_order_channel']?.toString() ?? '';
-            final isGrab = orderChannel.toLowerCase().contains('grab');
 
             debugPrint(
-                '📦 Order details fetched: $orderId, table: $tableName, isGrab: $isGrab');
+                '📦 Order details fetched: $orderId, table: $tableName');
 
             // Show the notification
             await _showKitchenOrderNotification(
               order,
-              isGrab: isGrab,
-              stationName: isGrab ? 'GRAB' : 'Kitchen',
+              stationName: 'Kitchen',
             );
 
             debugPrint(
@@ -1045,7 +759,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   Future<void> _showKitchenOrderNotification(
     Map<String, dynamic> order, {
-    required bool isGrab,
     String? stationName,
   }) async {
     try {
@@ -1123,10 +836,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           orderId: orderId,
           customerName: customerName,
           tableName: tableName,
-          isGrab: isGrab,
+          isGrab: false, // No Grab orders
           stationName: stationName,
           onTap: () {
-            // Navigate to Kitchen screen with GRAB station selected
+            // Navigate to Kitchen screen
             final authState = ref.read(authProvider);
             authState.whenOrNull(
               authenticated: (
@@ -1165,8 +878,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               },
             );
 
-            debugPrint(
-                '🔔 New kitchen order notification: $orderId (${isGrab ? "GRAB" : stationName}) - Table: $tableName');
+            // debugPrint(
+            //     '🔔 New kitchen order notification: $orderId (${isGrab ? "GRAB" : stationName}) - Table: $tableName');
           },
         );
       }
@@ -1176,7 +889,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   }
 
   // ============ PUBLIC API WRAPPER ============
-  /// Wrap other API calls with this method to prevent conflicts with GRAB refresh
+  /// Wrap other API calls with this method to prevent conflicts during refresh
   Future<T> executeProtectedAPICall<T>(Future<T> Function() apiCall) async {
     final completer = Completer<T>();
 
@@ -1225,14 +938,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   void dispose() {
     _ordersScrollController.removeListener(_onOrdersScroll);
     _ordersScrollController.dispose();
-    _globalGrabRefreshTimer?.cancel();
     _allOrdersRefreshTimer?.cancel();
 
     // Clear the API queue
     _apiQueue.clear();
     _isProcessingQueue = false;
 
-    GrabNotificationOverlay.dispose();
     KitchenNotificationOverlay.dispose();
     super.dispose();
   }
@@ -2118,7 +1829,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 key: ValueKey(
                     'kitchen_${DateTime.now().millisecondsSinceEpoch}'), // Force rebuild
               ),
-            const GrabScreen(), // Add Grab screen
             SettingsScreen(key: settingsScreenKey),
           ];
         }
@@ -2226,23 +1936,13 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   'assets/img-sidebar-kitchen.png',
                   'Fulfilment',
                   null,
-                  _pendingGrabOrdersCount, // Pass badge count
+                  _pendingKitchenOrdersCount, // Kitchen orders only
                 ),
-              // Grab screen - Tier 3 only
-              if (tier.toLowerCase() == 'tier 3')
-                _buildNavItem(
-                  hasKitchenStations ? 5 : 4,
-                  'assets/icon-grab.png',
-                  'Grab',
-                  null,
-                  0,
-                  true, // preserveIconColor = true for Grab icon
-                ),
-              // Settings (updated index)
+              // Settings (updated index without Grab)
               _buildNavItem(
                 hasKitchenStations
-                    ? (tier.toLowerCase() != 'tier 3' ? 4 : (tier.toLowerCase() == 'tier 3' ? 6 : 5))
-                    : (tier.toLowerCase() != 'tier 3' ? 3 : (tier.toLowerCase() == 'tier 3' ? 5 : 4)),
+                    ? (tier.toLowerCase() != 'tier 3' ? 4 : 5)
+                    : (tier.toLowerCase() != 'tier 3' ? 3 : 4),
                 'assets/img-sidebar-settings.png',
                 'Settings',
               ),
