@@ -242,12 +242,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             fromDate: dateFormat.format(fromDate),
             toDate: dateFormat.format(toDate),
           ),
-          // 6: Applied vouchers
+          // 6: Applied vouchers — use large limit to fetch ALL for accurate total
           PosService().getAppliedUserVouchers(
             posProfile: posProfile,
             fromDate: dateFormat.format(fromDate),
             toDate: dateFormat.format(toDate),
-            limit: vouchersLimit,
+            limit: 2000,
           ),
         ]);
 
@@ -259,15 +259,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           return sum + _convertToInt(timeData['invoice_count']);
         });
 
-        // NEW: Calculate total voucher redemption amount
-        final appliedVouchers =
+        // Fetch ALL vouchers — used for accurate total regardless of display limit
+        final allVouchers =
             _convertListToProperType(results[6]['message'] ?? []);
-        final totalVoucherRedemption =
-            appliedVouchers.fold(0.0, (sum, voucher) {
+
+        // Calculate total from the full unsliced list
+        final totalVoucherRedemption = allVouchers.fold(0.0, (sum, voucher) {
           return sum + _convertToDouble(voucher['voucher_amount']);
         });
 
-        // Convert to proper types - UPDATED: Include totalVoucherRedemption
+        // Slice to display limit — only affects what is shown in the UI list
+        final appliedVouchers = allVouchers.take(vouchersLimit).toList();
+
         return <String, dynamic>{
           'totalSales': _convertToDouble(results[0]['message']),
           'totalOrders': totalOrders,
@@ -276,8 +279,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'peakTimes': _convertListToProperType(results[1]['message']),
           'topItems': _convertListToProperType(results[4]['message']),
           'paymentMethods': _convertListToProperType(results[5]['message']),
-          'appliedVouchers': appliedVouchers,
-          'totalVoucherRedemption': totalVoucherRedemption, // NEW
+          'appliedVouchers': appliedVouchers,       // sliced — for display list
+          'totalVoucherRedemption': totalVoucherRedemption, // full total
           'fromDate': fromDate,
           'toDate': toDate,
         };
@@ -492,7 +495,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         Expanded(
                             child: _buildPaymentMethodChart(paymentMethods)),
                         const SizedBox(width: 20),
-                        Expanded(child: _buildAppliedVouchers(appliedVouchers)),
+                        Expanded(child: _buildAppliedVouchers(appliedVouchers, totalVoucherRedemption)),
                       ],
                     ),
                     const SizedBox(height: 30),
@@ -1260,11 +1263,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   // =============================================================
 
-  Widget _buildAppliedVouchers(List<Map<String, dynamic>> appliedVouchers) {
-    // Calculate total voucher amount
-    final totalVoucherAmount = appliedVouchers.fold(0.0, (sum, voucher) {
-      return sum + _convertToDouble(voucher['voucher_amount']);
-    });
+  Widget _buildAppliedVouchers(
+    List<Map<String, dynamic>> appliedVouchers,
+    double totalVoucherRedemption,
+  ) {
+    // totalVoucherRedemption is computed from the full unsliced list in _loadDashboardData
+    // so it is always accurate regardless of the display limit
 
     return ConstrainedBox(
       constraints: const BoxConstraints(
@@ -1330,7 +1334,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Total Discount: RM ${totalVoucherAmount.toStringAsFixed(2)}',
+              'Total Discount: RM ${totalVoucherRedemption.toStringAsFixed(2)}',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.green,

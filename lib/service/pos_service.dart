@@ -559,7 +559,7 @@ class PosService {
     required String posProfile,
     String? fromDate,
     String? toDate,
-    int limit = 10,
+    int limit = 2000, // large default to fetch all; caller slices for display
   }) async {
     final params = {
       'pos_profile': posProfile,
