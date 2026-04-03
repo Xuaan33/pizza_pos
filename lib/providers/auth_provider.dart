@@ -13,10 +13,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> loadFromSharedPreferences() async {
     final prefs = await SharedPreferences.getInstance();
+
     final lastLogin = prefs.getString('last_login');
-    final sid = prefs.getString('sid');
-    final apiKey = prefs.getString('api_key');
-    final apiSecret = prefs.getString('api_secret');
     final username = prefs.getString('username');
     final email = prefs.getString('email');
     final fullName = prefs.getString('full_name');
@@ -31,13 +29,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final itemsGroupsJson = prefs.getString('item_groups');
     final baseUrl = prefs.getString('base_url') ?? 'https://asdf.byondwave.com';
     final merchantId = prefs.getString('merchant_id');
-    final printMerchantReceiptCopy =
-        prefs.getInt('print_merchant_receipt_copy');
+    final printMerchantReceiptCopy = prefs.getInt('print_merchant_receipt_copy');
     final enableFiuu = prefs.getInt('enable_fiuu');
     final cashDrawerPinNeeded = prefs.getInt('cash_drawer_pin_needed');
-    final cashDrawerPin = prefs.getString('cash_drawer_pin') ?? '';
 
-    // Parse opening date if it exists
+    final secure = await AuthService.readSecureSession();
+    final sid = secure['sid'];
+    final apiKey = secure['api_key'];
+    final apiSecret = secure['api_secret'];
+    final cashDrawerPin = secure['cash_drawer_pin'] ?? '';
+
+    // Parse opening date
     DateTime? openingDate;
     if (openingDateString != null) {
       try {
@@ -47,7 +49,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     }
 
-    List<dynamic> itemsGroups = []; // Initialize empty list
+    List<dynamic> itemsGroups = [];
     if (itemsGroupsJson != null) {
       try {
         itemsGroups = jsonDecode(itemsGroupsJson);
@@ -56,10 +58,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     }
 
-    // Add session expiration (e.g., 7 days)
+    // 7-day absolute session expiration
     if (lastLogin != null) {
       final lastLoginDate = DateTime.parse(lastLogin);
-      if (DateTime.now().difference(lastLoginDate) > Duration(days: 7)) {
+      if (DateTime.now().difference(lastLoginDate) > const Duration(days: 7)) {
         await logout();
         return;
       }
@@ -73,31 +75,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
         branch != null &&
         merchantId != null) {
       state = AuthState.authenticated(
-          sid: sid,
-          apiKey: apiKey,
-          apiSecret: apiSecret,
-          username: username,
-          email: email ?? '',
-          fullName: fullName ?? username,
-          posProfile: posProfile,
-          branch: branch,
-          paymentMethods: paymentMethodsJson != null
-              ? List<Map<String, dynamic>>.from(jsonDecode(paymentMethodsJson))
-              : [],
-          taxes: taxesJson != null
-              ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
-              : [],
-          hasOpening: hasOpening,
-          tier: tier ?? '',
-          printKitchenOrder: printKitchenOrder ?? 1,
-          openingDate: openingDate,
-          itemsGroups: itemsGroups,
-          baseUrl: baseUrl,
-          merchantId: merchantId,
-          printMerchantReceiptCopy: printMerchantReceiptCopy ?? 0,
-          enableFiuu: enableFiuu ?? 0,
-          cashDrawerPinNeeded: cashDrawerPinNeeded ?? 0,
-          cashDrawerPin: cashDrawerPin ?? '');
+        sid: sid,
+        apiKey: apiKey,
+        apiSecret: apiSecret,
+        username: username,
+        email: email ?? '',
+        fullName: fullName ?? username,
+        posProfile: posProfile,
+        branch: branch,
+        paymentMethods: paymentMethodsJson != null
+            ? List<Map<String, dynamic>>.from(jsonDecode(paymentMethodsJson))
+            : [],
+        taxes: taxesJson != null
+            ? List<Map<String, dynamic>>.from(jsonDecode(taxesJson))
+            : [],
+        hasOpening: hasOpening,
+        tier: tier ?? '',
+        printKitchenOrder: printKitchenOrder ?? 1,
+        openingDate: openingDate,
+        itemsGroups: itemsGroups,
+        baseUrl: baseUrl,
+        merchantId: merchantId,
+        printMerchantReceiptCopy: printMerchantReceiptCopy ?? 0,
+        enableFiuu: enableFiuu ?? 0,
+        cashDrawerPinNeeded: cashDrawerPinNeeded ?? 0,
+        cashDrawerPin: cashDrawerPin,
+      );
     } else {
       state = const AuthState.unauthenticated();
     }
@@ -109,16 +112,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final prefs = await SharedPreferences.getInstance();
       final lastLogin = prefs.getString('last_login');
-      final sid = prefs.getString('sid');
       final username = prefs.getString('username');
-      final password = prefs.getString('password');
       final merchantId = prefs.getString('merchant_id');
+
+      final results = await Future.wait([
+        AuthService.readSecureSession(),
+        AuthService.getStoredPassword(),
+      ]);
+      final secure = results[0] as Map<String, String?>;
+      final sid = secure['sid'];
+      final password = results[1] as String?;
 
       debugPrint(
           '📱 Stored credentials - username: $username, password: ${password != null ? "***" : "null"}, merchantId: $merchantId');
       debugPrint('📱 Session info - sid: $sid, lastLogin: $lastLogin');
 
-      // Check if we should perform auto-login
       final bool shouldAutoLogin = forceRefresh ||
           sid == null ||
           sid.isEmpty ||
@@ -134,8 +142,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await loadFromSharedPreferences();
       }
     } catch (e) {
-      print('Error in loadSession: $e');
-      await loadFromSharedPreferences(); // Fallback to existing session
+      debugPrint('Error in loadSession: $e');
+      await loadFromSharedPreferences();
     }
   }
 
@@ -146,7 +154,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     try {
       final lastLoginDate = DateTime.parse(lastLogin);
-      return DateTime.now().difference(lastLoginDate) > Duration(hours: 4);
+      return DateTime.now().difference(lastLoginDate) >
+          const Duration(hours: 4);
     } catch (e) {
       return true;
     }
@@ -162,13 +171,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await _saveLoginData(response);
         await loadFromSharedPreferences();
       } else {
-        // Auto-login failed, try to load existing session
-        print('Auto-login failed: ${response['message']}');
+        debugPrint('Auto-login failed: ${response['message']}');
         await loadFromSharedPreferences();
       }
     } catch (e) {
-      print('Auto-login error: $e');
-      // Fall back to existing session
+      debugPrint('Auto-login error: $e');
       await loadFromSharedPreferences();
     }
   }
@@ -180,42 +187,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await AuthService().login(username, password, merchantId);
 
       if (response['success'] == true) {
-        final prefs = await SharedPreferences.getInstance();
         await AuthService.storeCredentials(username, password, merchantId);
+        await _saveLoginData(response);
 
-        await prefs.setString('sid', response['sid']);
-        await prefs.setString('api_key', response['api_key']);
-        await prefs.setString('api_secret', response['api_secret']);
-        await prefs.setString('username', response['username']);
-        await prefs.setString('email', response['email']);
-        await prefs.setString('full_name', response['full_name']);
-        await prefs.setString('pos_profile', response['pos_profile']);
-        await prefs.setString('branch', response['branch']);
-        await prefs.setString(
-            'payment_methods', jsonEncode(response['mode_of_payment']));
-        await prefs.setString('taxes', jsonEncode(response['taxes']));
-        await prefs.setBool('has_opening', response['has_opening']);
-        await prefs.setInt(
-            'print_kitchen_order', response['print_kitchen_order']);
-        await prefs.setString('tier', response['tier'] ?? 'tier 1');
-        await prefs.setString('last_login', DateTime.now().toIso8601String());
-        await prefs.setString(
-            'item_groups', jsonEncode(response['item_groups'] ?? []));
-        await prefs.setString(
-            'base_url', response['base_url'] ?? 'https://asdf.byondwave.com');
-        await prefs.setString(
-            'merchant_id', response['merchant_id'] ?? merchantId);
-        await prefs.setInt('print_merchant_receipt_copy',
-            response['print_merchant_receipt_copy'] ?? 0);
-        await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
-        await prefs.setInt(
-            'cash_drawer_pin_needed', response['cash_drawer_pin_needed'] ?? 0);
-        await prefs.setString(
-            'cash_drawer_pin', response['cash_drawer_pin'] ?? '');
-
+        final prefs = await SharedPreferences.getInstance();
         DateTime? openingDate;
 
-        // First, check if opening date is provided in the login response
         if (response['opening_date'] != null) {
           try {
             openingDate = DateTime.parse(response['opening_date']);
@@ -225,7 +202,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           }
         }
 
-        // If not in response but hasOpening is true, try to load from prefs
         if (openingDate == null && response['has_opening'] == true) {
           final existingOpeningDate = prefs.getString('opening_date');
           if (existingOpeningDate != null) {
@@ -237,7 +213,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           }
         }
 
-        // If still no date but hasOpening is true, use current date as fallback
         if (openingDate == null && response['has_opening'] == true) {
           openingDate = DateTime.now();
           await prefs.setString('opening_date', openingDate.toIso8601String());
@@ -256,8 +231,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
               List<Map<String, dynamic>>.from(response['mode_of_payment']),
           taxes: List<Map<String, dynamic>>.from(response['taxes']),
           hasOpening: response['has_opening'],
-          tier:
-              response['tier'] ?? 'tier 1', // Default to tier2 if not provided
+          tier: response['tier'] ?? 'tier 1',
           printKitchenOrder: response['print_kitchen_order'] ?? 1,
           openingDate: openingDate,
           itemsGroups: List<dynamic>.from(response['item_groups'] ?? []),
@@ -282,9 +256,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _saveLoginData(Map<String, dynamic> response) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString('sid', response['sid']);
-    await prefs.setString('api_key', response['api_key']);
-    await prefs.setString('api_secret', response['api_secret']);
     await prefs.setString('username', response['username']);
     await prefs.setString('email', response['email']);
     await prefs.setString('full_name', response['full_name']);
@@ -307,10 +278,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await prefs.setInt('enable_fiuu', response['enable_fiuu'] ?? 0);
     await prefs.setInt(
         'cash_drawer_pin_needed', response['cash_drawer_pin_needed'] ?? 0);
-    await prefs.setString('cash_drawer_pin', response['cash_drawer_pin'] ?? '');
+
+    await AuthService.writeSecureSession(
+      sid: response['sid'],
+      apiKey: response['api_key'],
+      apiSecret: response['api_secret'],
+      cashDrawerPin: response['cash_drawer_pin'] ?? '',
+    );
   }
 
-  // Add method to force refresh session data
   Future<void> refreshSession() async {
     await loadSession(forceRefresh: true);
   }
@@ -352,7 +328,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await prefs.remove('opening_date');
         }
 
-        // Update state with the new opening date
         state = AuthState.authenticated(
           sid: sid,
           apiKey: apiKey,
@@ -389,7 +364,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await updateOpeningStatus(false);
   }
 
-// Add method to get opening date
   Future<DateTime?> getOpeningDate() async {
     final prefs = await SharedPreferences.getInstance();
     final openingDateString = prefs.getString('opening_date');

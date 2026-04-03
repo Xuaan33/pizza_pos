@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /Users/nicholas/pizza_pos/lib/screens/*.dart)",
+      "Bash(pandoc --version)",
+      "Bash(python3 -c \"import reportlab\")",
+      "Bash(python3 -c \"import subprocess; result = subprocess.run\\(['pip3', 'install', 'reportlab', '--quiet'], capture_output=True, text=True\\); print\\(result.stdout\\); print\\(result.stderr\\)\")",
+      "Bash(python3 shiok_pos_overview.py)",
+      "Bash(open /Users/nicholas/pizza_pos/Shiok_POS_Project_Overview.pdf)"
+    ]
+  }
+}
