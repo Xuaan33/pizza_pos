@@ -77,30 +77,21 @@ class GrabNotificationOverlay {
   static Future<void> _playAsync() async {
     try {
       debugPrint('🔊 Playing notification sound...');
-      
-      // Create a fresh player for each notification to avoid conflicts
-      final player = AudioPlayer();
-      
-      // Set release mode
-      await player.setReleaseMode(ReleaseMode.release);
-      
-      // Play the sound
-      await player.play(
+
+      if (_audioPlayer == null) {
+        debugPrint('❌ Audio player is null');
+        return;
+      }
+
+      await _audioPlayer!.stop();
+      await _audioPlayer!.play(
         AssetSource('grab_notification.mp3'),
         volume: 1.0,
       );
-      
+
       debugPrint('✅ Notification sound playing');
-      
-      // Auto-dispose after sound finishes
-      player.onPlayerComplete.listen((event) {
-        player.dispose();
-        debugPrint('🔊 Sound completed and disposed');
-      });
-      
     } catch (e) {
       debugPrint('❌ Error playing notification sound: $e');
-      // Silent fail - notification still shows without sound
     }
   }
 

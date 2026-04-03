@@ -61,7 +61,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   List<Map<String, dynamic>> _cachedGrabOrders = []; // Cache for comparison
   bool _isLoadingGlobalGrab = false;
   DateTime? _lastGlobalGrabLoad;
-  Map<String, int> _orderUnfulfilledCounts = {}; // Track UNFULFILLED item counts
+  // Track the SET OF ITEM SIGNATURES already notified per order.
+  // Key: orderId, Value: Set of "itemCode_qty" strings seen and notified.
+  // This is stable across stations — once an item combo is notified it won't
+  // re-fire even if different stations return different item subsets per poll.
+  Map<String, Set<String>> _notifiedItemSignatures = {};
 
   // API Queue System
   final List<Future<void> Function()> _apiQueue = [];
@@ -84,6 +88,20 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 // Separate caching for kitchen orders per station
   final Map<String, List<Map<String, dynamic>>> _cachedStationOrders = {};
   final Map<String, List<Map<String, dynamic>>> _cachedStationGrabOrders = {};
+
+  // ============ PRINT DEDUPLICATION ============
+  // Guards against duplicate prints caused by multi-station loops,
+  // startup race between _processQueuedNotifications + _refreshAllOrders,
+  // or any other concurrent path calling _showKitchenOrderNotification.
+  final Set<String> _printedOrderIds = {};
+
+  // ============ GRAB NOTIFICATION DEDUPLICATION ============
+  // Both _performGrabRefresh (uses grabNotificationsProvider) and
+  // _performAllOrdersRefresh (uses kitchenNotificationsProvider) can fire for
+  // the same Grab order — they use different providers so neither alone blocks
+  // the other. This shared in-memory set is the single source of truth that
+  // prevents the overlay notification from showing twice.
+  final Set<String> _shownGrabNotificationIds = {};
 
 // ============ KITCHEN REFRESH SYSTEM ============
   Timer? _allOrdersRefreshTimer;
@@ -190,7 +208,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     _globalGrabRefreshTimer?.cancel();
 
     _globalGrabRefreshTimer =
-        Timer.periodic(const Duration(seconds: 15), (timer) {
+        Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -208,7 +226,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   void _startAllOrdersTimer() {
     _allOrdersRefreshTimer?.cancel();
     _allOrdersRefreshTimer =
-        Timer.periodic(const Duration(seconds: 15), (timer) {
+        Timer.periodic(const Duration(seconds: 5), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -453,6 +471,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             debugPrint(
                 '🔄 Checking all ${_kitchenStations.length} kitchen stations for new orders...');
 
+            // ============ COLLECT ALL STATION ORDERS BEFORE ADD-ON CHECK ============
+            // _checkForAddOnOrders MUST run once after ALL stations are fetched,
+            // not once per station. Different stations return different item subsets
+            // for the same order (drinks vs food). If we call it per-station,
+            // Station A seeds its items, then Station B sees its different items
+            // as "new" on the very same poll cycle and fires a false notification.
+            // Collecting everything first and merging by orderId solves this.
+            final Map<String, Map<String, dynamic>> allOrdersThisCycle = {};
+
             // Check each kitchen station for BOTH regular AND GRAB orders
             for (var station in _kitchenStations) {
               try {
@@ -468,6 +495,35 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   final newOrders = (regularResponse['message'] as List?)
                           ?.cast<Map<String, dynamic>>() ??
                       [];
+
+                  // ============ 🔬 RAW API RESPONSE DEBUG ============
+                  debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                  debugPrint('📡 RAW KITCHEN RESPONSE — Station: $station');
+                  debugPrint('   Total orders in response: ${newOrders.length}');
+                  for (var o in newOrders) {
+                    debugPrint('   ┌─ Order: ${o['name']} | order_fulfilled: ${o['custom_fulfilled']}');
+                    final rawItems = o['items'];
+                    if (rawItems == null) {
+                      debugPrint('   │  ⚠️  items field is NULL — add-on detection will be skipped');
+                    } else if (rawItems is! List) {
+                      debugPrint('   │  ⚠️  items field is NOT a List — type: ${rawItems.runtimeType}');
+                    } else if ((rawItems as List).isEmpty) {
+                      debugPrint('   │  ⚠️  items field is an EMPTY list — add-on detection will be skipped');
+                    } else {
+                      debugPrint('   │  Items count: ${rawItems.length}');
+                      for (var item in rawItems) {
+                        final code = item['item_code'];
+                        final name = item['item_name'] ?? item['name'];
+                        final qty = item['qty'] ?? item['quantity'];
+                        final fulfilled = item['custom_fulfilled'];
+                        debugPrint('   │   • item_code=$code | item_name=$name | qty=$qty | custom_fulfilled=$fulfilled');
+                        if (code == null) debugPrint('   │     ⚠️  item_code is NULL');
+                        if (fulfilled == null) debugPrint('   │     ⚠️  custom_fulfilled is NULL — will be treated as unfulfilled');
+                      }
+                    }
+                    debugPrint('   └─────────────────────────────────────');
+                  }
+                  debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
                   final cachedOrders = _cachedStationOrders[station] ?? [];
 
@@ -490,10 +546,44 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                       );
                     }
                   }
-                  
-                  // ============ CHECK FOR ADD-ONS IN REGULAR ORDERS ============
-                  // Detect when existing orders have new items added
-                  await _checkForAddOnOrders(newOrders);
+
+                  // Merge this station's orders into the cycle-wide collection.
+                  // For orders seen by multiple stations, merge their items lists
+                  // so _checkForAddOnOrders gets the full picture in one pass.
+                  for (var order in newOrders) {
+                    final orderId = order['name']?.toString() ?? '';
+                    if (orderId.isEmpty) continue;
+                    if (!allOrdersThisCycle.containsKey(orderId)) {
+                      // First station to report this order — deep copy it
+                      allOrdersThisCycle[orderId] = Map<String, dynamic>.from(order);
+                      final items = order['items'];
+                      if (items is List) {
+                        allOrdersThisCycle[orderId]!['items'] = List.from(items);
+                      }
+                    } else {
+                      // Subsequent station — merge items into the existing entry
+                      final existing = allOrdersThisCycle[orderId]!;
+                      final existingItems = existing['items'];
+                      final newItems = order['items'];
+                      if (newItems is List) {
+                        if (existingItems is List) {
+                          // Append only items not already present (by item_code+qty)
+                          final existingKeys = (existingItems as List)
+                              .map((i) => '${i['item_code']}::${i['qty']}')
+                              .toSet();
+                          for (var item in newItems) {
+                            final key = '${item['item_code']}::${item['qty']}';
+                            if (!existingKeys.contains(key)) {
+                              existingItems.add(item);
+                              existingKeys.add(key);
+                            }
+                          }
+                        } else {
+                          existing['items'] = List.from(newItems);
+                        }
+                      }
+                    }
+                  }
                 }
 
                 // Small delay before next API call
@@ -554,6 +644,16 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               }
             }
 
+            // ============ ADD-ON CHECK — ONCE, AFTER ALL STATIONS ============
+            // Run _checkForAddOnOrders on the merged order map so all items
+            // from all stations are visible in a single pass. This prevents
+            // Station B's items from looking like "new" add-ons when Station A
+            // already seeded the same order with different items this cycle.
+            if (allOrdersThisCycle.isNotEmpty) {
+              debugPrint('🔍 Running add-on check on ${allOrdersThisCycle.length} merged order(s) from all stations');
+              await _checkForAddOnOrders(allOrdersThisCycle.values.toList());
+            }
+
             debugPrint(
                 '✅ Completed kitchen refresh cycle for all ${_kitchenStations.length} stations');
           } catch (e) {
@@ -597,10 +697,16 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       return true;
     }
 
-    final cachedIds =
-        cached.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
-    final newIds =
-        newOrders.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
+    // Normalize custom_fulfilled to '0'/'1' string so that int (0/1) and
+    // double (0.0/1.0) API responses produce the same composite key.
+    String normFulfilled(dynamic v) =>
+        (num.tryParse(v?.toString() ?? '0') ?? 0) >= 1 ? '1' : '0';
+    final cachedIds = cached
+        .map((o) => '${o['name']}_${normFulfilled(o['custom_fulfilled'])}')
+        .toSet();
+    final newIds = newOrders
+        .map((o) => '${o['name']}_${normFulfilled(o['custom_fulfilled'])}')
+        .toSet();
 
     return !cachedIds.containsAll(newIds) || !newIds.containsAll(cachedIds);
   }
@@ -616,7 +722,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
     return newOrders.where((order) {
       final orderId = order['name']?.toString() ?? '';
-      final isUnfulfilled = order['custom_fulfilled'] != 1;
+      final isUnfulfilled = !_isFulfilled(order['custom_fulfilled']);
       final isNotNotified = !notificationProvider.hasBeenNotified(orderId);
       final isNotPending =
           !notificationProvider.isPendingPayment(orderId); // 🔥 ADD THIS
@@ -636,12 +742,16 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       return true;
     }
 
-    // Compare order IDs and fulfillment status
+    // Compare order IDs and fulfillment status.
+    // Normalize custom_fulfilled to '0'/'1' to handle both int and double values.
+    String normF(dynamic v) =>
+        (num.tryParse(v?.toString() ?? '0') ?? 0) >= 1 ? '1' : '0';
     final cachedIds = _cachedGrabOrders
-        .map((o) => '${o['name']}_${o['custom_fulfilled']}')
+        .map((o) => '${o['name']}_${normF(o['custom_fulfilled'])}')
         .toSet();
-    final newIds =
-        newOrders.map((o) => '${o['name']}_${o['custom_fulfilled']}').toSet();
+    final newIds = newOrders
+        .map((o) => '${o['name']}_${normF(o['custom_fulfilled'])}')
+        .toSet();
 
     return !cachedIds.containsAll(newIds) || !newIds.containsAll(cachedIds);
   }
@@ -705,81 +815,104 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     await _checkForAddOnOrders(orders);
   }
   
+  // Helper: safely parse custom_fulfilled regardless of whether the API
+  // returns it as int (0/1) or double (0.0/1.0).
+  bool _isFulfilled(dynamic value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    final n = num.tryParse(value.toString()) ?? 0;
+    return n >= 1;
+  }
+
   Future<void> _checkForAddOnOrders(List<Map<String, dynamic>> orders) async {
     try {
       debugPrint('🔍 Checking ${orders.length} orders for add-ons...');
-      
+
       for (var order in orders) {
         final orderId = order['name']?.toString() ?? '';
         if (orderId.isEmpty) continue;
-        
-        debugPrint('📦 Checking order: $orderId');
-        
-        // Check if order is fulfilled - skip if fully fulfilled
-        final isFulfilled = order['custom_fulfilled'] == 1;
-        if (isFulfilled) {
-          debugPrint('   ✅ Order fully fulfilled, skipping');
-          // Order is fully fulfilled, remove from tracking
-          _orderUnfulfilledCounts.remove(orderId);
+
+        // Skip fully fulfilled orders and clean up tracking.
+        // Uses _isFulfilled() to handle both int (0/1) and double (0.0/1.0)
+        // which the API has been observed returning.
+        if (_isFulfilled(order['custom_fulfilled'])) {
+          debugPrint('   ✅ Order fully fulfilled, clearing tracking: $orderId');
+          _notifiedItemSignatures.remove(orderId);
           continue;
         }
-        
+
         final items = order['items'] as List?;
-        debugPrint('   Total items: ${items?.length ?? 0}');
-        
-        // Count TOTAL QUANTITY of unfulfilled items (not just item count)
-        int currentUnfulfilledQty = 0;
-        if (items != null) {
-          for (var item in items) {
-            final itemFulfilled = item['custom_fulfilled'] == 1;
-            final itemName = item['item_name'] ?? item['name'] ?? 'Unknown';
-            final int qty = (item['qty'] ?? item['quantity'] ?? 1).toInt();
-            
-            debugPrint('      - $itemName x$qty: ${itemFulfilled ? "fulfilled ✅" : "unfulfilled ❌"}');
-            
-            if (!itemFulfilled) {
-              currentUnfulfilledQty += qty; // Add quantity, not just count
+        if (items == null || items.isEmpty) {
+          debugPrint('   ⚠️ No items in response for order $orderId, skipping');
+          continue;
+        }
+
+        // Build the set of UNFULFILLED item signatures from this response.
+        // Signature = "itemCode::index::qty" where index is the position of
+        // the item in the list. This handles duplicate item_codes in the same
+        // order (e.g. "Ayam Berempah" appearing twice with different qtys)
+        // without colliding into a single signature.
+        // _isFulfilled() handles both int and double custom_fulfilled values.
+        final Set<String> currentUnfulfilledSignatures = {};
+        for (var i = 0; i < items.length; i++) {
+          final item = items[i];
+          final bool itemFulfilled = _isFulfilled(item['custom_fulfilled']);
+          if (!itemFulfilled) {
+            final String itemCode =
+                item['item_code']?.toString() ?? item['name']?.toString() ?? '';
+            final int qty =
+                (num.tryParse((item['qty'] ?? item['quantity'] ?? 1).toString()) ?? 1)
+                    .toInt();
+            if (itemCode.isNotEmpty) {
+              // Index-scoped signature: stable for the same item line across
+              // polls, and unique even when the same item_code repeats.
+              currentUnfulfilledSignatures.add('$itemCode::$i::$qty');
             }
           }
         }
-        
-        debugPrint('   Total unfulfilled quantity: $currentUnfulfilledQty');
-        
-        // Get previous unfulfilled quantity for this order
-        final previousUnfulfilledQty = _orderUnfulfilledCounts[orderId];
-        debugPrint('   Previous unfulfilled quantity: ${previousUnfulfilledQty ?? "none (first time)"}');
-        
-        // Update the stored unfulfilled quantity
-        _orderUnfulfilledCounts[orderId] = currentUnfulfilledQty;
-        
-        // Only trigger if:
-        // 1. We have a previous count (not first time seeing this order)
-        // 2. Current unfulfilled qty > previous unfulfilled qty (items/qty added)
-        // 3. Current unfulfilled qty > 0 (there are items to print)
-        if (previousUnfulfilledQty != null && 
-            currentUnfulfilledQty > previousUnfulfilledQty && 
-            currentUnfulfilledQty > 0) {
-          
-          final addedQty = currentUnfulfilledQty - previousUnfulfilledQty;
-          debugPrint('🆕 ✅ ADD-ON DETECTED for order $orderId: $addedQty additional quantity');
-          debugPrint('   Previous unfulfilled qty: $previousUnfulfilledQty, Current unfulfilled qty: $currentUnfulfilledQty');
-          
-          // Auto-print kitchen order for the new items
-          // The API will only print unfulfilled items
-          await _printAddOnKitchenOrder(orderId);
-          
-          // Show a subtle notification about the add-on
-          await _showAddOnNotification(order, addedQty);
-        } else if (previousUnfulfilledQty == null && currentUnfulfilledQty > 0) {
-          // First time seeing this order, just store the quantity (don't notify)
-          debugPrint('📝 First time tracking order $orderId with $currentUnfulfilledQty unfulfilled quantity');
-        } else if (previousUnfulfilledQty != null && currentUnfulfilledQty == previousUnfulfilledQty) {
-          debugPrint('   ⏭️ No change in unfulfilled quantity, skipping');
-        } else if (previousUnfulfilledQty != null && currentUnfulfilledQty < previousUnfulfilledQty) {
-          debugPrint('   📉 Unfulfilled quantity decreased (items were fulfilled), skipping add-on');
+
+        debugPrint('   Unfulfilled signatures: $currentUnfulfilledSignatures');
+
+        // IMPORTANT: Use union (addAll) not replace (Set.from) here.
+        // Different stations return different subsets of the same order
+        // (e.g. Drink Station sees drinks, Back Kitchen sees food).
+        // If we replace the set each time, Station B wipes Station A's
+        // signatures and Station A fires again next poll — infinite spam.
+        // By always accumulating into a single growing set per orderId,
+        // each signature is only ever notified once regardless of which
+        // station surfaces it.
+        final Set<String> alreadyNotified =
+            _notifiedItemSignatures.putIfAbsent(orderId, () => {});
+
+        // Find signatures we have NOT yet notified about
+        final newSignatures =
+            currentUnfulfilledSignatures.difference(alreadyNotified);
+
+        if (newSignatures.isEmpty) {
+          debugPrint('   ⏭️ No new item signatures for $orderId, skipping');
+          continue;
         }
+
+        // First time ANY station sees this order — seed without notifying.
+        // alreadyNotified is empty means no station has reported this order yet.
+        if (alreadyNotified.isEmpty) {
+          alreadyNotified.addAll(currentUnfulfilledSignatures);
+          debugPrint(
+              '📝 First time tracking $orderId — seeded ${currentUnfulfilledSignatures.length} signature(s), no notification');
+          continue;
+        }
+
+        // Genuine new items — ADD new signatures into the accumulated set
+        // BEFORE any async call so subsequent station loops see them immediately.
+        alreadyNotified.addAll(newSignatures);
+
+        debugPrint(
+            '🆕 ADD-ON DETECTED for $orderId: ${newSignatures.length} new signature(s): $newSignatures');
+
+        await _printAddOnKitchenOrder(orderId);
+        await _showAddOnNotification(order, newSignatures.length);
       }
-      
+
       debugPrint('✅ Add-on check complete');
     } catch (e) {
       debugPrint('❌ Error checking for add-on orders: $e');
@@ -920,6 +1053,16 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final orderId = order['name']?.toString() ?? 'Unknown';
       final customerName = order['customer_name']?.toString() ?? 'Customer';
 
+      // ============ GRAB NOTIFICATION DEDUP ============
+      // Both _performGrabRefresh and _performAllOrdersRefresh can call this
+      // for the same order using different notification providers as guards.
+      // _shownGrabNotificationIds is the single shared gate between them.
+      if (_shownGrabNotificationIds.contains(orderId)) {
+        debugPrint('🚫 Duplicate Grab notification blocked for order: $orderId');
+        return;
+      }
+      _shownGrabNotificationIds.add(orderId);
+
       // ============ Trigger dashboard refresh ============
       _triggerDashboardRefresh();
 
@@ -1053,6 +1196,18 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       final customerName = order['customer_name']?.toString() ?? 'Customer';
       final tableName = order['table']?.toString() ?? 'N/A';
 
+      // ============ GRAB NOTIFICATION DEDUP (Path B) ============
+      // If this is a Grab order coming through the station loop, check the
+      // shared _shownGrabNotificationIds set so we don't show the overlay
+      // a second time if Path A (_showGrabNotification) already fired first.
+      if (isGrab && orderId != 'Unknown') {
+        if (_shownGrabNotificationIds.contains(orderId)) {
+          debugPrint('🚫 Duplicate Grab notification blocked in kitchen path for order: $orderId');
+          return;
+        }
+        _shownGrabNotificationIds.add(orderId);
+      }
+
       if (orderId != 'Unknown') {
         await ref
             .read(kitchenNotificationsProvider.notifier)
@@ -1061,8 +1216,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       }
 
       // ============ AUTO PRINT KITCHEN ORDER ============
-      // Print kitchen order automatically when notification comes in
-      if (orderId != 'Unknown') {
+      // Print kitchen order automatically when notification comes in.
+      // _printedOrderIds deduplicates against multi-station loops and
+      // startup races where the same orderId reaches this method twice.
+      if (orderId != 'Unknown' && !_printedOrderIds.contains(orderId)) {
+        _printedOrderIds.add(orderId); // Mark BEFORE the async print call
         try {
           debugPrint('🖨️ Auto-printing kitchen order for: $orderId');
           
@@ -1111,6 +1269,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
           debugPrint('❌ Error in auto-print: $e');
           // Don't throw - notification should still show even if printing fails
         }
+      } else if (_printedOrderIds.contains(orderId)) {
+        debugPrint('🚫 Duplicate print blocked for order: $orderId');
       }
 
       // ============ Trigger dashboard refresh ============
@@ -1356,126 +1516,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                 });
               } else {
                 List<Map<String, dynamic>> newOrders = invoices
-                    .map((invoice) {
-                      try {
-                        final items =
-                            (invoice['items'] as List? ?? []).map((item) {
-                          return {
-                            'name':
-                                item['item_name']?.toString() ?? 'Unknown Item',
-                            'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                            'quantity':
-                                (item['qty'] as num?)?.toDouble() ?? 1.0,
-                            'item_code': item['item_code']?.toString() ?? '',
-                            'options': item['options'] ?? {},
-                            'option_text': item['option_text'] ?? '',
-                            'custom_serve_later': item['custom_serve_later'],
-                            'custom_item_remarks':
-                                item['custom_item_remarks']?.toString() ?? '',
-                            'custom_variant_info':
-                                item['custom_variant_info']?.toString() ?? '',
-                            'discount_amount':
-                                (item['discount_amount'] as num?)?.toDouble() ??
-                                    0.0,
-                            'image': (item['image'])
-                          };
-                        }).toList();
-
-                        Map<String, dynamic>? taxBreakdown;
-                        final taxes = invoice['taxes'] as List?;
-                        if (taxes != null && taxes.isNotEmpty) {
-                          taxBreakdown = {
-                            'rate':
-                                (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                            'amount':
-                                (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                            'description':
-                                taxes[0]['account_head']?.toString() ?? 'Tax',
-                          };
-                        }
-
-                        DateTime? parseDate(String? dateString) {
-                          try {
-                            return dateString != null
-                                ? DateTime.parse(dateString)
-                                : null;
-                          } catch (_) {
-                            return null;
-                          }
-                        }
-
-                        final payments = invoice['payments'] as List? ?? [];
-                        String? m1Value;
-                        if (payments.isNotEmpty) {
-                          m1Value =
-                              payments[0]['custom_fiuu_m1_value']?.toString();
-                        }
-
-                        return {
-                          'orderId': invoice['name']?.toString() ?? 'Unknown',
-                          'invoiceNumber':
-                              invoice['name']?.toString() ?? 'Unknown',
-                          'status': invoice['status']?.toString() ?? 'Draft',
-                          'orderType':
-                              invoice['custom_order_channel']?.toString() ?? '',
-                          'tableNumber': (invoice['custom_table'] ?? ''),
-                          'items': items,
-                          'subtotal':
-                              (invoice['rounded_total'] as num?)?.toDouble() ??
-                                  0.0,
-                          'tax': taxBreakdown?['amount'] ?? 0.0,
-                          'total':
-                              (invoice['rounded_total'] as num?)?.toDouble() ??
-                                  0.0,
-                          'entryTime':
-                              parseDate(invoice['modified']?.toString()) ??
-                                  DateTime.now(),
-                          'paidTime': invoice['status']?.toString() == 'Paid'
-                              ? parseDate(invoice['modified']?.toString())
-                              : null,
-                          'isPaid': invoice['status']?.toString() == 'Paid' ||
-                              invoice['status']?.toString() == 'Consolidated',
-                          'paymentMethod': payments.isNotEmpty == true
-                              ? payments[0]['mode_of_payment']?.toString() ??
-                                  'Cash'
-                              : 'Cash',
-                          'm1value': m1Value,
-                          'customerName':
-                              invoice['customer_name']?.toString() ?? 'Guest',
-                          'remarks': invoice['remarks']?.toString() ?? '',
-                          'custom_item_remarks':
-                              invoice['custom_item_remarks']?.toString() ??
-                                  'N/A',
-                          'taxBreakdown': taxBreakdown,
-                          'paidAmount':
-                              (invoice['paid_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'changeAmount':
-                              (invoice['change_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'base_rounding_adjustment':
-                              (invoice['base_rounding_adjustment'] as num?)
-                                      ?.toDouble() ??
-                                  0.0,
-                          "pos_invoice_number":
-                              invoice['custom_fiuu_invoice_number']
-                                      ?.toString() ??
-                                  '000000',
-                          'total_taxes_and_charges':
-                              (invoice['total_taxes_and_charges'] as num?)
-                                      ?.toDouble() ??
-                                  0.0,
-                          'discount_amount':
-                              (invoice['discount_amount'] as num?)?.toDouble(),
-                          'user_voucher_code': (invoice['user_voucher_code']),
-                          'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
-                        };
-                      } catch (e) {
-                        print(
-                            'Error processing invoice ${invoice['name']}: $e');
-                        return null;
-                      }
-                    })
+                    .map((invoice) => _mapInvoiceToOrder(invoice))
                     .where((order) => order != null)
                     .cast<Map<String, dynamic>>()
                     .toList();
@@ -1519,6 +1560,89 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       if (mounted) {
         setState(() => _isLoadingMore = false);
       }
+    }
+  }
+
+  Map<String, dynamic>? _mapInvoiceToOrder(dynamic invoice) {
+    try {
+      final items = (invoice['items'] as List? ?? []).map((item) {
+        return {
+          'name': item['item_name']?.toString() ?? 'Unknown Item',
+          'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
+          'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
+          'item_code': item['item_code']?.toString() ?? '',
+          'options': item['options'] ?? {},
+          'option_text': item['option_text'] ?? '',
+          'custom_serve_later': item['custom_serve_later'],
+          'custom_item_remarks': item['custom_item_remarks']?.toString() ?? '',
+          'custom_variant_info': item['custom_variant_info']?.toString() ?? '',
+          'discount_amount': (item['discount_amount'] as num?)?.toDouble() ?? 0.0,
+          'image': (item['image'])
+        };
+      }).toList();
+
+      Map<String, dynamic>? taxBreakdown;
+      final taxes = invoice['taxes'] as List?;
+      if (taxes != null && taxes.isNotEmpty) {
+        taxBreakdown = {
+          'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
+          'amount': (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
+          'description': taxes[0]['account_head']?.toString() ?? 'Tax',
+        };
+      }
+
+      DateTime? parseDate(String? dateString) {
+        try {
+          return dateString != null ? DateTime.parse(dateString) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final payments = invoice['payments'] as List? ?? [];
+      final m1Value = payments.isNotEmpty
+          ? payments[0]['custom_fiuu_m1_value']?.toString()
+          : null;
+
+      return {
+        'orderId': invoice['name']?.toString() ?? 'Unknown',
+        'invoiceNumber': invoice['name']?.toString() ?? 'Unknown',
+        'status': invoice['status']?.toString() ?? 'Draft',
+        'orderType': invoice['custom_order_channel']?.toString() ?? '',
+        'tableNumber': (invoice['custom_table'] ?? ''),
+        'items': items,
+        'subtotal': (invoice['rounded_total'] as num?)?.toDouble() ?? 0.0,
+        'tax': taxBreakdown?['amount'] ?? 0.0,
+        'total': (invoice['rounded_total'] as num?)?.toDouble() ?? 0.0,
+        'entryTime': parseDate(invoice['modified']?.toString()) ?? DateTime.now(),
+        'paidTime': invoice['status']?.toString() == 'Paid'
+            ? parseDate(invoice['modified']?.toString())
+            : null,
+        'isPaid': invoice['status']?.toString() == 'Paid' ||
+            invoice['status']?.toString() == 'Consolidated',
+        'paymentMethod': payments.isNotEmpty
+            ? payments[0]['mode_of_payment']?.toString() ?? 'Cash'
+            : 'Cash',
+        'm1value': m1Value,
+        'customerName': invoice['customer_name']?.toString() ?? 'Guest',
+        'remarks': invoice['remarks']?.toString() ?? '',
+        'custom_item_remarks': invoice['custom_item_remarks']?.toString() ?? 'N/A',
+        'taxBreakdown': taxBreakdown,
+        'paidAmount': (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
+        'changeAmount': (invoice['change_amount'] as num?)?.toDouble() ?? 0.0,
+        'base_rounding_adjustment':
+            (invoice['base_rounding_adjustment'] as num?)?.toDouble() ?? 0.0,
+        'pos_invoice_number':
+            invoice['custom_fiuu_invoice_number']?.toString() ?? '000000',
+        'total_taxes_and_charges':
+            (invoice['total_taxes_and_charges'] as num?)?.toDouble() ?? 0.0,
+        'discount_amount': (invoice['discount_amount'] as num?)?.toDouble(),
+        'user_voucher_code': (invoice['user_voucher_code']),
+        'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
+      };
+    } catch (e) {
+      debugPrint('Error processing invoice ${invoice['name']}: $e');
+      return null;
     }
   }
 
@@ -1686,121 +1810,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               }
 
               List<Map<String, dynamic>> processedOrders = invoices
-                  .map((invoice) {
-                    try {
-                      final items =
-                          (invoice['items'] as List? ?? []).map((item) {
-                        return {
-                          'name':
-                              item['item_name']?.toString() ?? 'Unknown Item',
-                          'price': (item['rate'] as num?)?.toDouble() ?? 0.0,
-                          'quantity': (item['qty'] as num?)?.toDouble() ?? 1.0,
-                          'item_code': item['item_code']?.toString() ?? '',
-                          'options': item['options'] ?? {},
-                          'option_text': item['option_text'] ?? '',
-                          'custom_serve_later': item['custom_serve_later'],
-                          'custom_item_remarks':
-                              item['custom_item_remarks']?.toString() ?? '',
-                          'custom_variant_info':
-                              item['custom_variant_info']?.toString() ?? '',
-                          'discount_amount':
-                              (item['discount_amount'] as num?)?.toDouble() ??
-                                  0.0,
-                          'image': (item['image'])
-                        };
-                      }).toList();
-
-                      Map<String, dynamic>? taxBreakdown;
-                      final taxes = invoice['taxes'] as List?;
-                      if (taxes != null && taxes.isNotEmpty) {
-                        taxBreakdown = {
-                          'rate': (taxes[0]['rate'] as num?)?.toDouble() ?? 0.0,
-                          'amount':
-                              (taxes[0]['amount'] as num?)?.toDouble() ?? 0.0,
-                          'description':
-                              taxes[0]['account_head']?.toString() ?? 'Tax',
-                        };
-                      }
-
-                      DateTime? parseDate(String? dateString) {
-                        try {
-                          return dateString != null
-                              ? DateTime.parse(dateString)
-                              : null;
-                        } catch (_) {
-                          return null;
-                        }
-                      }
-
-                      // Extract payment method info
-                      final payments = invoice['payments'] as List? ?? [];
-                      String? m1Value;
-                      if (payments.isNotEmpty) {
-                        m1Value =
-                            payments[0]['custom_fiuu_m1_value']?.toString();
-                      }
-
-                      return {
-                        'orderId': invoice['name']?.toString() ?? 'Unknown',
-                        'invoiceNumber':
-                            invoice['name']?.toString() ?? 'Unknown',
-                        'status': invoice['status']?.toString() ?? 'Draft',
-                        'orderType':
-                            invoice['custom_order_channel']?.toString() ?? '',
-                        'tableNumber': (invoice['custom_table'] ?? ''),
-                        'items': items,
-                        'subtotal':
-                            (invoice['rounded_total'] as num?)?.toDouble() ??
-                                0.0,
-                        'tax': taxBreakdown?['amount'] ?? 0.0,
-                        'total':
-                            (invoice['rounded_total'] as num?)?.toDouble() ??
-                                0.0,
-                        'entryTime':
-                            parseDate(invoice['modified']?.toString()) ??
-                                DateTime.now(),
-                        'paidTime': invoice['status']?.toString() == 'Paid'
-                            ? parseDate(invoice['modified']?.toString())
-                            : null,
-                        'isPaid': invoice['status']?.toString() == 'Paid' ||
-                            invoice['status']?.toString() == 'Consolidated',
-                        'paymentMethod': payments.isNotEmpty == true
-                            ? payments[0]['mode_of_payment']?.toString() ??
-                                'Cash'
-                            : 'Cash',
-                        'm1value': m1Value,
-                        'customerName':
-                            invoice['customer_name']?.toString() ?? 'Guest',
-                        'remarks': invoice['remarks']?.toString() ?? '',
-                        'custom_item_remarks':
-                            invoice['custom_item_remarks']?.toString() ?? 'N/A',
-                        'taxBreakdown': taxBreakdown,
-                        'paidAmount':
-                            (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
-                        'changeAmount':
-                            (invoice['change_amount'] as num?)?.toDouble() ??
-                                0.0,
-                        'base_rounding_adjustment':
-                            (invoice['base_rounding_adjustment'] as num?)
-                                    ?.toDouble() ??
-                                0.0,
-                        "pos_invoice_number":
-                            invoice['custom_fiuu_invoice_number']?.toString() ??
-                                '000000',
-                        'total_taxes_and_charges':
-                            (invoice['total_taxes_and_charges'] as num?)
-                                    ?.toDouble() ??
-                                0.0,
-                        'discount_amount':
-                            (invoice['discount_amount'] as num?)?.toDouble(),
-                        'user_voucher_code': (invoice['user_voucher_code']),
-                        'custom_is_refund': (invoice['custom_is_refund'] ?? 0)
-                      };
-                    } catch (e) {
-                      print('Error processing invoice ${invoice['name']}: $e');
-                      return null;
-                    }
-                  })
+                  .map((invoice) => _mapInvoiceToOrder(invoice))
                   .where((order) => order != null)
                   .cast<Map<String, dynamic>>()
                   .toList();
